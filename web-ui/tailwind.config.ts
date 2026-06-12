@@ -11,7 +11,10 @@ export default {
       colors: {
         bg: 'var(--bg)',
         surface: 'var(--surface)',
-        text: 'var(--text)',
+        text: {
+          DEFAULT: 'var(--text)',
+          muted: 'var(--text-muted)',
+        },
         accent: 'var(--accent)',
         primary: {
           DEFAULT: 'var(--primary)',
