@@ -52,9 +52,8 @@ test: ## Run Go tests with the race detector
 	go test -race ./...
 
 .PHONY: lint
-lint: ## gofmt check + go vet
-	@test -z "$$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -l .; exit 1; }
-	go vet ./...
+lint: ## Run golangci-lint (govet, staticcheck, gofmt, …)
+	go tool golangci-lint run ./...
 
 ## --- Frontend (web-ui) ---
 
