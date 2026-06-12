@@ -1,11 +1,14 @@
 import { LayoutGrid, LogOut, Moon, Rows3, Search, Sun } from 'lucide-react'
 import type { Branding } from '@/lib/branding'
+import type { Me } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { SettingsMenu } from './SettingsMenu'
 
 export type Tab = 'services' | 'favorites'
 
 interface TopBarProps {
   branding: Branding
+  showTabs: boolean
   tab: Tab
   onTab: (t: Tab) => void
   query: string
@@ -16,11 +19,32 @@ interface TopBarProps {
   onToggleTheme: () => void
   userName: string
   onLogout: () => void
+  favoritesOrder: Me['favorites_order']
+  favoritesSeparateTab: boolean
+  onChangeOrder: (order: Me['favorites_order']) => void
+  onChangeSeparateTab: (on: boolean) => void
 }
 
 // The persistent top bar (docs/01 §4.1, docs/03 §6): logo, the two primary tabs
 // with a visible active highlight, search, and the theme + view toggles.
-export function TopBar({ branding, tab, onTab, query, onQuery, view, onToggleView, isDark, onToggleTheme, userName, onLogout }: TopBarProps) {
+export function TopBar({
+  branding,
+  showTabs,
+  tab,
+  onTab,
+  query,
+  onQuery,
+  view,
+  onToggleView,
+  isDark,
+  onToggleTheme,
+  userName,
+  onLogout,
+  favoritesOrder,
+  favoritesSeparateTab,
+  onChangeOrder,
+  onChangeSeparateTab,
+}: TopBarProps) {
   return (
     <header className="sticky top-0 z-10 border-b border-surface bg-bg">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
@@ -29,14 +53,16 @@ export function TopBar({ branding, tab, onTab, query, onQuery, view, onToggleVie
           <img src={branding.logo_light} alt={branding.product_name} className="h-7" />
         </picture>
 
-        <nav aria-label="Hauptnavigation" className="ml-2 flex items-center gap-1">
-          <TabButton active={tab === 'services'} onClick={() => onTab('services')}>
-            Dienste
-          </TabButton>
-          <TabButton active={tab === 'favorites'} onClick={() => onTab('favorites')}>
-            Favoriten
-          </TabButton>
-        </nav>
+        {showTabs && (
+          <nav aria-label="Hauptnavigation" className="ml-2 flex items-center gap-1">
+            <TabButton active={tab === 'services'} onClick={() => onTab('services')}>
+              Dienste
+            </TabButton>
+            <TabButton active={tab === 'favorites'} onClick={() => onTab('favorites')}>
+              Favoriten
+            </TabButton>
+          </nav>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           <label className="relative hidden sm:block">
@@ -61,6 +87,13 @@ export function TopBar({ branding, tab, onTab, query, onQuery, view, onToggleVie
           <IconToggle onClick={onToggleTheme} label={isDark ? 'Helles Design' : 'Dunkles Design'}>
             {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </IconToggle>
+
+          <SettingsMenu
+            order={favoritesOrder}
+            separateTab={favoritesSeparateTab}
+            onChangeOrder={onChangeOrder}
+            onChangeSeparateTab={onChangeSeparateTab}
+          />
 
           <span className="ml-1 hidden max-w-[12ch] truncate text-sm text-text-muted md:inline" title={userName}>
             {userName}

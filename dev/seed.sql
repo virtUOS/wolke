@@ -26,7 +26,7 @@ insert into services (name, description, service_url, doc_url, icon) values
   ('BigBlueButton', '{"de":"Web-Konferenzen und Vorlesungsaufzeichnung.","en":"Web conferencing and lecture recording."}', 'https://bbb.example.edu', 'https://docs.example.edu/bbb', 'video'),
   ('Identitätsmanagement', '{"de":"Passwort ändern und Konto verwalten.","en":"Change your password and manage your account."}', 'https://idm.example.edu', 'https://docs.example.edu/account', 'key-round'),
   ('WLAN an der UOS', '{"de":"So verbindest du dich mit eduroam.","en":"How to connect to eduroam."}', NULL, 'https://docs.example.edu/wifi', 'wifi')
-on conflict do nothing;
+on conflict (name) do nothing;
 
 -- Category attachments (by name/slug, so this stays readable).
 insert into service_categories (service_id, category_id)
