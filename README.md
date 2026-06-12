@@ -37,24 +37,38 @@ Claude Code as the source of truth. Read the docs in order; each builds on the l
 
 ## Local development (no Docker)
 
-The primary loop runs the Go API and the Vite dev server directly against a local
-Postgres — no containers in the inner loop, no TLS, no embedded build (docs/04 §4).
-Requires Go 1.26, Node 24, and podman (for Postgres).
+Login is always required, so a working setup needs the database **and** an IdP:
+the authenticated endpoints (`/api/me`, `/api/catalog`, …) only exist when OIDC is
+configured — otherwise the SPA can't load. `.env.example` points OIDC at the local
+mock from `make idp`. Requires Go 1.26, Node 24, and podman.
+
+One-time setup:
 
 ```bash
-cp .env.example .env            # adjust if needed; DATABASE_URL matches `make db`
-make db                         # start Postgres 17 (podman), one-time
-make migrate                    # apply migrations (goose)
-make web-install                # one-time: install frontend deps
-
-# then two terminals:
-make run                        # A: Go server on http://localhost:8080
-make web-dev                    # B: Vite SPA on http://localhost:5173 (proxies /api → :8080)
+cp .env.example .env            # OIDC already points at the make idp mock
+make idp                        # mock IdP on :8455 (auto-issues a student+admin)
+make db && make migrate && make seed
+make web-install
 ```
 
-Open the Vite URL it prints (5173, or the next free port). The SPA fetches
-`/api/branding` through the proxy and themes itself at runtime. `make run` serves
-the API and a placeholder shell; the real SPA in dev comes from Vite.
+**Quickest way to see it running** — the embedded single-origin build:
+
+```bash
+make serve                      # builds the SPA into the binary, loads .env, runs it
+# open PUBLIC_URL (http://127.0.0.1:8080); you're auto-logged-in via the mock
+```
+
+**Active development (HMR)** — Go API + Vite, two terminals:
+
+```bash
+make run                        # A: Go API on :8080 (loads .env)
+make web-dev                    # B: Vite SPA (proxies /api,/auth → :8080)
+```
+
+For the Vite loop the browser hits Vite, which bypasses the server's login gate,
+so the SPA redirects to `/auth/login` itself on a 401. For that round-trip to land
+back in Vite, set `PUBLIC_URL` in `.env` to the **Vite origin** it prints (e.g.
+`http://localhost:5173`, or `5174` if 5173 is taken) before `make run`.
 
 Useful targets (`make help` lists all):
 

@@ -65,8 +65,8 @@ seed: ## Load dev catalog seed data (idempotent; dev only)
 ## --- Backend ---
 
 .PHONY: run
-run: ## Run the Go server (dev; SPA served by `make web-dev`)
-	go run ./cmd/server
+run: ## Run the Go server (dev; loads .env if present; SPA served by `make web-dev`)
+	@set -a; [ -f .env ] && . ./.env || true; set +a; go run ./cmd/server
 
 .PHONY: test
 test: ## Run Go tests with the race detector
@@ -105,6 +105,10 @@ embed: web-build ## Copy the built SPA into the Go embed dir
 build: embed ## Build the single binary with the SPA embedded
 	go build -o bin/server ./cmd/server
 	@echo "built bin/server (SPA embedded)"
+
+.PHONY: serve
+serve: build ## Build + run the embedded binary (loads .env) — browse PUBLIC_URL
+	@set -a; [ -f .env ] && . ./.env || true; set +a; ./bin/server
 
 .PHONY: check
 check: lint test web-check ## Run the full local gate (Go + frontend)
