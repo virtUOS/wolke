@@ -1,0 +1,53 @@
+# Structured runtime configuration (docs/02 §6, §11). Copy to config.yaml and
+# point CONFIG_FILE at it. This file owns the nested maps — the OIDC claim
+# mapping and the branding theme — which environment variables intentionally
+# CANNOT override (env overrides only top-level scalars). Secrets stay in env.
+#
+# Everything below shows the built-in defaults (the UOS skin). A fork re-skins
+# and re-points by editing this one file and restarting — no recompile.
+
+# OIDC is provider-agnostic: discovery does the rest, so the same code works with
+# Keycloak, Authentik, Zitadel, Auth0, Entra, etc. (docs/02 §6).
+oidc:
+  # issuer_url / client_id / client_secret / scopes are scalars — set via env
+  # (OIDC_ISSUER_URL, …) in deployments. Shown here for reference.
+  scopes: [openid, profile, email]
+  # Which claim carries affiliation, and how its values map to the 3 roles.
+  role:
+    claim: eduPersonAffiliation
+    values:
+      faculty: teacher
+      employee: staff
+      member: staff
+      student: student
+    precedence: [teacher, staff, student]   # if several match, first wins
+    default: student                          # if none match
+  # How to detect a dashboard admin (supports a nested claim path).
+  admin:
+    claim: groups
+    match: dashboard-admins
+
+# Branding / theme — applied by the SPA as CSS variables at runtime. Keep the
+# token NAMES stable (docs/03 §2); only values change. The brand hex values are
+# read from the mockups and are still TBD against the UOS Corporate Design
+# manual (concept §8.1).
+branding:
+  product_name: "IT Service"
+  org_name: "Universität Osnabrück"
+  logo_light: /branding/logo-light.svg
+  logo_dark: /branding/logo-dark.svg
+  favicon: /branding/favicon.svg
+  default_locale: de
+  theme:
+    light:
+      primary: "#A6093D"
+      primary_hover: "#8A0732"
+      accent: "#F2C879"
+      surface: "#F4F4F5"
+      text: "#18181B"
+    dark:
+      primary: "#C2355C"
+      primary_hover: "#A6093D"
+      accent: "#F2C879"
+      surface: "#1E1E21"
+      text: "#F4F4F5"

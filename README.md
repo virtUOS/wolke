@@ -35,6 +35,44 @@ Claude Code as the source of truth. Read the docs in order; each builds on the l
 - **Scale:** 2–3k concurrent, read-heavy. A single instance with an in-process catalog cache
   handles it. Redis only enters the picture if you run multiple instances.
 
+## Local development (no Docker)
+
+The primary loop runs the Go API and the Vite dev server directly against a local
+Postgres — no containers in the inner loop, no TLS, no embedded build (docs/04 §4).
+Requires Go 1.26, Node 24, and podman (for Postgres).
+
+```bash
+cp .env.example .env            # adjust if needed; DATABASE_URL matches `make db`
+make db                         # start Postgres 17 (podman), one-time
+make migrate                    # apply migrations (goose)
+make web-install                # one-time: install frontend deps
+
+# then two terminals:
+make run                        # A: Go server on http://localhost:8080
+make web-dev                    # B: Vite SPA on http://localhost:5173 (proxies /api → :8080)
+```
+
+Open the Vite URL it prints (5173, or the next free port). The SPA fetches
+`/api/branding` through the proxy and themes itself at runtime. `make run` serves
+the API and a placeholder shell; the real SPA in dev comes from Vite.
+
+Useful targets (`make help` lists all):
+
+| Command | What it does |
+|---------|--------------|
+| `make check` | Full local gate: gofmt + vet + `go test -race`, then frontend typecheck/lint/test |
+| `make sqlc` | Regenerate type-safe queries after editing SQL |
+| `make migrate` / `make migrate-down` | Apply / roll back migrations |
+| `make build` | Build the single binary with the SPA **embedded** (prod-like) |
+
+Integration tests that need Postgres read `DATABASE_URL` and **skip** when it is
+unset, so `go test ./...` is safe without a database; `make test` (after `make db
+&& make migrate`) runs them for real.
+
+The end-to-end Compose stack (app + Postgres + Caddy + a dev IdP) lives in
+`compose.yaml` and is for staging / a pre-release check — it does not constrain
+daily work.
+
 ## How to start with Claude Code
 
 1. Put these docs in a fresh repo and copy `CLAUDE.md` to the root.
