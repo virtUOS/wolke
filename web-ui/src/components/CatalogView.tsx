@@ -1,17 +1,18 @@
 import { localized, type Category, type Service } from '@/lib/api'
-import { Tile } from './Tile'
+import { Tile, type TileActions } from './Tile'
 
 interface CatalogViewProps {
   services: Service[]
   categories: Category[]
   locale: string
   view: 'list' | 'table'
+  actions?: TileActions
 }
 
 // CatalogView groups services by category (in category sort order) and renders
 // them as a single column (list) or a multi-column grid (table) — docs/01 §4.3.
 // A service in several categories appears under each.
-export function CatalogView({ services, categories, locale, view }: CatalogViewProps) {
+export function CatalogView({ services, categories, locale, view, actions }: CatalogViewProps) {
   const groups = categories
     .map((c) => ({ category: c, services: services.filter((s) => s.categories.includes(c.slug)) }))
     .filter((g) => g.services.length > 0)
@@ -32,7 +33,16 @@ export function CatalogView({ services, categories, locale, view }: CatalogViewP
           </h2>
           <div className={grid}>
             {svcs.map((s) => (
-              <Tile key={`${category.slug}-${s.id}`} service={s} categories={categories} locale={locale} />
+              <Tile
+                key={`${category.slug}-${s.id}`}
+                service={s}
+                categories={categories}
+                locale={locale}
+                favorited={actions?.favoritedIDs.has(s.id)}
+                onToggleFavorite={actions?.onToggleFavorite}
+                onAddToList={actions?.onAddToList}
+                onLaunch={actions?.onLaunch}
+              />
             ))}
           </div>
         </section>

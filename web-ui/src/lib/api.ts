@@ -45,6 +45,14 @@ export interface SearchResults {
   services: Service[]
 }
 
+export interface FavoriteList {
+  id: string
+  name: string
+  is_default: boolean
+  sort: number
+  items: string[] // service ids
+}
+
 // ApiError carries the HTTP status so callers can react (e.g. redirect to login
 // on 401) rather than treating every failure the same.
 export class ApiError extends Error {
@@ -65,22 +73,43 @@ async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
   return (await res.json()) as T
 }
 
+async function send<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (!res.ok) {
+    throw new ApiError(res.status, `${method} ${url} → ${res.status}`)
+  }
+  return (res.status === 204 ? undefined : await res.json()) as T
+}
+
 export const api = {
   me: (signal?: AbortSignal) => getJSON<Me>('/api/me', signal),
   catalog: (signal?: AbortSignal) => getJSON<Catalog>('/api/catalog', signal),
   defaults: (signal?: AbortSignal) => getJSON<DefaultsView>('/api/catalog/defaults', signal),
   search: (q: string, signal?: AbortSignal) =>
     getJSON<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`, signal),
-  updatePrefs: async (patch: Partial<Pick<Me, 'theme' | 'view_mode'>>): Promise<Me> => {
-    const res = await fetch('/api/me/prefs', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    })
-    if (!res.ok) {
-      throw new Error(`PATCH /api/me/prefs → ${res.status}`)
-    }
-    return (await res.json()) as Me
+  updatePrefs: (patch: Partial<Pick<Me, 'theme' | 'view_mode'>>) => send<Me>('PATCH', '/api/me/prefs', patch),
+
+  // favorites
+  favorites: (signal?: AbortSignal) => getJSON<{ lists: FavoriteList[] }>('/api/favorites', signal),
+  createList: (name: string) => send<FavoriteList>('POST', '/api/favorites/lists', { name }),
+  renameList: (id: string, name: string) => send<void>('PATCH', `/api/favorites/lists/${id}`, { name }),
+  reorderList: (id: string, sort: number) => send<void>('PATCH', `/api/favorites/lists/${id}`, { sort }),
+  deleteList: (id: string) => send<void>('DELETE', `/api/favorites/lists/${id}`),
+  addItem: (listID: string, serviceID: string) =>
+    send<{ list_id: string }>('POST', '/api/favorites/items', { list_id: listID, service_id: serviceID }),
+  quickStar: (serviceID: string) => send<{ list_id: string }>('POST', '/api/favorites/items', { service_id: serviceID }),
+  removeItem: (listID: string, serviceID: string) =>
+    send<void>('DELETE', '/api/favorites/items', { list_id: listID, service_id: serviceID }),
+
+  // usage
+  frequent: (signal?: AbortSignal) => getJSON<{ services: Service[] }>('/api/usage/frequent', signal),
+  recordClick: (serviceID: string) => {
+    // Fire-and-forget; a failed event must never disrupt the launch.
+    void send('POST', '/api/events/click', { service_id: serviceID }).catch(() => {})
   },
 }
 
