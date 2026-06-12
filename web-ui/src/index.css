@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fallback token values for first paint, before GET /api/branding resolves and
+   applyBrandingTokens() injects the active skin. Variable NAMES are stable
+   (docs/03 §2); the branding payload overrides the values at runtime. --bg is
+   not part of the branding token set, so it stays defined here. */
+:root {
+  --bg: #ffffff;
+  --surface: #f4f4f5;
+  --text: #18181b;
+  --accent: #f2c879;
+  --primary: #a6093d;
+  --primary-hover: #8a0732;
+}
+
+.dark {
+  --bg: #161618;
+  --surface: #1e1e21;
+  --text: #f4f4f5;
+  --accent: #f2c879;
+  --primary: #c2355c;
+  --primary-hover: #a6093d;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+}
+
+/* Respect reduced-motion globally (docs/03 §8). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
