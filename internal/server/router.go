@@ -29,10 +29,11 @@ type Deps struct {
 	Auth  *auth.Service
 	Users UserStore
 	// Catalog and Defaults back the read API; mounted when present (DB configured).
-	Catalog  *catalog.Cache
-	Defaults RoleDefaultsStore
-	Search   SearchStore
-	Prefs    service.PrefsStore
+	Catalog   *catalog.Cache
+	Defaults  RoleDefaultsStore
+	Search    SearchStore
+	Prefs     service.PrefsStore
+	Favorites service.FavoritesStore
 }
 
 // New builds the HTTP handler for the app: middleware stack, operational
@@ -89,6 +90,14 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 		pr.With(requireUserJSON).Get("/api/me", me)
 		if deps.Prefs != nil {
 			pr.With(requireUserJSON).Patch("/api/me/prefs", updatePrefs(deps.Prefs))
+		}
+		if deps.Favorites != nil {
+			pr.With(requireUserJSON).Get("/api/favorites", listFavorites(deps.Favorites))
+			pr.With(requireUserJSON).Post("/api/favorites/lists", createList(deps.Favorites))
+			pr.With(requireUserJSON).Patch("/api/favorites/lists/{id}", patchList(deps.Favorites))
+			pr.With(requireUserJSON).Delete("/api/favorites/lists/{id}", deleteList(deps.Favorites))
+			pr.With(requireUserJSON).Post("/api/favorites/items", addItem(deps.Favorites))
+			pr.With(requireUserJSON).Delete("/api/favorites/items", removeItem(deps.Favorites))
 		}
 		if deps.Catalog != nil {
 			pr.With(requireUserJSON).Get("/api/catalog", catalogList(deps.Catalog))
