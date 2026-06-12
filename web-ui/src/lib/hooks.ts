@@ -35,6 +35,29 @@ export function usePrefsMutation() {
   })
 }
 
+export function useFavorites() {
+  return useQuery({ queryKey: ['favorites'], queryFn: ({ signal }) => api.favorites(signal) })
+}
+
+export function useFrequent() {
+  return useQuery({ queryKey: ['frequent'], queryFn: ({ signal }) => api.frequent(signal) })
+}
+
+// useFavoriteActions bundles the favorite mutations; each refreshes the lists.
+export function useFavoriteActions() {
+  const qc = useQueryClient()
+  const onSuccess = () => qc.invalidateQueries({ queryKey: ['favorites'] })
+  return {
+    quickStar: useMutation({ mutationFn: (serviceID: string) => api.quickStar(serviceID), onSuccess }),
+    addItem: useMutation({ mutationFn: (v: { listID: string; serviceID: string }) => api.addItem(v.listID, v.serviceID), onSuccess }),
+    removeItem: useMutation({ mutationFn: (v: { listID: string; serviceID: string }) => api.removeItem(v.listID, v.serviceID), onSuccess }),
+    createList: useMutation({ mutationFn: (name: string) => api.createList(name), onSuccess }),
+    renameList: useMutation({ mutationFn: (v: { id: string; name: string }) => api.renameList(v.id, v.name), onSuccess }),
+    reorderList: useMutation({ mutationFn: (v: { id: string; sort: number }) => api.reorderList(v.id, v.sort), onSuccess }),
+    deleteList: useMutation({ mutationFn: (id: string) => api.deleteList(id), onSuccess }),
+  }
+}
+
 // useApplyTheme applies the effective theme as the `.dark` class on <html>,
 // resolving 'system' against the OS preference and reacting to OS changes.
 export function useApplyTheme(theme: Me['theme'] | undefined) {

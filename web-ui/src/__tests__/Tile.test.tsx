@@ -72,8 +72,26 @@ describe('Tile', () => {
     expect(onToggle).toHaveBeenCalledWith(service)
   })
 
-  it('has no axe violations in either density', async () => {
-    const { container } = render(<Tile service={service} categories={categories} locale="de" onToggleFavorite={() => {}} />)
+  it('fires onLaunch when the launch zone is activated', async () => {
+    const user = userEvent.setup()
+    const onLaunch = vi.fn()
+    render(<Tile service={service} categories={categories} locale="de" onLaunch={onLaunch} />)
+    await user.click(screen.getByRole('link', { name: /MyShare/ }))
+    expect(onLaunch).toHaveBeenCalledWith(service)
+  })
+
+  it('shows an add-to-list button when onAddToList is provided', async () => {
+    const user = userEvent.setup()
+    const onAddToList = vi.fn()
+    render(<Tile service={service} categories={categories} locale="de" onAddToList={onAddToList} />)
+    await user.click(screen.getByRole('button', { name: /zu einer Liste hinzufügen/ }))
+    expect(onAddToList).toHaveBeenCalledWith(service)
+  })
+
+  it('has no axe violations with all controls', async () => {
+    const { container } = render(
+      <Tile service={service} categories={categories} locale="de" onToggleFavorite={() => {}} onAddToList={() => {}} onLaunch={() => {}} />,
+    )
     await expectNoAxeViolations(container)
   })
 })

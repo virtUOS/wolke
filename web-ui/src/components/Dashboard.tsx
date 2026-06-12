@@ -1,13 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Branding } from '@/lib/branding'
-import type { Catalog, Category, Me, Service } from '@/lib/api'
-import { useApplyTheme, useCatalog, useDefaults, usePrefsMutation, useSearch } from '@/lib/hooks'
+import { api, type Catalog, type Category, type Me, type Service } from '@/lib/api'
+import {
+  useApplyTheme,
+  useCatalog,
+  useDefaults,
+  useFavoriteActions,
+  useFavorites,
+  useFrequent,
+  usePrefsMutation,
+  useSearch,
+} from '@/lib/hooks'
+import { AddToListDialog } from './AddToListDialog'
 import { CatalogView } from './CatalogView'
-import { Tile } from './Tile'
+import { FavoritesPanel } from './FavoritesPanel'
+import { Tile, type TileActions } from './Tile'
 import { TopBar, type Tab } from './TopBar'
 
-// useEffectiveView resolves 'auto' to table on wide viewports, list otherwise
-// (mobile-first: list is the phone default — docs/03 §4).
 function useEffectiveView(mode: Me['view_mode']): 'list' | 'table' {
   const [wide, setWide] = useState(() => window.matchMedia('(min-width: 768px)').matches)
   useEffect(() => {
@@ -26,8 +36,10 @@ function gridClass(view: 'list' | 'table'): string {
 
 export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const locale = branding.default_locale || 'de'
+  const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('services')
   const [query, setQuery] = useState('')
+  const [dialogService, setDialogService] = useState<Service | null>(null)
 
   useApplyTheme(me.theme)
   const prefs = usePrefsMutation()
@@ -38,10 +50,35 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const catalog = useCatalog()
   const defaults = useDefaults()
   const search = useSearch(query)
+  const favorites = useFavorites()
+  const frequent = useFrequent()
+  const fav = useFavoriteActions()
   const searching = query.trim().length > 0
 
-  const toggleTheme = () => prefs.mutate({ theme: isDark ? 'light' : 'dark' })
-  const toggleView = () => prefs.mutate({ view_mode: view === 'table' ? 'list' : 'table' })
+  const lists = favorites.data?.lists ?? []
+  const defaultList = lists.find((l) => l.is_default) ?? null
+  const favoritedIDs = useMemo(() => new Set(defaultList?.items ?? []), [defaultList])
+  const servicesByID = useMemo(() => {
+    const m = new Map<string, Service>()
+    catalog.data?.services.forEach((s) => m.set(s.id, s))
+    return m
+  }, [catalog.data])
+
+  const actions: TileActions = {
+    favoritedIDs,
+    onToggleFavorite: (s) => {
+      if (favoritedIDs.has(s.id) && defaultList) {
+        fav.removeItem.mutate({ listID: defaultList.id, serviceID: s.id })
+      } else {
+        fav.quickStar.mutate(s.id)
+      }
+    },
+    onAddToList: (s) => setDialogService(s),
+    onLaunch: (s) => {
+      api.recordClick(s.id)
+      qc.invalidateQueries({ queryKey: ['frequent'] })
+    },
+  }
 
   return (
     <div className="min-h-screen bg-bg text-text">
@@ -52,9 +89,13 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         query={query}
         onQuery={setQuery}
         view={view}
-        onToggleView={toggleView}
+        onToggleView={() => prefs.mutate({ view_mode: view === 'table' ? 'list' : 'table' })}
         isDark={isDark}
-        onToggleTheme={toggleTheme}
+        onToggleTheme={() => prefs.mutate({ theme: isDark ? 'light' : 'dark' })}
+        userName={me.display_name}
+        onLogout={() => {
+          void fetch('/auth/logout', { method: 'POST' }).finally(() => window.location.assign('/'))
+        }}
       />
 
       <main className="mx-auto max-w-6xl px-4 py-6">
@@ -66,9 +107,27 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             categories={catalog.data?.categories ?? []}
             locale={locale}
             view={view}
+            actions={actions}
           />
         ) : tab === 'favorites' ? (
-          <EmptyFavorites />
+          <FavoritesPanel
+            lists={lists}
+            frequent={frequent.data?.services ?? []}
+            resolve={(id) => servicesByID.get(id)}
+            categories={catalog.data?.categories ?? []}
+            locale={locale}
+            view={view}
+            defaultListID={defaultList?.id ?? null}
+            favoritedIDs={favoritedIDs}
+            onCreateList={(name) => fav.createList.mutate(name)}
+            onRenameList={(id, name) => fav.renameList.mutate({ id, name })}
+            onDeleteList={(id) => fav.deleteList.mutate(id)}
+            onReorderList={(id, sort) => fav.reorderList.mutate({ id, sort })}
+            onRemoveItem={(listID, serviceID) => fav.removeItem.mutate({ listID, serviceID })}
+            onToggleFavorite={actions.onToggleFavorite}
+            onAddToList={actions.onAddToList}
+            onLaunch={actions.onLaunch}
+          />
         ) : (
           <ServicesPanel
             locale={locale}
@@ -78,9 +137,25 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             defaultServices={defaults.data?.services ?? []}
             catalogLoading={catalog.isLoading}
             catalog={catalog.data}
+            actions={actions}
           />
         )}
       </main>
+
+      <AddToListDialog
+        service={dialogService}
+        lists={lists}
+        onClose={() => setDialogService(null)}
+        onAddToExisting={(listID) => {
+          if (dialogService) fav.addItem.mutate({ listID, serviceID: dialogService.id })
+        }}
+        onCreateAndAdd={(name) => {
+          const svc = dialogService
+          if (svc) {
+            fav.createList.mutateAsync(name).then((list) => fav.addItem.mutate({ listID: list.id, serviceID: svc.id }))
+          }
+        }}
+      />
     </div>
   )
 }
@@ -93,6 +168,7 @@ function ServicesPanel({
   defaultServices,
   catalogLoading,
   catalog,
+  actions,
 }: {
   locale: string
   view: 'list' | 'table'
@@ -101,6 +177,7 @@ function ServicesPanel({
   defaultServices: Service[]
   catalogLoading: boolean
   catalog: Catalog | undefined
+  actions: TileActions
 }) {
   return (
     <div className="space-y-10">
@@ -116,7 +193,16 @@ function ServicesPanel({
         ) : defaultServices.length > 0 && catalog ? (
           <div className={gridClass(view)}>
             {defaultServices.map((s) => (
-              <Tile key={s.id} service={s} categories={catalog.categories} locale={locale} />
+              <Tile
+                key={s.id}
+                service={s}
+                categories={catalog.categories}
+                locale={locale}
+                favorited={actions.favoritedIDs.has(s.id)}
+                onToggleFavorite={actions.onToggleFavorite}
+                onAddToList={actions.onAddToList}
+                onLaunch={actions.onLaunch}
+              />
             ))}
           </div>
         ) : (
@@ -133,7 +219,7 @@ function ServicesPanel({
             Lädt…
           </p>
         ) : (
-          <CatalogView services={catalog.services} categories={catalog.categories} locale={locale} view={view} />
+          <CatalogView services={catalog.services} categories={catalog.categories} locale={locale} view={view} actions={actions} />
         )}
       </section>
     </div>
@@ -147,6 +233,7 @@ function SearchPanel({
   categories,
   locale,
   view,
+  actions,
 }: {
   query: string
   isLoading: boolean
@@ -154,6 +241,7 @@ function SearchPanel({
   categories: Category[]
   locale: string
   view: 'list' | 'table'
+  actions: TileActions
 }) {
   return (
     <section aria-labelledby="search-results" aria-live="polite">
@@ -167,16 +255,8 @@ function SearchPanel({
       ) : results.length === 0 ? (
         <p className="text-sm text-text-muted">Keine Treffer. Versuch einen anderen Begriff.</p>
       ) : (
-        <CatalogView services={results} categories={categories} locale={locale} view={view} />
+        <CatalogView services={results} categories={categories} locale={locale} view={view} actions={actions} />
       )}
     </section>
-  )
-}
-
-function EmptyFavorites() {
-  return (
-    <div className="rounded-lg border border-dashed border-surface p-10 text-center text-sm text-text-muted">
-      Favoriten kommen in Kürze. Bald kannst du Dienste mit ☆ hier ablegen.
-    </div>
   )
 }

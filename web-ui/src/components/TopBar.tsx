@@ -1,4 +1,4 @@
-import { LayoutGrid, Moon, Rows3, Search, Sun } from 'lucide-react'
+import { LayoutGrid, LogOut, Moon, Rows3, Search, Sun } from 'lucide-react'
 import type { Branding } from '@/lib/branding'
 import { cn } from '@/lib/utils'
 
@@ -14,11 +14,13 @@ interface TopBarProps {
   onToggleView: () => void
   isDark: boolean
   onToggleTheme: () => void
+  userName: string
+  onLogout: () => void
 }
 
 // The persistent top bar (docs/01 §4.1, docs/03 §6): logo, the two primary tabs
 // with a visible active highlight, search, and the theme + view toggles.
-export function TopBar({ branding, tab, onTab, query, onQuery, view, onToggleView, isDark, onToggleTheme }: TopBarProps) {
+export function TopBar({ branding, tab, onTab, query, onQuery, view, onToggleView, isDark, onToggleTheme, userName, onLogout }: TopBarProps) {
   return (
     <header className="sticky top-0 z-10 border-b border-surface bg-bg">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
@@ -58,6 +60,13 @@ export function TopBar({ branding, tab, onTab, query, onQuery, view, onToggleVie
 
           <IconToggle onClick={onToggleTheme} label={isDark ? 'Helles Design' : 'Dunkles Design'}>
             {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </IconToggle>
+
+          <span className="ml-1 hidden max-w-[12ch] truncate text-sm text-text-muted md:inline" title={userName}>
+            {userName}
+          </span>
+          <IconToggle onClick={onLogout} label="Abmelden">
+            <LogOut className="h-5 w-5" />
           </IconToggle>
         </div>
       </div>
