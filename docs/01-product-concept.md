@@ -15,7 +15,7 @@ that with a single, trustworthy front door:
 - **Find** — search or browse by category, get a one-line description, and go.
 - **Learn** — every entry links to in-depth documentation (hosted elsewhere), and some
   entries are *documentation only* (e.g. "How Wi-Fi works at UOS") with no service behind them.
-- **Keep** — pin frequent services, organize them into personal lists.
+- **Keep** — pin frequent services as favorites for one-tap access.
 - **Stay informed** — announcements surface outages and major changes at the top.
 
 It is deliberately **not** a status page (no up/down indicators), not a documentation host,
@@ -75,17 +75,13 @@ clearest usability idea; keep it crisp.
 
 A toggle in the top bar switches between them; the choice persists per user.
 
-### 4.4 Favorites and personal lists
-Favorites are not a flat list. A user organizes them into named lists (the Figma shows
-"Täglicher Gebrauch", "Wichtig für die Uni", and a "+ Neue Liste" creator). Two ways to favorite:
+### 4.4 Favorites
+Favorites are a **flat per-user set** — no named lists. Tapping the star on a tile toggles the
+service as a favorite (one tap, no dialog); tapping again removes it. The Favorites tab shows the
+user's favorited services, grouped by category, alongside the "frequently used" strip (§4.5).
 
-- **Quick:** tap the star → the service is added to a default list immediately, inheriting the
-  service's own categories. No dialog. (Figma "Option 2".)
-- **Deliberate:** a small affordance opens a dialog with a list dropdown + "New list" inline input,
-  so the user chooses where it goes.
-
-Recommendation: **star = quick-add to "My favorites"**; a long-press / overflow action opens the
-"add to list…" dialog. This keeps the common case one tap and the power case discoverable.
+> **Decision (supersedes the earlier Figma mockup):** the named-lists idea ("Täglicher Gebrauch",
+> "+ Neue Liste", a default list, add-to-list dialog) was dropped. Keep favorites a single flat set.
 
 ### 4.5 "Frequently used"
 A surfaced section (top of Favorites, or its own strip on the Services page) showing the user's

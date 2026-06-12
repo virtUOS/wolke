@@ -5,85 +5,46 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/virtUOS/service-hub/internal/catalog"
 	"github.com/virtUOS/service-hub/internal/service"
 )
 
-// listFavorites returns the user's lists with their items (docs/02 §12).
-func listFavorites(db service.FavoritesStore) http.HandlerFunc {
+// listFavorites returns the user's favorited services, resolved via the catalog
+// cache so the shape matches /api/catalog (docs/02 §12). Favorites are a flat
+// set — no lists (docs/01 §4.4).
+func listFavorites(c *catalog.Cache, db service.FavoritesStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
-		lists, err := service.ListFavorites(r.Context(), db, user.ID)
+		ids, err := service.ListFavorites(r.Context(), db, user.ID)
 		if err != nil {
 			writeServiceError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"lists": lists})
-	}
-}
-
-func createList(db service.FavoritesStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user, _ := userFromContext(r.Context())
-		var body struct {
-			Name string `json:"name"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
-			return
-		}
-		list, err := service.CreateList(r.Context(), db, user.ID, body.Name)
+		snap, err := c.Get(r.Context())
 		if err != nil {
-			writeServiceError(w, err)
+			writeProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
 			return
 		}
-		writeJSON(w, http.StatusCreated, list)
+		services := make([]catalog.Service, 0, len(ids))
+		for _, id := range ids {
+			if svc, ok := snap.ServiceByID(id); ok {
+				services = append(services, svc)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"services": services})
 	}
 }
 
-func patchList(db service.FavoritesStore) http.HandlerFunc {
+func addFavorite(db service.FavoritesStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
-		listID, ok := parseUUID(chi.URLParam(r, "id"))
+		serviceID, ok := decodeServiceID(w, r)
 		if !ok {
-			writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid list id.")
 			return
 		}
-		var body struct {
-			Name *string `json:"name"`
-			Sort *int    `json:"sort"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
-			return
-		}
-		if body.Name != nil {
-			if err := service.RenameList(r.Context(), db, user.ID, listID, *body.Name); err != nil {
-				writeServiceError(w, err)
-				return
-			}
-		}
-		if body.Sort != nil {
-			if err := service.ReorderList(r.Context(), db, user.ID, listID, *body.Sort); err != nil {
-				writeServiceError(w, err)
-				return
-			}
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-func deleteList(db service.FavoritesStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user, _ := userFromContext(r.Context())
-		listID, ok := parseUUID(chi.URLParam(r, "id"))
-		if !ok {
-			writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid list id.")
-			return
-		}
-		if err := service.DeleteList(r.Context(), db, user.ID, listID); err != nil {
+		if err := service.AddFavorite(r.Context(), db, user.ID, serviceID); err != nil {
 			writeServiceError(w, err)
 			return
 		}
@@ -91,69 +52,37 @@ func deleteList(db service.FavoritesStore) http.HandlerFunc {
 	}
 }
 
-// addItem adds a service to a list. With no list_id it quick-stars to the default
-// list (creating it on first use); the response carries the target list id.
-func addItem(db service.FavoritesStore) http.HandlerFunc {
+func removeFavorite(db service.FavoritesStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
-		var body struct {
-			ListID    string `json:"list_id"`
-			ServiceID string `json:"service_id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
-			return
-		}
-		serviceID, ok := parseUUID(body.ServiceID)
+		serviceID, ok := decodeServiceID(w, r)
 		if !ok {
-			writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid service id.")
 			return
 		}
-		if body.ListID == "" {
-			listID, err := service.QuickStar(r.Context(), db, user.ID, serviceID)
-			if err != nil {
-				writeServiceError(w, err)
-				return
-			}
-			writeJSON(w, http.StatusOK, map[string]string{"list_id": listID})
-			return
-		}
-		listID, ok := parseUUID(body.ListID)
-		if !ok {
-			writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid list id.")
-			return
-		}
-		if err := service.AddItem(r.Context(), db, user.ID, listID, serviceID); err != nil {
-			writeServiceError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"list_id": body.ListID})
-	}
-}
-
-func removeItem(db service.FavoritesStore) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user, _ := userFromContext(r.Context())
-		var body struct {
-			ListID    string `json:"list_id"`
-			ServiceID string `json:"service_id"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
-			return
-		}
-		listID, ok1 := parseUUID(body.ListID)
-		serviceID, ok2 := parseUUID(body.ServiceID)
-		if !ok1 || !ok2 {
-			writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid list or service id.")
-			return
-		}
-		if err := service.RemoveItem(r.Context(), db, user.ID, listID, serviceID); err != nil {
+		if err := service.RemoveFavorite(r.Context(), db, user.ID, serviceID); err != nil {
 			writeServiceError(w, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// decodeServiceID reads {service_id} from the body and parses it, writing the
+// error response itself on failure.
+func decodeServiceID(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {
+	var body struct {
+		ServiceID string `json:"service_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
+		return pgtype.UUID{}, false
+	}
+	id, ok := parseUUID(body.ServiceID)
+	if !ok {
+		writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid service id.")
+		return pgtype.UUID{}, false
+	}
+	return id, true
 }
 
 // writeServiceError maps use-case errors to HTTP problem responses.

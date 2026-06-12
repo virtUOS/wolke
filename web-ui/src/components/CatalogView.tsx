@@ -40,7 +40,6 @@ export function CatalogView({ services, categories, locale, view, actions }: Cat
                 locale={locale}
                 favorited={actions?.favoritedIDs.has(s.id)}
                 onToggleFavorite={actions?.onToggleFavorite}
-                onAddToList={actions?.onAddToList}
                 onLaunch={actions?.onLaunch}
               />
             ))}

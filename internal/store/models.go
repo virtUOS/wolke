@@ -23,19 +23,10 @@ type ClickEvent struct {
 	ClickedAt pgtype.Timestamptz `json:"clicked_at"`
 }
 
-type FavoriteItem struct {
-	ListID    pgtype.UUID        `json:"list_id"`
+type Favorite struct {
+	UserID    pgtype.UUID        `json:"user_id"`
 	ServiceID pgtype.UUID        `json:"service_id"`
 	Sort      int32              `json:"sort"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
-type FavoriteList struct {
-	ID        pgtype.UUID        `json:"id"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	Name      string             `json:"name"`
-	Sort      int32              `json:"sort"`
-	IsDefault bool               `json:"is_default"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 

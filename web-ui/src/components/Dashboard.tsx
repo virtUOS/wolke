@@ -12,7 +12,6 @@ import {
   usePrefsMutation,
   useSearch,
 } from '@/lib/hooks'
-import { AddToListDialog } from './AddToListDialog'
 import { CatalogView } from './CatalogView'
 import { FavoritesPanel } from './FavoritesPanel'
 import { Tile, type TileActions } from './Tile'
@@ -39,7 +38,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('services')
   const [query, setQuery] = useState('')
-  const [dialogService, setDialogService] = useState<Service | null>(null)
 
   useApplyTheme(me.theme)
   const prefs = usePrefsMutation()
@@ -55,25 +53,18 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const fav = useFavoriteActions()
   const searching = query.trim().length > 0
 
-  const lists = favorites.data?.lists ?? []
-  const defaultList = lists.find((l) => l.is_default) ?? null
-  const favoritedIDs = useMemo(() => new Set(defaultList?.items ?? []), [defaultList])
-  const servicesByID = useMemo(() => {
-    const m = new Map<string, Service>()
-    catalog.data?.services.forEach((s) => m.set(s.id, s))
-    return m
-  }, [catalog.data])
+  const favoriteServices = useMemo(() => favorites.data?.services ?? [], [favorites.data])
+  const favoritedIDs = useMemo(() => new Set(favoriteServices.map((s) => s.id)), [favoriteServices])
 
   const actions: TileActions = {
     favoritedIDs,
     onToggleFavorite: (s) => {
-      if (favoritedIDs.has(s.id) && defaultList) {
-        fav.removeItem.mutate({ listID: defaultList.id, serviceID: s.id })
+      if (favoritedIDs.has(s.id)) {
+        fav.remove.mutate(s.id)
       } else {
-        fav.quickStar.mutate(s.id)
+        fav.add.mutate(s.id)
       }
     },
-    onAddToList: (s) => setDialogService(s),
     onLaunch: (s) => {
       api.recordClick(s.id)
       qc.invalidateQueries({ queryKey: ['frequent'] })
@@ -111,22 +102,12 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           />
         ) : tab === 'favorites' ? (
           <FavoritesPanel
-            lists={lists}
+            favorites={favoriteServices}
             frequent={frequent.data?.services ?? []}
-            resolve={(id) => servicesByID.get(id)}
             categories={catalog.data?.categories ?? []}
             locale={locale}
             view={view}
-            defaultListID={defaultList?.id ?? null}
-            favoritedIDs={favoritedIDs}
-            onCreateList={(name) => fav.createList.mutate(name)}
-            onRenameList={(id, name) => fav.renameList.mutate({ id, name })}
-            onDeleteList={(id) => fav.deleteList.mutate(id)}
-            onReorderList={(id, sort) => fav.reorderList.mutate({ id, sort })}
-            onRemoveItem={(listID, serviceID) => fav.removeItem.mutate({ listID, serviceID })}
-            onToggleFavorite={actions.onToggleFavorite}
-            onAddToList={actions.onAddToList}
-            onLaunch={actions.onLaunch}
+            actions={actions}
           />
         ) : (
           <ServicesPanel
@@ -141,21 +122,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           />
         )}
       </main>
-
-      <AddToListDialog
-        service={dialogService}
-        lists={lists}
-        onClose={() => setDialogService(null)}
-        onAddToExisting={(listID) => {
-          if (dialogService) fav.addItem.mutate({ listID, serviceID: dialogService.id })
-        }}
-        onCreateAndAdd={(name) => {
-          const svc = dialogService
-          if (svc) {
-            fav.createList.mutateAsync(name).then((list) => fav.addItem.mutate({ listID: list.id, serviceID: svc.id }))
-          }
-        }}
-      />
     </div>
   )
 }
@@ -200,7 +166,6 @@ function ServicesPanel({
                 locale={locale}
                 favorited={actions.favoritedIDs.has(s.id)}
                 onToggleFavorite={actions.onToggleFavorite}
-                onAddToList={actions.onAddToList}
                 onLaunch={actions.onLaunch}
               />
             ))}

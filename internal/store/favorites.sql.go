@@ -11,129 +11,40 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const addFavoriteItem = `-- name: AddFavoriteItem :exec
-insert into favorite_items (list_id, service_id, sort)
+const addFavorite = `-- name: AddFavorite :exec
+insert into favorites (user_id, service_id, sort)
 values ($1, $2, $3)
-on conflict (list_id, service_id) do nothing
+on conflict (user_id, service_id) do nothing
 `
 
-type AddFavoriteItemParams struct {
-	ListID    pgtype.UUID `json:"list_id"`
+type AddFavoriteParams struct {
+	UserID    pgtype.UUID `json:"user_id"`
 	ServiceID pgtype.UUID `json:"service_id"`
 	Sort      int32       `json:"sort"`
 }
 
-func (q *Queries) AddFavoriteItem(ctx context.Context, arg AddFavoriteItemParams) error {
-	_, err := q.db.Exec(ctx, addFavoriteItem, arg.ListID, arg.ServiceID, arg.Sort)
+func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) error {
+	_, err := q.db.Exec(ctx, addFavorite, arg.UserID, arg.ServiceID, arg.Sort)
 	return err
 }
 
-const countFavoriteLists = `-- name: CountFavoriteLists :one
-select count(*) from favorite_lists where user_id = $1
+const listFavoriteServiceIDs = `-- name: ListFavoriteServiceIDs :many
+select service_id from favorites where user_id = $1 order by sort, created_at
 `
 
-func (q *Queries) CountFavoriteLists(ctx context.Context, userID pgtype.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countFavoriteLists, userID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const createFavoriteList = `-- name: CreateFavoriteList :one
-insert into favorite_lists (user_id, name, sort, is_default)
-values ($1, $2, $3, $4)
-returning id, user_id, name, sort, is_default, created_at
-`
-
-type CreateFavoriteListParams struct {
-	UserID    pgtype.UUID `json:"user_id"`
-	Name      string      `json:"name"`
-	Sort      int32       `json:"sort"`
-	IsDefault bool        `json:"is_default"`
-}
-
-func (q *Queries) CreateFavoriteList(ctx context.Context, arg CreateFavoriteListParams) (FavoriteList, error) {
-	row := q.db.QueryRow(ctx, createFavoriteList,
-		arg.UserID,
-		arg.Name,
-		arg.Sort,
-		arg.IsDefault,
-	)
-	var i FavoriteList
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Name,
-		&i.Sort,
-		&i.IsDefault,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const deleteFavoriteList = `-- name: DeleteFavoriteList :execrows
-delete from favorite_lists where id = $1 and user_id = $2
-`
-
-type DeleteFavoriteListParams struct {
-	ID     pgtype.UUID `json:"id"`
-	UserID pgtype.UUID `json:"user_id"`
-}
-
-func (q *Queries) DeleteFavoriteList(ctx context.Context, arg DeleteFavoriteListParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteFavoriteList, arg.ID, arg.UserID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const getDefaultList = `-- name: GetDefaultList :one
-select id, user_id, name, sort, is_default, created_at from favorite_lists where user_id = $1 and is_default limit 1
-`
-
-func (q *Queries) GetDefaultList(ctx context.Context, userID pgtype.UUID) (FavoriteList, error) {
-	row := q.db.QueryRow(ctx, getDefaultList, userID)
-	var i FavoriteList
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Name,
-		&i.Sort,
-		&i.IsDefault,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getFavoriteItemsForUser = `-- name: GetFavoriteItemsForUser :many
-select fi.list_id, fi.service_id, fi.sort
-from favorite_items fi
-join favorite_lists fl on fl.id = fi.list_id
-where fl.user_id = $1
-order by fi.list_id, fi.sort, fi.created_at
-`
-
-type GetFavoriteItemsForUserRow struct {
-	ListID    pgtype.UUID `json:"list_id"`
-	ServiceID pgtype.UUID `json:"service_id"`
-	Sort      int32       `json:"sort"`
-}
-
-// All items across the user's lists, to assemble lists+items in one round trip.
-func (q *Queries) GetFavoriteItemsForUser(ctx context.Context, userID pgtype.UUID) ([]GetFavoriteItemsForUserRow, error) {
-	rows, err := q.db.Query(ctx, getFavoriteItemsForUser, userID)
+func (q *Queries) ListFavoriteServiceIDs(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listFavoriteServiceIDs, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GetFavoriteItemsForUserRow{}
+	items := []pgtype.UUID{}
 	for rows.Next() {
-		var i GetFavoriteItemsForUserRow
-		if err := rows.Scan(&i.ListID, &i.ServiceID, &i.Sort); err != nil {
+		var service_id pgtype.UUID
+		if err := rows.Scan(&service_id); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, service_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -141,118 +52,28 @@ func (q *Queries) GetFavoriteItemsForUser(ctx context.Context, userID pgtype.UUI
 	return items, nil
 }
 
-const getFavoriteListForUser = `-- name: GetFavoriteListForUser :one
-select id, user_id, name, sort, is_default, created_at from favorite_lists where id = $1 and user_id = $2
+const nextFavoriteSort = `-- name: NextFavoriteSort :one
+select coalesce(max(sort) + 1, 0)::int from favorites where user_id = $1
 `
 
-type GetFavoriteListForUserParams struct {
-	ID     pgtype.UUID `json:"id"`
-	UserID pgtype.UUID `json:"user_id"`
-}
-
-func (q *Queries) GetFavoriteListForUser(ctx context.Context, arg GetFavoriteListForUserParams) (FavoriteList, error) {
-	row := q.db.QueryRow(ctx, getFavoriteListForUser, arg.ID, arg.UserID)
-	var i FavoriteList
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Name,
-		&i.Sort,
-		&i.IsDefault,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getFavoriteLists = `-- name: GetFavoriteLists :many
-select id, user_id, name, sort, is_default, created_at from favorite_lists where user_id = $1 order by sort, created_at
-`
-
-func (q *Queries) GetFavoriteLists(ctx context.Context, userID pgtype.UUID) ([]FavoriteList, error) {
-	rows, err := q.db.Query(ctx, getFavoriteLists, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []FavoriteList{}
-	for rows.Next() {
-		var i FavoriteList
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Name,
-			&i.Sort,
-			&i.IsDefault,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const nextItemSort = `-- name: NextItemSort :one
-select coalesce(max(sort) + 1, 0)::int from favorite_items where list_id = $1
-`
-
-func (q *Queries) NextItemSort(ctx context.Context, listID pgtype.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, nextItemSort, listID)
+func (q *Queries) NextFavoriteSort(ctx context.Context, userID pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, nextFavoriteSort, userID)
 	var column_1 int32
 	err := row.Scan(&column_1)
 	return column_1, err
 }
 
-const removeFavoriteItem = `-- name: RemoveFavoriteItem :execrows
-delete from favorite_items where list_id = $1 and service_id = $2
+const removeFavorite = `-- name: RemoveFavorite :execrows
+delete from favorites where user_id = $1 and service_id = $2
 `
 
-type RemoveFavoriteItemParams struct {
-	ListID    pgtype.UUID `json:"list_id"`
+type RemoveFavoriteParams struct {
+	UserID    pgtype.UUID `json:"user_id"`
 	ServiceID pgtype.UUID `json:"service_id"`
 }
 
-func (q *Queries) RemoveFavoriteItem(ctx context.Context, arg RemoveFavoriteItemParams) (int64, error) {
-	result, err := q.db.Exec(ctx, removeFavoriteItem, arg.ListID, arg.ServiceID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const renameFavoriteList = `-- name: RenameFavoriteList :execrows
-update favorite_lists set name = $3 where id = $1 and user_id = $2
-`
-
-type RenameFavoriteListParams struct {
-	ID     pgtype.UUID `json:"id"`
-	UserID pgtype.UUID `json:"user_id"`
-	Name   string      `json:"name"`
-}
-
-func (q *Queries) RenameFavoriteList(ctx context.Context, arg RenameFavoriteListParams) (int64, error) {
-	result, err := q.db.Exec(ctx, renameFavoriteList, arg.ID, arg.UserID, arg.Name)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const setFavoriteListSort = `-- name: SetFavoriteListSort :execrows
-update favorite_lists set sort = $3 where id = $1 and user_id = $2
-`
-
-type SetFavoriteListSortParams struct {
-	ID     pgtype.UUID `json:"id"`
-	UserID pgtype.UUID `json:"user_id"`
-	Sort   int32       `json:"sort"`
-}
-
-func (q *Queries) SetFavoriteListSort(ctx context.Context, arg SetFavoriteListSortParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setFavoriteListSort, arg.ID, arg.UserID, arg.Sort)
+func (q *Queries) RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeFavorite, arg.UserID, arg.ServiceID)
 	if err != nil {
 		return 0, err
 	}

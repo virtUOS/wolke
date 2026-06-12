@@ -45,13 +45,6 @@ export interface SearchResults {
   services: Service[]
 }
 
-export interface FavoriteList {
-  id: string
-  name: string
-  is_default: boolean
-  sort: number
-  items: string[] // service ids
-}
 
 // ApiError carries the HTTP status so callers can react (e.g. redirect to login
 // on 401) rather than treating every failure the same.
@@ -93,17 +86,10 @@ export const api = {
     getJSON<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`, signal),
   updatePrefs: (patch: Partial<Pick<Me, 'theme' | 'view_mode'>>) => send<Me>('PATCH', '/api/me/prefs', patch),
 
-  // favorites
-  favorites: (signal?: AbortSignal) => getJSON<{ lists: FavoriteList[] }>('/api/favorites', signal),
-  createList: (name: string) => send<FavoriteList>('POST', '/api/favorites/lists', { name }),
-  renameList: (id: string, name: string) => send<void>('PATCH', `/api/favorites/lists/${id}`, { name }),
-  reorderList: (id: string, sort: number) => send<void>('PATCH', `/api/favorites/lists/${id}`, { sort }),
-  deleteList: (id: string) => send<void>('DELETE', `/api/favorites/lists/${id}`),
-  addItem: (listID: string, serviceID: string) =>
-    send<{ list_id: string }>('POST', '/api/favorites/items', { list_id: listID, service_id: serviceID }),
-  quickStar: (serviceID: string) => send<{ list_id: string }>('POST', '/api/favorites/items', { service_id: serviceID }),
-  removeItem: (listID: string, serviceID: string) =>
-    send<void>('DELETE', '/api/favorites/items', { list_id: listID, service_id: serviceID }),
+  // favorites — a flat per-user set (no lists; docs/01 §4.4)
+  favorites: (signal?: AbortSignal) => getJSON<{ services: Service[] }>('/api/favorites', signal),
+  addFavorite: (serviceID: string) => send<void>('POST', '/api/favorites/items', { service_id: serviceID }),
+  removeFavorite: (serviceID: string) => send<void>('DELETE', '/api/favorites/items', { service_id: serviceID }),
 
   // usage
   frequent: (signal?: AbortSignal) => getJSON<{ services: Service[] }>('/api/usage/frequent', signal),

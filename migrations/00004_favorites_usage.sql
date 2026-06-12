@@ -1,28 +1,17 @@
 -- +goose Up
--- Personalization (docs/02 §4): favorite lists + items, and usage tracking that
--- powers "frequently used" (per-user) and, later, aggregate metrics (docs/01 §5.4).
+-- Personalization (docs/02 §4): a flat per-user favorites set (no named lists —
+-- concept §4.4), and usage tracking that powers "frequently used" (per-user) and,
+-- later, aggregate metrics (docs/01 §5.4).
 
--- Personal lists (the Figma "Täglicher Gebrauch", "Wichtig für die Uni", …).
-create table favorite_lists (
-    id          uuid primary key default gen_random_uuid(),
+-- Favorites: a flat per-user set of services.
+create table favorites (
     user_id     uuid not null references users (id) on delete cascade,
-    name        text not null,
-    sort        integer not null default 0,
-    is_default  boolean not null default false,
-    created_at  timestamptz not null default now()
-);
-create index favorite_lists_user_idx on favorite_lists (user_id, sort);
--- At most one default list per user (the quick-star target).
-create unique index favorite_lists_one_default on favorite_lists (user_id) where is_default;
-
-create table favorite_items (
-    list_id     uuid not null references favorite_lists (id) on delete cascade,
     service_id  uuid not null references services (id) on delete cascade,
     sort        integer not null default 0,
     created_at  timestamptz not null default now(),
-    primary key (list_id, service_id)
+    primary key (user_id, service_id)
 );
-create index favorite_items_list_sort_idx on favorite_items (list_id, sort);
+create index favorites_user_sort_idx on favorites (user_id, sort);
 
 -- Raw click events: feed "frequently used" (per user) and aggregate metrics.
 -- user_id/service_id null on delete so history degrades gracefully (docs/01 §5.1).
@@ -48,5 +37,4 @@ create table usage_daily (
 -- +goose Down
 drop table usage_daily;
 drop table click_events;
-drop table favorite_items;
-drop table favorite_lists;
+drop table favorites;
