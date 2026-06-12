@@ -39,10 +39,6 @@ export function useFavorites() {
   return useQuery({ queryKey: ['favorites'], queryFn: ({ signal }) => api.favorites(signal) })
 }
 
-export function useFrequent() {
-  return useQuery({ queryKey: ['frequent'], queryFn: ({ signal }) => api.frequent(signal) })
-}
-
 // useFavoriteActions bundles add/remove; each refreshes the favorites query.
 export function useFavoriteActions() {
   const qc = useQueryClient()

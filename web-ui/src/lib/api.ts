@@ -33,6 +33,8 @@ export interface Me {
   is_admin: boolean
   view_mode: 'list' | 'table' | 'auto'
   theme: 'light' | 'dark' | 'system'
+  favorites_order: 'usage' | 'alpha'
+  favorites_separate_tab: boolean
 }
 
 export interface DefaultsView {
@@ -84,7 +86,8 @@ export const api = {
   defaults: (signal?: AbortSignal) => getJSON<DefaultsView>('/api/catalog/defaults', signal),
   search: (q: string, signal?: AbortSignal) =>
     getJSON<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`, signal),
-  updatePrefs: (patch: Partial<Pick<Me, 'theme' | 'view_mode'>>) => send<Me>('PATCH', '/api/me/prefs', patch),
+  updatePrefs: (patch: Partial<Pick<Me, 'theme' | 'view_mode' | 'favorites_order' | 'favorites_separate_tab'>>) =>
+    send<Me>('PATCH', '/api/me/prefs', patch),
 
   // favorites — a flat per-user set (no lists; docs/01 §4.4)
   favorites: (signal?: AbortSignal) => getJSON<{ services: Service[] }>('/api/favorites', signal),

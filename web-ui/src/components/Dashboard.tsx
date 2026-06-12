@@ -1,20 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Branding } from '@/lib/branding'
-import { api, type Catalog, type Category, type Me, type Service } from '@/lib/api'
+import { api, type Category, type Me, type Service } from '@/lib/api'
 import {
   useApplyTheme,
   useCatalog,
-  useDefaults,
   useFavoriteActions,
   useFavorites,
-  useFrequent,
   usePrefsMutation,
   useSearch,
 } from '@/lib/hooks'
 import { CatalogView } from './CatalogView'
-import { FavoritesPanel } from './FavoritesPanel'
-import { Tile, type TileActions } from './Tile'
+import { FavoritesSection } from './FavoritesPanel'
+import { type TileActions } from './Tile'
 import { TopBar, type Tab } from './TopBar'
 
 function useEffectiveView(mode: Me['view_mode']): 'list' | 'table' {
@@ -27,10 +25,6 @@ function useEffectiveView(mode: Me['view_mode']): 'list' | 'table' {
   }, [])
   if (mode === 'list' || mode === 'table') return mode
   return wide ? 'table' : 'list'
-}
-
-function gridClass(view: 'list' | 'table'): string {
-  return view === 'table' ? 'grid gap-3 sm:grid-cols-2 lg:grid-cols-3' : 'grid gap-3'
 }
 
 export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
@@ -46,35 +40,40 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     me.theme === 'dark' || (me.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   const catalog = useCatalog()
-  const defaults = useDefaults()
   const search = useSearch(query)
   const favorites = useFavorites()
-  const frequent = useFrequent()
   const fav = useFavoriteActions()
   const searching = query.trim().length > 0
+  const separateTab = me.favorites_separate_tab
 
   const favoriteServices = useMemo(() => favorites.data?.services ?? [], [favorites.data])
   const favoritedIDs = useMemo(() => new Set(favoriteServices.map((s) => s.id)), [favoriteServices])
 
   const actions: TileActions = {
     favoritedIDs,
-    onToggleFavorite: (s) => {
-      if (favoritedIDs.has(s.id)) {
-        fav.remove.mutate(s.id)
-      } else {
-        fav.add.mutate(s.id)
-      }
-    },
+    onToggleFavorite: (s) => (favoritedIDs.has(s.id) ? fav.remove.mutate(s.id) : fav.add.mutate(s.id)),
     onLaunch: (s) => {
       api.recordClick(s.id)
-      qc.invalidateQueries({ queryKey: ['frequent'] })
+      // Usage-ordered favorites should reflect the new click on next read.
+      qc.invalidateQueries({ queryKey: ['favorites'] })
     },
   }
+
+  const categories = catalog.data?.categories ?? []
+  const favSection = (as: 'h1' | 'h2') => (
+    <FavoritesSection favorites={favoriteServices} categories={categories} locale={locale} view={view} actions={actions} as={as} />
+  )
+  const catalogSection = catalog.isLoading || !catalog.data ? (
+    <p className="text-sm text-text-muted" aria-busy="true">Lädt…</p>
+  ) : (
+    <CatalogView services={catalog.data.services} categories={categories} locale={locale} view={view} actions={actions} />
+  )
 
   return (
     <div className="min-h-screen bg-bg text-text">
       <TopBar
         branding={branding}
+        showTabs={separateTab}
         tab={tab}
         onTab={setTab}
         query={query}
@@ -87,6 +86,10 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         onLogout={() => {
           void fetch('/auth/logout', { method: 'POST' }).finally(() => window.location.assign('/'))
         }}
+        favoritesOrder={me.favorites_order}
+        favoritesSeparateTab={separateTab}
+        onChangeOrder={(order) => prefs.mutate({ favorites_order: order })}
+        onChangeSeparateTab={(on) => prefs.mutate({ favorites_separate_tab: on })}
       />
 
       <main className="mx-auto max-w-6xl px-4 py-6">
@@ -95,98 +98,22 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             query={query}
             isLoading={search.isLoading}
             results={search.data?.services ?? []}
-            categories={catalog.data?.categories ?? []}
+            categories={categories}
             locale={locale}
             view={view}
             actions={actions}
           />
-        ) : tab === 'favorites' ? (
-          <FavoritesPanel
-            favorites={favoriteServices}
-            frequent={frequent.data?.services ?? []}
-            categories={catalog.data?.categories ?? []}
-            locale={locale}
-            view={view}
-            actions={actions}
-          />
+        ) : separateTab ? (
+          // Tab layout: favorites get their own tab.
+          tab === 'favorites' ? favSection('h1') : catalogSection
         ) : (
-          <ServicesPanel
-            locale={locale}
-            view={view}
-            displayName={me.display_name}
-            defaultsLoading={defaults.isLoading}
-            defaultServices={defaults.data?.services ?? []}
-            catalogLoading={catalog.isLoading}
-            catalog={catalog.data}
-            actions={actions}
-          />
+          // Default single page: favorites on top, then the category catalog.
+          <div className="space-y-10">
+            {favSection('h1')}
+            {catalogSection}
+          </div>
         )}
       </main>
-    </div>
-  )
-}
-
-function ServicesPanel({
-  locale,
-  view,
-  displayName,
-  defaultsLoading,
-  defaultServices,
-  catalogLoading,
-  catalog,
-  actions,
-}: {
-  locale: string
-  view: 'list' | 'table'
-  displayName: string
-  defaultsLoading: boolean
-  defaultServices: Service[]
-  catalogLoading: boolean
-  catalog: Catalog | undefined
-  actions: TileActions
-}) {
-  return (
-    <div className="space-y-10">
-      <section aria-labelledby="for-you">
-        <h1 id="for-you" className="mb-4 flex items-center gap-2 text-2xl font-bold">
-          <span aria-hidden="true" className="inline-block h-7 w-1.5 rounded bg-primary" />
-          Für dich, {displayName}
-        </h1>
-        {defaultsLoading ? (
-          <p className="text-sm text-text-muted" aria-busy="true">
-            Lädt…
-          </p>
-        ) : defaultServices.length > 0 && catalog ? (
-          <div className={gridClass(view)}>
-            {defaultServices.map((s) => (
-              <Tile
-                key={s.id}
-                service={s}
-                categories={catalog.categories}
-                locale={locale}
-                favorited={actions.favoritedIDs.has(s.id)}
-                onToggleFavorite={actions.onToggleFavorite}
-                onLaunch={actions.onLaunch}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-text-muted">Noch keine Vorauswahl für deine Rolle.</p>
-        )}
-      </section>
-
-      <section aria-labelledby="all-services">
-        <h2 id="all-services" className="mb-4 text-lg font-semibold text-text-muted">
-          Alle Dienste
-        </h2>
-        {catalogLoading || !catalog ? (
-          <p className="text-sm text-text-muted" aria-busy="true">
-            Lädt…
-          </p>
-        ) : (
-          <CatalogView services={catalog.services} categories={catalog.categories} locale={locale} view={view} actions={actions} />
-        )}
-      </section>
     </div>
   )
 }
