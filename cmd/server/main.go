@@ -16,6 +16,7 @@ import (
 
 	"github.com/virtUOS/service-hub/internal/config"
 	"github.com/virtUOS/service-hub/internal/server"
+	"github.com/virtUOS/service-hub/internal/store"
 )
 
 func main() {
@@ -34,10 +35,25 @@ func run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel(cfg.LogLevel)}))
 	slog.SetDefault(logger)
 
+	// The DB is optional in Phase 0 local dev: with no DATABASE_URL the server
+	// still serves the shell and /readyz reports always-ready. When configured,
+	// /readyz pings the pool so a load balancer can gate on real readiness.
+	var ready func(context.Context) error
+	if cfg.DatabaseURL != "" {
+		db, err := store.Open(context.Background(), cfg.DatabaseURL)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		ready = db.Ping
+		logger.Info("database connected")
+	} else {
+		logger.Warn("DATABASE_URL not set; running without a database (Phase 0 dev shell)")
+	}
+
 	handler, err := server.New(cfg, server.Deps{
 		Logger: logger,
-		// Ready stays nil (always-ready) until the DB pool lands in step 0.5.
-		Ready: nil,
+		Ready:  ready,
 	})
 	if err != nil {
 		return err
