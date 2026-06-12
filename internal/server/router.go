@@ -15,6 +15,7 @@ import (
 	"github.com/virtUOS/service-hub/internal/catalog"
 	"github.com/virtUOS/service-hub/internal/config"
 	"github.com/virtUOS/service-hub/internal/service"
+	"github.com/virtUOS/service-hub/internal/usage"
 	"github.com/virtUOS/service-hub/internal/web"
 )
 
@@ -34,6 +35,7 @@ type Deps struct {
 	Search    SearchStore
 	Prefs     service.PrefsStore
 	Favorites service.FavoritesStore
+	Usage     usage.Store
 }
 
 // New builds the HTTP handler for the app: middleware stack, operational
@@ -98,6 +100,12 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 			pr.With(requireUserJSON).Delete("/api/favorites/lists/{id}", deleteList(deps.Favorites))
 			pr.With(requireUserJSON).Post("/api/favorites/items", addItem(deps.Favorites))
 			pr.With(requireUserJSON).Delete("/api/favorites/items", removeItem(deps.Favorites))
+		}
+		if deps.Usage != nil {
+			pr.With(requireUserJSON).Post("/api/events/click", recordClick(deps.Usage))
+			if deps.Catalog != nil {
+				pr.With(requireUserJSON).Get("/api/usage/frequent", frequent(deps.Catalog, deps.Usage))
+			}
 		}
 		if deps.Catalog != nil {
 			pr.With(requireUserJSON).Get("/api/catalog", catalogList(deps.Catalog))

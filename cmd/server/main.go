@@ -73,6 +73,7 @@ func run() error {
 		deps.Defaults = db
 		deps.Search = db
 		deps.Favorites = db
+		deps.Usage = db
 	}
 
 	// Wire the real OIDC BFF when an issuer is configured and the DB is present;
