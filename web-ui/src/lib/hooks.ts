@@ -43,18 +43,13 @@ export function useFrequent() {
   return useQuery({ queryKey: ['frequent'], queryFn: ({ signal }) => api.frequent(signal) })
 }
 
-// useFavoriteActions bundles the favorite mutations; each refreshes the lists.
+// useFavoriteActions bundles add/remove; each refreshes the favorites query.
 export function useFavoriteActions() {
   const qc = useQueryClient()
   const onSuccess = () => qc.invalidateQueries({ queryKey: ['favorites'] })
   return {
-    quickStar: useMutation({ mutationFn: (serviceID: string) => api.quickStar(serviceID), onSuccess }),
-    addItem: useMutation({ mutationFn: (v: { listID: string; serviceID: string }) => api.addItem(v.listID, v.serviceID), onSuccess }),
-    removeItem: useMutation({ mutationFn: (v: { listID: string; serviceID: string }) => api.removeItem(v.listID, v.serviceID), onSuccess }),
-    createList: useMutation({ mutationFn: (name: string) => api.createList(name), onSuccess }),
-    renameList: useMutation({ mutationFn: (v: { id: string; name: string }) => api.renameList(v.id, v.name), onSuccess }),
-    reorderList: useMutation({ mutationFn: (v: { id: string; sort: number }) => api.reorderList(v.id, v.sort), onSuccess }),
-    deleteList: useMutation({ mutationFn: (id: string) => api.deleteList(id), onSuccess }),
+    add: useMutation({ mutationFn: (serviceID: string) => api.addFavorite(serviceID), onSuccess }),
+    remove: useMutation({ mutationFn: (serviceID: string) => api.removeFavorite(serviceID), onSuccess }),
   }
 }
 

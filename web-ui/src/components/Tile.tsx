@@ -1,15 +1,14 @@
 import { useId, useState } from 'react'
-import { BookOpen, ChevronDown, ChevronUp, ExternalLink, FolderPlus, Star } from 'lucide-react'
+import { BookOpen, ChevronDown, ChevronUp, ExternalLink, Star } from 'lucide-react'
 import { localized, type Category, type Service } from '@/lib/api'
 import { iconByName } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
 // TileActions bundles the favorite/launch handlers shared by every tile grid,
-// so views pass one object instead of drilling four props.
+// so views pass one object instead of drilling several props.
 export interface TileActions {
   favoritedIDs: Set<string>
   onToggleFavorite: (s: Service) => void
-  onAddToList: (s: Service) => void
   onLaunch: (s: Service) => void
 }
 
@@ -17,11 +16,9 @@ interface TileProps {
   service: Service
   locale: string
   categories: Category[]
-  /** When provided, the favorite star is shown (quick-add to the default list). */
+  /** When provided, the favorite star is shown (toggles the flat favorites set). */
   favorited?: boolean
   onToggleFavorite?: (service: Service) => void
-  /** When provided, an "add to list…" button opens the deliberate add-to-list flow. */
-  onAddToList?: (service: Service) => void
   /** Fired when the launch zone is activated (records a click event). */
   onLaunch?: (service: Service) => void
 }
@@ -31,7 +28,7 @@ interface TileProps {
 // tab; the bottom zone toggles the description in place and never navigates.
 // Three controls, three roles — so keyboard and screen-reader users get the same
 // crisp launch/explore split.
-export function Tile({ service, locale, categories, favorited, onToggleFavorite, onAddToList, onLaunch }: TileProps) {
+export function Tile({ service, locale, categories, favorited, onToggleFavorite, onLaunch }: TileProps) {
   const [open, setOpen] = useState(false)
   const regionId = useId()
 
@@ -44,30 +41,16 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
   return (
     <div className="rounded-lg border border-surface bg-bg shadow-sm">
       <div className="relative flex items-start gap-3 p-4">
-        {(onToggleFavorite || onAddToList) && (
-          <div className="absolute right-2 top-2 flex items-center gap-0.5">
-            {onAddToList && (
-              <button
-                type="button"
-                aria-label={`${service.name} zu einer Liste hinzufügen`}
-                onClick={() => onAddToList(service)}
-                className="rounded-md p-1 text-text-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-              >
-                <FolderPlus className="h-5 w-5" aria-hidden="true" />
-              </button>
-            )}
-            {onToggleFavorite && (
-              <button
-                type="button"
-                aria-pressed={favorited}
-                aria-label={favorited ? `${service.name} aus Favoriten entfernen` : `${service.name} zu Favoriten hinzufügen`}
-                onClick={() => onToggleFavorite(service)}
-                className="rounded-md p-1 text-text-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-              >
-                <Star className={cn('h-5 w-5', favorited && 'fill-[var(--primary)] text-primary')} aria-hidden="true" />
-              </button>
-            )}
-          </div>
+        {onToggleFavorite && (
+          <button
+            type="button"
+            aria-pressed={favorited}
+            aria-label={favorited ? `${service.name} aus Favoriten entfernen` : `${service.name} zu Favoriten hinzufügen`}
+            onClick={() => onToggleFavorite(service)}
+            className="absolute right-2 top-2 rounded-md p-1 text-text-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+          >
+            <Star className={cn('h-5 w-5', favorited && 'fill-[var(--primary)] text-primary')} aria-hidden="true" />
+          </button>
         )}
 
         {/* Top zone = launch. */}

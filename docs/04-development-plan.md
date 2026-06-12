@@ -41,10 +41,10 @@ A few habits keep an agentic build on the rails:
   expands a tile, and launches a service in a new tab. This is the product's spine — get it right.
 
 ### Phase 2 — Personalization
-- Favorite lists + items; quick-star (default list) and add-to-list dialog; reorder.
+- Favorites: a flat per-user set; the star toggles favorite (no named lists — concept §4.4).
 - Click event ingestion (`POST /api/events/click`) + **frequently used** (`/api/usage/frequent`).
 - Doc-only entries rendered distinctly.
-- **Done when:** a user pins services into named lists and "frequently used" reflects real clicks.
+- **Done when:** a user favorites services and "frequently used" reflects real clicks.
 
 ### Phase 3 — Admin (form path) + announcements
 - Admin guard; admin CRUD form with live tile preview, icon picker, multi-category, URL validation, soft-delete.

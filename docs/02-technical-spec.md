@@ -13,7 +13,7 @@ boring, well-supported libraries.** Every choice below is justified against that
 | Concern | Choice | Why |
 |---------|--------|-----|
 | HTTP | `net/http` + **chi** router | Stdlib-native, tiny, middleware-friendly. (Plain `net/http` 1.22 routing is also fine; chi just reads nicer.) |
-| DB | **PostgreSQL** | One relational store covers catalog, users, favorites, lists, events, announcements, audit. |
+| DB | **PostgreSQL** | One relational store covers catalog, users, favorites, events, announcements, audit. |
 | DB access | **pgx** + **sqlc** | Type-safe queries generated from SQL. No heavy ORM; you write SQL, get Go funcs. |
 | Migrations | **goose** (or golang-migrate) | Versioned, checked into the repo. |
 | Auth | **coreos/go-oidc** + `golang.org/x/oauth2` | Provider-agnostic OIDC client (uses discovery). Works with Keycloak, Authentik, Zitadel, Auth0, Entra, etc. — not Keycloak-specific. |
@@ -31,7 +31,7 @@ Structure (a monolith with clear internal packages — not microservices):
 /internal
   /auth          # OIDC, sessions, role/admin resolution
   /catalog       # services, categories, search
-  /favorites     # lists + items
+  /favorites     # the user's flat favorites set
   /usage         # click ingestion, "frequently used", rollups
   /announce      # announcements
   /admin         # write paths, validation, audit
@@ -148,19 +148,13 @@ create table role_defaults (
   primary key (role, service_id)
 );
 
--- Personal lists (the Figma "Täglicher Gebrauch", "Wichtig für die Uni", ...).
-create table favorite_lists (
-  id        uuid primary key default gen_random_uuid(),
-  user_id   uuid references users(id) on delete cascade,
-  name      text not null,
-  sort      int not null default 0,
-  is_default boolean not null default false
-);
-create table favorite_items (
-  list_id    uuid references favorite_lists(id) on delete cascade,
+-- Favorites: a flat per-user set of services (no named lists — see concept §4.4).
+create table favorites (
+  user_id    uuid references users(id) on delete cascade,
   service_id uuid references services(id) on delete cascade,
   sort       int not null default 0,
-  primary key (list_id, service_id)
+  created_at timestamptz not null default now(),
+  primary key (user_id, service_id)
 );
 
 -- Click events feed "frequently used" + aggregate metrics.
@@ -207,7 +201,7 @@ create table audit_log (
 
 Indexes worth having from day one: `services(is_active)`, a trigram/GIN index on
 `services.name` and `services.description` for search, `click_events(user_id, clicked_at)`,
-`favorite_items(list_id, sort)`.
+`favorites(user_id, sort)`.
 
 ## 5. Search
 Start with **PostgreSQL full-text + `pg_trgm`** (fuzzy/prefix over name + description + category
@@ -421,12 +415,9 @@ GET    /api/search?q=              → grouped search results
 
 # personalization
 PATCH  /api/me/prefs               → theme, view_mode
-GET    /api/favorites              → the user's lists + items
-POST   /api/favorites/lists        → create list
-PATCH  /api/favorites/lists/:id    → rename / reorder
-DELETE /api/favorites/lists/:id    → delete list
-POST   /api/favorites/items        → add service to a list (quick-star → default list)
-DELETE /api/favorites/items        → remove
+GET    /api/favorites              → the user's favorited services
+POST   /api/favorites/items        → add a service to favorites {service_id}
+DELETE /api/favorites/items        → remove a service from favorites {service_id}
 GET    /api/usage/frequent         → the user's frequently-used services
 
 # events

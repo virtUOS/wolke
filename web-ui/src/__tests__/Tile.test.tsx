@@ -80,17 +80,9 @@ describe('Tile', () => {
     expect(onLaunch).toHaveBeenCalledWith(service)
   })
 
-  it('shows an add-to-list button when onAddToList is provided', async () => {
-    const user = userEvent.setup()
-    const onAddToList = vi.fn()
-    render(<Tile service={service} categories={categories} locale="de" onAddToList={onAddToList} />)
-    await user.click(screen.getByRole('button', { name: /zu einer Liste hinzufügen/ }))
-    expect(onAddToList).toHaveBeenCalledWith(service)
-  })
-
   it('has no axe violations with all controls', async () => {
     const { container } = render(
-      <Tile service={service} categories={categories} locale="de" onToggleFavorite={() => {}} onAddToList={() => {}} onLaunch={() => {}} />,
+      <Tile service={service} categories={categories} locale="de" onToggleFavorite={() => {}} onLaunch={() => {}} />,
     )
     await expectNoAxeViolations(container)
   })
