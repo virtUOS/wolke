@@ -67,13 +67,15 @@ func run() error {
 	// writes (Phase 3). Reads serve from cache (docs/02 §9).
 	if db != nil {
 		dbForCatalog := db
-		deps.Catalog = catalog.NewCache(catalogCacheTTL, func(ctx context.Context) (*catalog.Snapshot, error) {
+		cache := catalog.NewCache(catalogCacheTTL, func(ctx context.Context) (*catalog.Snapshot, error) {
 			return catalog.Load(ctx, dbForCatalog)
 		})
+		deps.Catalog = cache
 		deps.Defaults = db
 		deps.Search = db
 		deps.Favorites = db
 		deps.Usage = db
+		deps.Admin = &server.AdminDeps{Store: db, Invalidate: cache.Invalidate, Audit: db}
 	}
 
 	// Wire the real OIDC BFF when an issuer is configured and the DB is present;
