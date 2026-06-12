@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { AppShell } from '@/components/AppShell'
+import { Dashboard } from '@/components/Dashboard'
+import { useMe } from '@/lib/hooks'
 import { applyBrandingTokens, applySystemTheme, fetchBranding, type Branding } from '@/lib/branding'
 
 export default function App() {
   const [branding, setBranding] = useState<Branding | null>(null)
   const [failed, setFailed] = useState(false)
+  const me = useMe()
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -23,19 +25,19 @@ export default function App() {
     return () => ctrl.abort()
   }, [])
 
-  if (failed) {
+  if (failed || me.isError) {
     return (
       <div role="alert" className="p-6 text-sm">
-        Die Konfiguration konnte nicht geladen werden.
+        Die Anwendung konnte nicht geladen werden. Bitte lade die Seite neu.
       </div>
     )
   }
-  if (!branding) {
+  if (!branding || me.isLoading || !me.data) {
     return (
       <div aria-busy="true" className="p-6 text-sm">
         Lädt…
       </div>
     )
   }
-  return <AppShell branding={branding} />
+  return <Dashboard branding={branding} me={me.data} />
 }
