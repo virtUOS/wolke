@@ -30,6 +30,7 @@ type Deps struct {
 	// Catalog and Defaults back the read API; mounted when present (DB configured).
 	Catalog  *catalog.Cache
 	Defaults RoleDefaultsStore
+	Search   SearchStore
 }
 
 // New builds the HTTP handler for the app: middleware stack, operational
@@ -87,6 +88,7 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 		if deps.Catalog != nil {
 			pr.With(requireUserJSON).Get("/api/catalog", catalogList(deps.Catalog))
 			pr.With(requireUserJSON).Get("/api/catalog/defaults", catalogDefaults(deps.Catalog, deps.Defaults))
+			pr.With(requireUserJSON).Get("/api/search", search(deps.Catalog, deps.Search))
 		}
 		pr.With(requireUserRedirect).Handle("/*", spaHandler)
 	})

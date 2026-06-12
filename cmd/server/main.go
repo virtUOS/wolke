@@ -71,6 +71,7 @@ func run() error {
 			return catalog.Load(ctx, dbForCatalog)
 		})
 		deps.Defaults = db
+		deps.Search = db
 	}
 
 	// Wire the real OIDC BFF when an issuer is configured and the DB is present;
