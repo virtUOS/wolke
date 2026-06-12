@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -41,13 +42,19 @@ func recoverer(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
-				if rec := recover(); rec != nil && rec != http.ErrAbortHandler {
-					log.LogAttrs(r.Context(), slog.LevelError, "panic recovered",
-						slog.String("request_id", middleware.GetReqID(r.Context())),
-						slog.Any("panic", rec),
-					)
-					writeJSON(w, http.StatusInternalServerError, map[string]string{"status": "error"})
+				rec := recover()
+				if rec == nil {
+					return
 				}
+				// Let the server handle a deliberate abort rather than masking it.
+				if err, ok := rec.(error); ok && errors.Is(err, http.ErrAbortHandler) {
+					panic(rec)
+				}
+				log.LogAttrs(r.Context(), slog.LevelError, "panic recovered",
+					slog.String("request_id", middleware.GetReqID(r.Context())),
+					slog.Any("panic", rec),
+				)
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"status": "error"})
 			}()
 			next.ServeHTTP(w, r)
 		})

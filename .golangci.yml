@@ -1,0 +1,19 @@
+version: "2"
+
+# sqlc- and embed-generated files carry "DO NOT EDIT" headers and are skipped by
+# golangci-lint automatically.
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - misspell
+    - revive
+    - bodyclose
+    - errorlint
+  exclusions:
+    # The frontend dir vendors a stray Go package under node_modules; never lint it.
+    paths:
+      - web-ui
+
+formatters:
+  enable:
+    - gofmt
