@@ -15,6 +15,30 @@ type Category struct {
 	Sort  int32       `json:"sort"`
 }
 
+type ClickEvent struct {
+	ID        int64              `json:"id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	ServiceID pgtype.UUID        `json:"service_id"`
+	UserRole  string             `json:"user_role"`
+	ClickedAt pgtype.Timestamptz `json:"clicked_at"`
+}
+
+type FavoriteItem struct {
+	ListID    pgtype.UUID        `json:"list_id"`
+	ServiceID pgtype.UUID        `json:"service_id"`
+	Sort      int32              `json:"sort"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type FavoriteList struct {
+	ID        pgtype.UUID        `json:"id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Name      string             `json:"name"`
+	Sort      int32              `json:"sort"`
+	IsDefault bool               `json:"is_default"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type RoleDefault struct {
 	Role      string      `json:"role"`
 	ServiceID pgtype.UUID `json:"service_id"`
@@ -44,6 +68,13 @@ type Session struct {
 	Data      []byte             `json:"data"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+}
+
+type UsageDaily struct {
+	Day       pgtype.Date `json:"day"`
+	ServiceID pgtype.UUID `json:"service_id"`
+	UserRole  string      `json:"user_role"`
+	Clicks    int64       `json:"clicks"`
 }
 
 type User struct {
