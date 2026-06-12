@@ -28,12 +28,17 @@ func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) error 
 	return err
 }
 
-const listFavoriteServiceIDs = `-- name: ListFavoriteServiceIDs :many
-select service_id from favorites where user_id = $1 order by sort, created_at
+const listFavoritesAlpha = `-- name: ListFavoritesAlpha :many
+select f.service_id
+from favorites f
+join services s on s.id = f.service_id
+where f.user_id = $1
+order by s.name
 `
 
-func (q *Queries) ListFavoriteServiceIDs(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
-	rows, err := q.db.Query(ctx, listFavoriteServiceIDs, userID)
+// Favorites ordered alphabetically by service name.
+func (q *Queries) ListFavoritesAlpha(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listFavoritesAlpha, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +55,50 @@ func (q *Queries) ListFavoriteServiceIDs(ctx context.Context, userID pgtype.UUID
 		return nil, err
 	}
 	return items, nil
+}
+
+const listFavoritesByUsage = `-- name: ListFavoritesByUsage :many
+select f.service_id
+from favorites f
+left join (
+    select click_events.service_id, count(*) as c
+    from click_events
+    where click_events.user_id = $1
+    group by click_events.service_id
+) cc on cc.service_id = f.service_id
+where f.user_id = $1
+order by coalesce(cc.c, 0) desc, f.sort, f.created_at
+`
+
+// Favorites ordered by the user's click count (most-used first), then by the
+// stored order as a stable tiebreaker.
+func (q *Queries) ListFavoritesByUsage(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listFavoritesByUsage, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var service_id pgtype.UUID
+		if err := rows.Scan(&service_id); err != nil {
+			return nil, err
+		}
+		items = append(items, service_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markFavoritesSeeded = `-- name: MarkFavoritesSeeded :exec
+update users set favorites_seeded = true where id = $1
+`
+
+func (q *Queries) MarkFavoritesSeeded(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markFavoritesSeeded, userID)
+	return err
 }
 
 const nextFavoriteSort = `-- name: NextFavoriteSort :one
@@ -78,4 +127,25 @@ func (q *Queries) RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const seedFavoritesFromRoleDefaults = `-- name: SeedFavoritesFromRoleDefaults :exec
+insert into favorites (user_id, service_id, sort)
+select $1, rd.service_id, rd.sort
+from role_defaults rd
+join services s on s.id = rd.service_id
+where rd.role = $2 and s.is_active = true
+on conflict (user_id, service_id) do nothing
+`
+
+type SeedFavoritesFromRoleDefaultsParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	Role   string      `json:"role"`
+}
+
+// One-time pre-fill: copy the user's role defaults into favorites as real,
+// editable entries (concept §4.4).
+func (q *Queries) SeedFavoritesFromRoleDefaults(ctx context.Context, arg SeedFavoritesFromRoleDefaultsParams) error {
+	_, err := q.db.Exec(ctx, seedFavoritesFromRoleDefaults, arg.UserID, arg.Role)
+	return err
 }

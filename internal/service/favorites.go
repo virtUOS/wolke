@@ -18,15 +18,40 @@ func (e *NotFoundError) Error() string { return e.What + " not found" }
 // FavoritesStore is the persistence the favorites use case needs. Favorites are
 // a flat per-user set — no named lists (docs/01 §4.4).
 type FavoritesStore interface {
-	ListFavoriteServiceIDs(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
+	ListFavoritesByUsage(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
+	ListFavoritesAlpha(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
 	NextFavoriteSort(ctx context.Context, userID pgtype.UUID) (int32, error)
 	AddFavorite(ctx context.Context, arg store.AddFavoriteParams) error
 	RemoveFavorite(ctx context.Context, arg store.RemoveFavoriteParams) (int64, error)
+	SeedFavoritesFromRoleDefaults(ctx context.Context, arg store.SeedFavoritesFromRoleDefaultsParams) error
+	MarkFavoritesSeeded(ctx context.Context, userID pgtype.UUID) error
 }
 
-// ListFavorites returns the user's favorited service ids, in display order.
-func ListFavorites(ctx context.Context, db FavoritesStore, userID pgtype.UUID) ([]string, error) {
-	ids, err := db.ListFavoriteServiceIDs(ctx, userID)
+// ListFavorites returns the user's favorited service ids in the user's chosen
+// order (by usage or alphabetically). On the user's first call it pre-fills
+// favorites from their role defaults, as real editable entries, exactly once
+// (concept §4.4).
+func ListFavorites(ctx context.Context, db FavoritesStore, u store.User) ([]string, error) {
+	if !u.FavoritesSeeded {
+		if err := db.SeedFavoritesFromRoleDefaults(ctx, store.SeedFavoritesFromRoleDefaultsParams{
+			UserID: u.ID, Role: u.PrimaryRole,
+		}); err != nil {
+			return nil, fmt.Errorf("seed favorites: %w", err)
+		}
+		if err := db.MarkFavoritesSeeded(ctx, u.ID); err != nil {
+			return nil, fmt.Errorf("mark favorites seeded: %w", err)
+		}
+	}
+
+	var (
+		ids []pgtype.UUID
+		err error
+	)
+	if u.FavoritesOrder == "alpha" {
+		ids, err = db.ListFavoritesAlpha(ctx, u.ID)
+	} else {
+		ids, err = db.ListFavoritesByUsage(ctx, u.ID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("list favorites: %w", err)
 	}

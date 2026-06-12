@@ -24,16 +24,19 @@ type PrefsStore interface {
 	UpdateUserPrefs(ctx context.Context, arg store.UpdateUserPrefsParams) (store.User, error)
 }
 
-// Prefs are the user-controlled display preferences. Both fields are required
+// Prefs are the user-controlled display preferences. All fields are required
 // here; the caller fills any unspecified field with the user's current value.
 type Prefs struct {
-	Theme    string
-	ViewMode string
+	Theme                string
+	ViewMode             string
+	FavoritesOrder       string
+	FavoritesSeparateTab bool
 }
 
 var (
-	validThemes    = map[string]bool{"light": true, "dark": true, "system": true}
-	validViewModes = map[string]bool{"list": true, "table": true, "auto": true}
+	validThemes          = map[string]bool{"light": true, "dark": true, "system": true}
+	validViewModes       = map[string]bool{"list": true, "table": true, "auto": true}
+	validFavoritesOrders = map[string]bool{"usage": true, "alpha": true}
 )
 
 // UpdatePrefs validates and persists a user's display preferences. Validation
@@ -46,9 +49,14 @@ func UpdatePrefs(ctx context.Context, db PrefsStore, userID pgtype.UUID, p Prefs
 	if !validViewModes[p.ViewMode] {
 		return store.User{}, &ValidationError{Field: "view_mode", Msg: "must be one of list, table, auto"}
 	}
+	if !validFavoritesOrders[p.FavoritesOrder] {
+		return store.User{}, &ValidationError{Field: "favorites_order", Msg: "must be one of usage, alpha"}
+	}
 	return db.UpdateUserPrefs(ctx, store.UpdateUserPrefsParams{
-		ID:       userID,
-		ViewMode: p.ViewMode,
-		Theme:    p.Theme,
+		ID:                   userID,
+		ViewMode:             p.ViewMode,
+		Theme:                p.Theme,
+		FavoritesOrder:       p.FavoritesOrder,
+		FavoritesSeparateTab: p.FavoritesSeparateTab,
 	})
 }

@@ -12,13 +12,15 @@ import (
 // meResponse is the current-user read model (docs/02 §12): identity, role/admin,
 // and the persisted prefs the SPA needs to render.
 type meResponse struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
-	Email       string `json:"email,omitempty"`
-	PrimaryRole string `json:"primary_role"`
-	IsAdmin     bool   `json:"is_admin"`
-	ViewMode    string `json:"view_mode"`
-	Theme       string `json:"theme"`
+	ID                   string `json:"id"`
+	DisplayName          string `json:"display_name"`
+	Email                string `json:"email,omitempty"`
+	PrimaryRole          string `json:"primary_role"`
+	IsAdmin              bool   `json:"is_admin"`
+	ViewMode             string `json:"view_mode"`
+	Theme                string `json:"theme"`
+	FavoritesOrder       string `json:"favorites_order"`
+	FavoritesSeparateTab bool   `json:"favorites_separate_tab"`
 }
 
 // me returns the authenticated user. It assumes requireUserJSON ran first.
@@ -33,13 +35,15 @@ func me(w http.ResponseWriter, r *http.Request) {
 
 func toMeResponse(u store.User) meResponse {
 	return meResponse{
-		ID:          uuidString(u.ID),
-		DisplayName: u.DisplayName,
-		Email:       textString(u.Email),
-		PrimaryRole: u.PrimaryRole,
-		IsAdmin:     u.IsAdmin,
-		ViewMode:    u.ViewMode,
-		Theme:       u.Theme,
+		ID:                   uuidString(u.ID),
+		DisplayName:          u.DisplayName,
+		Email:                textString(u.Email),
+		PrimaryRole:          u.PrimaryRole,
+		IsAdmin:              u.IsAdmin,
+		ViewMode:             u.ViewMode,
+		Theme:                u.Theme,
+		FavoritesOrder:       u.FavoritesOrder,
+		FavoritesSeparateTab: u.FavoritesSeparateTab,
 	}
 }
 

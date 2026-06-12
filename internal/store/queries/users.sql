@@ -16,9 +16,11 @@ returning *;
 select * from users where id = $1;
 
 -- name: UpdateUserPrefs :one
--- Theme/view-mode persist server-side so they follow the user across devices.
+-- Display prefs persist server-side so they follow the user across devices.
 update users
-set view_mode = $2,
-    theme     = $3
-where id = $1
+set view_mode              = @view_mode,
+    theme                  = @theme,
+    favorites_order        = @favorites_order,
+    favorites_separate_tab = @favorites_separate_tab
+where id = @id
 returning *;
