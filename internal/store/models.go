@@ -15,6 +15,29 @@ type Category struct {
 	Sort  int32       `json:"sort"`
 }
 
+type RoleDefault struct {
+	Role      string      `json:"role"`
+	ServiceID pgtype.UUID `json:"service_id"`
+	Sort      int32       `json:"sort"`
+}
+
+type Service struct {
+	ID          pgtype.UUID        `json:"id"`
+	Name        string             `json:"name"`
+	Description []byte             `json:"description"`
+	ServiceUrl  pgtype.Text        `json:"service_url"`
+	DocUrl      pgtype.Text        `json:"doc_url"`
+	Icon        string             `json:"icon"`
+	IsActive    bool               `json:"is_active"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type ServiceCategory struct {
+	ServiceID  pgtype.UUID `json:"service_id"`
+	CategoryID pgtype.UUID `json:"category_id"`
+}
+
 type Session struct {
 	ID        string             `json:"id"`
 	UserID    pgtype.UUID        `json:"user_id"`

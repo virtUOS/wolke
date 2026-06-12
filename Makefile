@@ -57,6 +57,11 @@ migrate-down: ## Roll back the last migration (goose down)
 sqlc: ## Regenerate type-safe queries from SQL
 	go tool sqlc generate
 
+.PHONY: seed
+seed: ## Load dev catalog seed data (idempotent; dev only)
+	podman exec -i $(PG_CONTAINER) psql -q -U servicehub -d servicehub < dev/seed.sql
+	@echo "seeded dev catalog"
+
 ## --- Backend ---
 
 .PHONY: run
