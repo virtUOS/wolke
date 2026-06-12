@@ -1,16 +1,14 @@
 <!doctype html>
-<!--
-  Placeholder so go:embed always has a dist/ to embed and `go build` works
-  without a frontend build. The production image (and the local prod-like run)
-  copies web-ui/dist/* over this file before building with the embed, so the
-  real themed SPA is what ships. Dev uses the Vite server instead (docs/04 §4).
--->
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/branding/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>IT Service</title>
+    <script type="module" crossorigin src="/assets/index-D_0m88ec.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-eC2ybZx_.css">
   </head>
   <body>
-    <p>Frontend build not embedded. Run the Vite dev server, or build web-ui and rebuild the binary.</p>
+    <div id="root"></div>
   </body>
 </html>

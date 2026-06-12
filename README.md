@@ -58,17 +58,22 @@ make serve                      # builds the SPA into the binary, loads .env, ru
 # open PUBLIC_URL (http://127.0.0.1:8080); you're auto-logged-in via the mock
 ```
 
-**Active development (HMR)** — Go API + Vite, two terminals:
+**Active development (HMR)** — Go API + Vite, two terminals. Vite is pinned to
+`:5180`, so set `PUBLIC_URL=http://localhost:5180` in `.env` first (the login
+round-trip must return to the Vite origin, not `:8080`):
 
 ```bash
+# in .env: PUBLIC_URL=http://localhost:5180
 make run                        # A: Go API on :8080 (loads .env)
-make web-dev                    # B: Vite SPA (proxies /api,/auth → :8080)
+make web-dev                    # B: Vite SPA on http://localhost:5180 (proxies /api,/auth → :8080)
+# open http://localhost:5180
 ```
 
-For the Vite loop the browser hits Vite, which bypasses the server's login gate,
-so the SPA redirects to `/auth/login` itself on a 401. For that round-trip to land
-back in Vite, set `PUBLIC_URL` in `.env` to the **Vite origin** it prints (e.g.
-`http://localhost:5173`, or `5174` if 5173 is taken) before `make run`.
+Why: the browser hits Vite, which serves the SPA directly and bypasses the
+server's login gate, so the SPA redirects to `/auth/login` on a 401. The OIDC
+`redirect_uri` is built from `PUBLIC_URL`; pointing it at `:8080` would send the
+callback to a different origin than where the handshake cookie was set, and login
+would fail. `make serve` (single origin) sidesteps all of this.
 
 Useful targets (`make help` lists all):
 

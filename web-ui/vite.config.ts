@@ -11,7 +11,11 @@ export default defineConfig({
     alias: { '@': path.resolve(__dirname, './src') },
   },
   server: {
-    port: 5173,
+    // Pinned (strictPort) so the OIDC PUBLIC_URL for the dev loop is
+    // deterministic: set PUBLIC_URL=http://localhost:5180 in .env for `make run`.
+    // 5173 is avoided because it commonly collides with other local projects.
+    port: 5180,
+    strictPort: true,
     proxy: {
       '/api': 'http://localhost:8080',
       '/branding': 'http://localhost:8080',
