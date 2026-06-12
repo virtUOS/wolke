@@ -8,6 +8,29 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Announcement struct {
+	ID          pgtype.UUID        `json:"id"`
+	Title       []byte             `json:"title"`
+	Body        []byte             `json:"body"`
+	Severity    string             `json:"severity"`
+	Audience    string             `json:"audience"`
+	StartsAt    pgtype.Timestamptz `json:"starts_at"`
+	EndsAt      pgtype.Timestamptz `json:"ends_at"`
+	Dismissible bool               `json:"dismissible"`
+	CreatedBy   pgtype.UUID        `json:"created_by"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type AuditLog struct {
+	ID        int64              `json:"id"`
+	ActorID   pgtype.UUID        `json:"actor_id"`
+	ActorKind string             `json:"actor_kind"`
+	Action    string             `json:"action"`
+	TargetID  pgtype.UUID        `json:"target_id"`
+	Diff      []byte             `json:"diff"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type Category struct {
 	ID    pgtype.UUID `json:"id"`
 	Slug  string      `json:"slug"`

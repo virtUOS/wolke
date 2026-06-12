@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -31,6 +32,11 @@ func Open(ctx context.Context, url string) (*DB, error) {
 // Ping reports whether the database is reachable; it backs the /readyz probe.
 func (db *DB) Ping(ctx context.Context) error {
 	return db.Pool.Ping(ctx)
+}
+
+// Begin starts a transaction (used by multi-statement writes in the service layer).
+func (db *DB) Begin(ctx context.Context) (pgx.Tx, error) {
+	return db.Pool.Begin(ctx)
 }
 
 // Close releases the pool.
