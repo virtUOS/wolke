@@ -67,7 +67,15 @@ Useful targets (`make help` lists all):
 
 Integration tests that need Postgres read `DATABASE_URL` and **skip** when it is
 unset, so `go test ./...` is safe without a database; `make test` (after `make db
-&& make migrate`) runs them for real.
+&& make migrate`) runs them for real. The OIDC BFF integration test additionally
+needs a mock IdP — `make idp` starts one on :8455, then:
+
+```bash
+OIDC_TEST_ISSUER=http://127.0.0.1:8455/default make test   # use 127.0.0.1, not localhost
+```
+
+To run the app against the mock for manual login, set `OIDC_ISSUER_URL`,
+`OIDC_CLIENT_ID=service-hub`, and a `SESSION_SECRET` in `.env` before `make run`.
 
 ### End-to-end stack (Compose, for staging / pre-release)
 

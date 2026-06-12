@@ -29,6 +29,22 @@ db: ## Start (or resume) the local Postgres 17 container
 db-stop: ## Stop the local Postgres container
 	@podman stop $(PG_CONTAINER)
 
+OIDC_CONTAINER ?= servicehub-oidc
+OIDC_TEST_ISSUER ?= http://127.0.0.1:8455/default
+export OIDC_TEST_ISSUER
+
+.PHONY: idp
+idp: ## Start the mock OIDC IdP on :8455 (for `make run` and the auth test)
+	@podman start $(OIDC_CONTAINER) 2>/dev/null || \
+	  podman run -d --name $(OIDC_CONTAINER) -p 8455:8080 \
+	    -e JSON_CONFIG="$$(cat dev/mock-oidc-config.json)" \
+	    ghcr.io/navikt/mock-oauth2-server:2.1.10
+	@echo "Mock OIDC up: $(OIDC_TEST_ISSUER) (use 127.0.0.1, not localhost)"
+
+.PHONY: idp-stop
+idp-stop: ## Stop the mock OIDC IdP
+	@podman stop $(OIDC_CONTAINER)
+
 .PHONY: migrate
 migrate: ## Apply all migrations (goose up)
 	go tool goose -dir migrations postgres "$(DATABASE_URL)" up
