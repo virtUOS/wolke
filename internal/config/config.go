@@ -27,6 +27,10 @@ type Config struct {
 	MetricsToken   string   `yaml:"metrics_token"`
 	LogLevel       string   `yaml:"log_level"`
 	TrustedProxies []string `yaml:"trusted_proxies"`
+	// BrandingDir is the directory of mounted branding assets (logos, favicon)
+	// served under /branding/. A deployer mounts their own; the repo ships a
+	// default. The logo_* / favicon paths in Branding reference files here.
+	BrandingDir string `yaml:"branding_dir"`
 
 	OIDC     OIDC     `yaml:"oidc"`
 	Branding Branding `yaml:"branding"`
@@ -61,21 +65,23 @@ type AdminMapping struct {
 // Branding is the runtime skin served at GET /api/branding (docs/02 §11,
 // docs/03 §2). The bundled defaults are the UOS skin; a deployer overrides them
 // by mounting a branding.yaml and swapping logo assets — no recompile.
+// The json tags below are deliberate: Branding carries no secrets, so the
+// config struct is also the exact GET /api/branding response shape (docs/02 §12).
 type Branding struct {
-	ProductName   string `yaml:"product_name"`
-	OrgName       string `yaml:"org_name"`
-	LogoLight     string `yaml:"logo_light"`
-	LogoDark      string `yaml:"logo_dark"`
-	Favicon       string `yaml:"favicon"`
-	DefaultLocale string `yaml:"default_locale"`
-	Theme         Theme  `yaml:"theme"`
+	ProductName   string `yaml:"product_name" json:"product_name"`
+	OrgName       string `yaml:"org_name" json:"org_name"`
+	LogoLight     string `yaml:"logo_light" json:"logo_light"`
+	LogoDark      string `yaml:"logo_dark" json:"logo_dark"`
+	Favicon       string `yaml:"favicon" json:"favicon"`
+	DefaultLocale string `yaml:"default_locale" json:"default_locale"`
+	Theme         Theme  `yaml:"theme" json:"theme"`
 }
 
 // Theme carries the light/dark token sets. Tokens are a map so the variable
 // names stay stable while only values change across deployments (docs/03 §2).
 type Theme struct {
-	Light map[string]string `yaml:"light"`
-	Dark  map[string]string `yaml:"dark"`
+	Light map[string]string `yaml:"light" json:"light"`
+	Dark  map[string]string `yaml:"dark" json:"dark"`
 }
 
 // Defaults returns the bundled configuration: dev-friendly scalars and the UOS
@@ -87,6 +93,7 @@ func Defaults() Config {
 		PublicURL:      "http://localhost:8080",
 		LogLevel:       "info",
 		TrustedProxies: nil,
+		BrandingDir:    "branding",
 		OIDC: OIDC{
 			Scopes: []string{"openid", "profile", "email"},
 			Role: RoleMapping{
@@ -171,6 +178,7 @@ func applyEnv(cfg *Config, lookupEnv func(string) (string, bool)) {
 	setStr("SESSION_SECRET", &cfg.SessionSecret)
 	setStr("METRICS_TOKEN", &cfg.MetricsToken)
 	setStr("LOG_LEVEL", &cfg.LogLevel)
+	setStr("BRANDING_DIR", &cfg.BrandingDir)
 	setCSV("TRUSTED_PROXIES", &cfg.TrustedProxies)
 
 	setStr("OIDC_ISSUER_URL", &cfg.OIDC.IssuerURL)

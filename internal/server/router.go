@@ -39,5 +39,9 @@ func New(cfg *config.Config, deps Deps) (http.Handler, error) {
 	r.Get("/healthz", healthz)
 	r.Get("/readyz", readyz(deps.Ready))
 
+	// Public, session-free runtime theming (docs/02 §11–§12).
+	r.Get("/api/branding", branding(cfg.Branding))
+	mountBranding(r, cfg.BrandingDir)
+
 	return r, nil
 }
