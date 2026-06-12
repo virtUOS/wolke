@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/virtUOS/service-hub/internal/auth"
+	"github.com/virtUOS/service-hub/internal/catalog"
 	"github.com/virtUOS/service-hub/internal/config"
 	"github.com/virtUOS/service-hub/internal/web"
 )
@@ -26,6 +27,9 @@ type Deps struct {
 	// used instead, so the app still runs.
 	Auth  *auth.Service
 	Users UserStore
+	// Catalog and Defaults back the read API; mounted when present (DB configured).
+	Catalog  *catalog.Cache
+	Defaults RoleDefaultsStore
 }
 
 // New builds the HTTP handler for the app: middleware stack, operational
@@ -80,6 +84,10 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 	r.Group(func(pr chi.Router) {
 		pr.Use(loadSession(deps.Auth, deps.Users))
 		pr.With(requireUserJSON).Get("/api/me", me)
+		if deps.Catalog != nil {
+			pr.With(requireUserJSON).Get("/api/catalog", catalogList(deps.Catalog))
+			pr.With(requireUserJSON).Get("/api/catalog/defaults", catalogDefaults(deps.Catalog, deps.Defaults))
+		}
 		pr.With(requireUserRedirect).Handle("/*", spaHandler)
 	})
 }

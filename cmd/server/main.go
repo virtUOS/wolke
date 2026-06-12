@@ -15,10 +15,15 @@ import (
 	"time"
 
 	"github.com/virtUOS/service-hub/internal/auth"
+	"github.com/virtUOS/service-hub/internal/catalog"
 	"github.com/virtUOS/service-hub/internal/config"
 	"github.com/virtUOS/service-hub/internal/server"
 	"github.com/virtUOS/service-hub/internal/store"
 )
+
+// catalogCacheTTL bounds how long the in-process catalog snapshot is served
+// before a refresh; admin writes also invalidate it explicitly (Phase 3).
+const catalogCacheTTL = 60 * time.Second
 
 func main() {
 	if err := run(); err != nil {
@@ -57,6 +62,16 @@ func run() error {
 	}
 
 	deps := server.Deps{Logger: logger, Ready: ready}
+
+	// Catalog read model: an in-process cache over the DB, invalidated on admin
+	// writes (Phase 3). Reads serve from cache (docs/02 §9).
+	if db != nil {
+		dbForCatalog := db
+		deps.Catalog = catalog.NewCache(catalogCacheTTL, func(ctx context.Context) (*catalog.Snapshot, error) {
+			return catalog.Load(ctx, dbForCatalog)
+		})
+		deps.Defaults = db
+	}
 
 	// Wire the real OIDC BFF when an issuer is configured and the DB is present;
 	// otherwise the server falls back to the Phase 0 login stub.
