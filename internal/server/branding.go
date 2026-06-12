@@ -23,16 +23,16 @@ func branding(b config.Branding) http.HandlerFunc {
 }
 
 // mountBranding serves mounted brand assets (logos, favicon) under /branding/
-// from the configured directory, if it exists. Paths in the branding payload
-// (logo_light, …) resolve here. Absent in a deployment → the route 404s and the
-// SPA falls back gracefully.
+// from the configured directory. The route is always registered and always
+// public, so brand assets never fall through to the auth stub or the SPA shell:
+// with no asset dir (or a missing file) it simply 404s.
 func mountBranding(r chi.Router, dir string) {
-	if dir == "" {
-		return
+	if dir != "" {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			fs := http.StripPrefix("/branding/", http.FileServer(http.Dir(dir)))
+			r.Handle("/branding/*", fs)
+			return
+		}
 	}
-	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-		return
-	}
-	fs := http.StripPrefix("/branding/", http.FileServer(http.Dir(dir)))
-	r.Handle("/branding/*", fs)
+	r.Handle("/branding/*", http.HandlerFunc(http.NotFound))
 }

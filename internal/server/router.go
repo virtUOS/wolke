@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/virtUOS/service-hub/internal/config"
+	"github.com/virtUOS/service-hub/internal/web"
 )
 
 // Deps are the runtime dependencies the router needs from main.
@@ -42,6 +43,24 @@ func New(cfg *config.Config, deps Deps) (http.Handler, error) {
 	// Public, session-free runtime theming (docs/02 §11–§12).
 	r.Get("/api/branding", branding(cfg.Branding))
 	mountBranding(r, cfg.BrandingDir)
+
+	// Login stub (public): replaced by the OIDC code flow in Phase 1.
+	r.Get("/auth/login", loginStub(cfg))
+
+	// The embedded SPA sits behind the auth stub: cookieless requests are
+	// redirected to login (docs/01 §6 — no unauthenticated view).
+	spa, err := web.FS()
+	if err != nil {
+		return nil, err
+	}
+	spaHandler, err := web.SPAHandler(spa)
+	if err != nil {
+		return nil, err
+	}
+	r.Group(func(pr chi.Router) {
+		pr.Use(authStub)
+		pr.Handle("/*", spaHandler)
+	})
 
 	return r, nil
 }
