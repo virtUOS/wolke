@@ -29,7 +29,7 @@ func reqWithUser(method, target, body string, user store.User) *http.Request {
 
 func TestUpdatePrefsPartialKeepsCurrent(t *testing.T) {
 	f := &fakePrefsStore{}
-	current := store.User{ID: pgtype.UUID{Valid: true}, ViewMode: "auto", Theme: "system"}
+	current := store.User{ID: pgtype.UUID{Valid: true}, ViewMode: "auto", Theme: "system", FavoritesOrder: "usage"}
 	// Only theme is sent; view_mode must keep its current value.
 	req := reqWithUser(http.MethodPatch, "/api/me/prefs", `{"theme":"dark"}`, current)
 	rec := httptest.NewRecorder()

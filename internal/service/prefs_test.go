@@ -23,15 +23,15 @@ func (f *fakePrefs) UpdateUserPrefs(_ context.Context, arg store.UpdateUserPrefs
 
 func TestUpdatePrefsValid(t *testing.T) {
 	f := &fakePrefs{}
-	u, err := UpdatePrefs(context.Background(), f, pgtype.UUID{}, Prefs{Theme: "dark", ViewMode: "table"})
+	u, err := UpdatePrefs(context.Background(), f, pgtype.UUID{}, Prefs{Theme: "dark", ViewMode: "table", FavoritesOrder: "alpha", FavoritesSeparateTab: true})
 	if err != nil {
 		t.Fatalf("UpdatePrefs: %v", err)
 	}
 	if !f.called {
 		t.Fatal("store was not called")
 	}
-	if f.got.Theme != "dark" || f.got.ViewMode != "table" {
-		t.Errorf("persisted %+v, want dark/table", f.got)
+	if f.got.Theme != "dark" || f.got.ViewMode != "table" || f.got.FavoritesOrder != "alpha" || !f.got.FavoritesSeparateTab {
+		t.Errorf("persisted %+v, want dark/table/alpha/separate-tab", f.got)
 	}
 	if u.Theme != "dark" {
 		t.Errorf("returned theme = %q, want dark", u.Theme)
@@ -44,8 +44,9 @@ func TestUpdatePrefsRejectsInvalid(t *testing.T) {
 		prefs Prefs
 		field string
 	}{
-		{"bad theme", Prefs{Theme: "neon", ViewMode: "list"}, "theme"},
-		{"bad view_mode", Prefs{Theme: "dark", ViewMode: "grid"}, "view_mode"},
+		{"bad theme", Prefs{Theme: "neon", ViewMode: "list", FavoritesOrder: "usage"}, "theme"},
+		{"bad view_mode", Prefs{Theme: "dark", ViewMode: "grid", FavoritesOrder: "usage"}, "view_mode"},
+		{"bad favorites_order", Prefs{Theme: "dark", ViewMode: "list", FavoritesOrder: "random"}, "favorites_order"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

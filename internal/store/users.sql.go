@@ -12,7 +12,7 @@ import (
 )
 
 const getUserByID = `-- name: GetUserByID :one
-select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at from users where id = $1
+select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded from users where id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -29,27 +29,40 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 		&i.Theme,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.FavoritesOrder,
+		&i.FavoritesSeparateTab,
+		&i.FavoritesSeeded,
 	)
 	return i, err
 }
 
 const updateUserPrefs = `-- name: UpdateUserPrefs :one
 update users
-set view_mode = $2,
-    theme     = $3
-where id = $1
-returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at
+set view_mode              = $1,
+    theme                  = $2,
+    favorites_order        = $3,
+    favorites_separate_tab = $4
+where id = $5
+returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded
 `
 
 type UpdateUserPrefsParams struct {
-	ID       pgtype.UUID `json:"id"`
-	ViewMode string      `json:"view_mode"`
-	Theme    string      `json:"theme"`
+	ViewMode             string      `json:"view_mode"`
+	Theme                string      `json:"theme"`
+	FavoritesOrder       string      `json:"favorites_order"`
+	FavoritesSeparateTab bool        `json:"favorites_separate_tab"`
+	ID                   pgtype.UUID `json:"id"`
 }
 
-// Theme/view-mode persist server-side so they follow the user across devices.
+// Display prefs persist server-side so they follow the user across devices.
 func (q *Queries) UpdateUserPrefs(ctx context.Context, arg UpdateUserPrefsParams) (User, error) {
-	row := q.db.QueryRow(ctx, updateUserPrefs, arg.ID, arg.ViewMode, arg.Theme)
+	row := q.db.QueryRow(ctx, updateUserPrefs,
+		arg.ViewMode,
+		arg.Theme,
+		arg.FavoritesOrder,
+		arg.FavoritesSeparateTab,
+		arg.ID,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -62,6 +75,9 @@ func (q *Queries) UpdateUserPrefs(ctx context.Context, arg UpdateUserPrefsParams
 		&i.Theme,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.FavoritesOrder,
+		&i.FavoritesSeparateTab,
+		&i.FavoritesSeeded,
 	)
 	return i, err
 }
@@ -75,7 +91,7 @@ set display_name = excluded.display_name,
     primary_role = excluded.primary_role,
     is_admin     = excluded.is_admin,
     last_seen_at = now()
-returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at
+returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded
 `
 
 type UpsertUserParams struct {
@@ -109,6 +125,9 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		&i.Theme,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.FavoritesOrder,
+		&i.FavoritesSeparateTab,
+		&i.FavoritesSeeded,
 	)
 	return i, err
 }

@@ -17,7 +17,7 @@ import (
 func listFavorites(c *catalog.Cache, db service.FavoritesStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
-		ids, err := service.ListFavorites(r.Context(), db, user.ID)
+		ids, err := service.ListFavorites(r.Context(), db, user)
 		if err != nil {
 			writeServiceError(w, err)
 			return
