@@ -45,10 +45,22 @@ export interface SearchResults {
   services: Service[]
 }
 
+// ApiError carries the HTTP status so callers can react (e.g. redirect to login
+// on 401) rather than treating every failure the same.
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
 async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal, headers: { Accept: 'application/json' } })
   if (!res.ok) {
-    throw new Error(`GET ${url} → ${res.status}`)
+    throw new ApiError(res.status, `GET ${url} → ${res.status}`)
   }
   return (await res.json()) as T
 }

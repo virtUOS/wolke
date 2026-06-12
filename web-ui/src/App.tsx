@@ -1,12 +1,24 @@
 import { useEffect, useState } from 'react'
 import { Dashboard } from '@/components/Dashboard'
 import { useMe } from '@/lib/hooks'
+import { ApiError } from '@/lib/api'
 import { applyBrandingTokens, applySystemTheme, fetchBranding, type Branding } from '@/lib/branding'
 
 export default function App() {
   const [branding, setBranding] = useState<Branding | null>(null)
   const [failed, setFailed] = useState(false)
   const me = useMe()
+
+  // No session → bounce to the BFF login (docs/01 §6: login is always required).
+  // In the embedded build the server redirects before the SPA loads; in the Vite
+  // dev loop the SPA is served directly, so it must handle the 401 itself.
+  const unauthenticated = me.error instanceof ApiError && me.error.status === 401
+  useEffect(() => {
+    if (unauthenticated) {
+      const returnTo = encodeURIComponent(window.location.pathname + window.location.search)
+      window.location.assign(`/auth/login?return_to=${returnTo}`)
+    }
+  }, [unauthenticated])
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -25,10 +37,24 @@ export default function App() {
     return () => ctrl.abort()
   }, [])
 
+  if (unauthenticated) {
+    return (
+      <div aria-busy="true" className="p-6 text-sm">
+        Anmeldung…
+      </div>
+    )
+  }
+
+  // A non-401 error from /api/me usually means auth isn't configured on the
+  // server (e.g. running without OIDC). Surface a hint rather than a blank fail.
   if (failed || me.isError) {
     return (
       <div role="alert" className="p-6 text-sm">
-        Die Anwendung konnte nicht geladen werden. Bitte lade die Seite neu.
+        <p>Die Anwendung konnte nicht geladen werden.</p>
+        <p className="mt-2 text-text-muted">
+          Falls der Server ohne OIDC läuft, sind die angemeldeten Endpunkte nicht verfügbar. Siehe README → „Local
+          development“.
+        </p>
       </div>
     )
   }
