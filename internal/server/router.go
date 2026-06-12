@@ -14,6 +14,7 @@ import (
 	"github.com/virtUOS/service-hub/internal/auth"
 	"github.com/virtUOS/service-hub/internal/catalog"
 	"github.com/virtUOS/service-hub/internal/config"
+	"github.com/virtUOS/service-hub/internal/service"
 	"github.com/virtUOS/service-hub/internal/web"
 )
 
@@ -31,6 +32,7 @@ type Deps struct {
 	Catalog  *catalog.Cache
 	Defaults RoleDefaultsStore
 	Search   SearchStore
+	Prefs    service.PrefsStore
 }
 
 // New builds the HTTP handler for the app: middleware stack, operational
@@ -85,6 +87,9 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 	r.Group(func(pr chi.Router) {
 		pr.Use(loadSession(deps.Auth, deps.Users))
 		pr.With(requireUserJSON).Get("/api/me", me)
+		if deps.Prefs != nil {
+			pr.With(requireUserJSON).Patch("/api/me/prefs", updatePrefs(deps.Prefs))
+		}
 		if deps.Catalog != nil {
 			pr.With(requireUserJSON).Get("/api/catalog", catalogList(deps.Catalog))
 			pr.With(requireUserJSON).Get("/api/catalog/defaults", catalogDefaults(deps.Catalog, deps.Defaults))

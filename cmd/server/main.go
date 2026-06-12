@@ -84,6 +84,7 @@ func run() error {
 		sessions := auth.NewSessionStore(db, auth.DefaultSessionTTL)
 		deps.Auth = auth.NewService(authn, sessions, db, cfg, logger)
 		deps.Users = db
+		deps.Prefs = db
 		logger.Info("OIDC auth enabled", "issuer", cfg.OIDC.IssuerURL)
 	} else {
 		logger.Warn("OIDC not configured; using the login stub (no real authentication)")
