@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/virtUOS/service-hub/internal/auth"
 	"github.com/virtUOS/service-hub/internal/config"
 	"github.com/virtUOS/service-hub/internal/server"
 	"github.com/virtUOS/service-hub/internal/store"
@@ -35,12 +36,16 @@ func run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel(cfg.LogLevel)}))
 	slog.SetDefault(logger)
 
-	// The DB is optional in Phase 0 local dev: with no DATABASE_URL the server
-	// still serves the shell and /readyz reports always-ready. When configured,
+	// The DB is optional in local dev: with no DATABASE_URL the server still
+	// serves the shell and /readyz reports always-ready. When configured,
 	// /readyz pings the pool so a load balancer can gate on real readiness.
-	var ready func(context.Context) error
+	var (
+		ready func(context.Context) error
+		db    *store.DB
+	)
 	if cfg.DatabaseURL != "" {
-		db, err := store.Open(context.Background(), cfg.DatabaseURL)
+		var err error
+		db, err = store.Open(context.Background(), cfg.DatabaseURL)
 		if err != nil {
 			return err
 		}
@@ -48,13 +53,27 @@ func run() error {
 		ready = db.Ping
 		logger.Info("database connected")
 	} else {
-		logger.Warn("DATABASE_URL not set; running without a database (Phase 0 dev shell)")
+		logger.Warn("DATABASE_URL not set; running without a database (dev shell)")
 	}
 
-	handler, err := server.New(cfg, server.Deps{
-		Logger: logger,
-		Ready:  ready,
-	})
+	deps := server.Deps{Logger: logger, Ready: ready}
+
+	// Wire the real OIDC BFF when an issuer is configured and the DB is present;
+	// otherwise the server falls back to the Phase 0 login stub.
+	if cfg.OIDC.IssuerURL != "" && cfg.OIDC.ClientID != "" && db != nil {
+		authn, err := auth.NewAuthenticator(context.Background(), cfg)
+		if err != nil {
+			return err
+		}
+		sessions := auth.NewSessionStore(db, auth.DefaultSessionTTL)
+		deps.Auth = auth.NewService(authn, sessions, db, cfg, logger)
+		deps.Users = db
+		logger.Info("OIDC auth enabled", "issuer", cfg.OIDC.IssuerURL)
+	} else {
+		logger.Warn("OIDC not configured; using the login stub (no real authentication)")
+	}
+
+	handler, err := server.New(cfg, deps)
 	if err != nil {
 		return err
 	}

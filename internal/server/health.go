@@ -35,3 +35,17 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 		slog.Error("write json response", "error", err)
 	}
 }
+
+// writeProblem emits an RFC-7807-style problem+json with a stable code and a
+// human-readable message (docs/02 §10).
+func writeProblem(w http.ResponseWriter, status int, code, detail string) {
+	w.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"code":   code,
+		"detail": detail,
+		"status": status,
+	}); err != nil {
+		slog.Error("write problem response", "error", err)
+	}
+}

@@ -49,8 +49,16 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U servicehub -d servicehub"
           --health-interval 5s --health-timeout 3s --health-retries 10
+      mock-oidc:
+        image: ghcr.io/navikt/mock-oauth2-server:2.1.10
+        ports:
+          - 8455:8080
+        env:
+          JSON_CONFIG: '{"interactiveLogin":false,"tokenCallbacks":[{"issuerId":"default","requestMappings":[{"requestParam":"client_id","match":"service-hub","claims":{"sub":"stud-1","name":"Test Student","email":"stud@example.edu","eduPersonAffiliation":"student","groups":["dashboard-admins"]}}]}]}'
     env:
       DATABASE_URL: postgres://servicehub:devpass@localhost:5432/servicehub?sslmode=disable
+      # IPv4: mock-oauth2-server crashes on IPv6 peers.
+      OIDC_TEST_ISSUER: http://127.0.0.1:8455/default
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -66,7 +74,16 @@ jobs:
         run: go tool golangci-lint run ./...
       - name: Apply migrations
         run: go tool goose -dir migrations postgres "$DATABASE_URL" up
-      - name: Test (race, with real Postgres)
+      - name: Wait for mock OIDC
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "$OIDC_TEST_ISSUER/.well-known/openid-configuration" >/dev/null; then
+              echo "mock OIDC ready"; exit 0
+            fi
+            sleep 1
+          done
+          echo "mock OIDC did not become ready"; exit 1
+      - name: Test (race, with real Postgres + mock OIDC)
         run: go test -race ./...
       - name: Build embedded binary
         run: |
