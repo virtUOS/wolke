@@ -1,0 +1,19 @@
+# Caddy is the only exposed surface: it terminates TLS and reverse-proxies to the
+# app over plain HTTP inside the Compose network (docs/02 §3, §10; docs/04 §4).
+# For localhost, Caddy serves HTTPS with its internal CA (self-signed) — fine for
+# staging / an end-to-end check. In production, replace `localhost` with the real
+# hostname and Caddy obtains real certificates automatically.
+
+localhost {
+	encode gzip
+
+	# /metrics must never be reachable from outside (docs/02 §7).
+	@metrics path /metrics
+	respond @metrics 404
+
+	# Caddy sets X-Forwarded-Proto/Host/For by default; the app trusts them only
+	# from the Compose network (TRUSTED_PROXIES), and builds its own URLs from
+	# PUBLIC_URL. So Secure cookies and OIDC redirects are correct even though TLS
+	# terminates here.
+	reverse_proxy app:8080
+}

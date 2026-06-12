@@ -69,9 +69,28 @@ Integration tests that need Postgres read `DATABASE_URL` and **skip** when it is
 unset, so `go test ./...` is safe without a database; `make test` (after `make db
 && make migrate`) runs them for real.
 
-The end-to-end Compose stack (app + Postgres + Caddy + a dev IdP) lives in
-`compose.yaml` and is for staging / a pre-release check — it does not constrain
-daily work.
+### End-to-end stack (Compose, for staging / pre-release)
+
+`compose.yaml` runs the production-shaped stack — Caddy (TLS) → app → Postgres,
+plus a one-shot `goose` migrate step and an optional mock OIDC IdP. It is **not**
+the daily loop; use it to check the real embedded image behind the proxy.
+
+```bash
+podman compose up -d --build        # build images + start postgres, migrate, app, caddy
+podman compose --profile idp up -d  # also start the mock OIDC IdP (Phase 1)
+```
+
+Caddy listens on 80/443 by default (production-correct). **Rootless podman can't
+bind ports < 1024** — override with high ports:
+
+```bash
+CADDY_HTTP_PORT=8080 CADDY_HTTPS_PORT=8443 podman compose up -d --build
+# then: curl -k https://localhost:8443/
+```
+
+The app trusts `X-Forwarded-*` only from the Compose subnet and takes its public
+URL from `PUBLIC_URL`, so Secure cookies and (Phase 1) OIDC redirects are correct
+even though TLS terminates at Caddy. `/metrics` is blocked at the proxy.
 
 ## How to start with Claude Code
 

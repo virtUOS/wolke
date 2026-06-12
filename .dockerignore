@@ -1,0 +1,19 @@
+.git
+.gitignore
+bin/
+*.test
+coverage.*
+.env
+.env.example
+
+# Frontend deps/build are produced inside the image's web stage.
+web-ui/node_modules/
+web-ui/dist/
+
+# Real embedded assets are copied in from the web stage; keep only the
+# placeholder index.html (the assets/ dir is build output).
+internal/web/dist/assets/
+
+# Docs aren't needed in the build context.
+docs/
+*.md
