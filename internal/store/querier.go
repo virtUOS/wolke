@@ -14,11 +14,13 @@ type Querier interface {
 	AddFavorite(ctx context.Context, arg AddFavoriteParams) error
 	AddRoleDefault(ctx context.Context, arg AddRoleDefaultParams) error
 	AddServiceCategory(ctx context.Context, arg AddServiceCategoryParams) error
+	AdminListAnnouncements(ctx context.Context, lim int32) ([]Announcement, error)
 	// Full catalog including soft-deleted (inactive) services.
 	AdminListServices(ctx context.Context) ([]Service, error)
 	// A trivial query used in Phase 0 to prove the sqlc -> pgx pipeline end-to-end.
 	// Real catalog queries arrive in Phase 1.
 	CountCategories(ctx context.Context) (int64, error)
+	CreateAnnouncement(ctx context.Context, arg CreateAnnouncementParams) (Announcement, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	CreateService(ctx context.Context, arg CreateServiceParams) (Service, error)
 	// id is sha256(token); the raw token lives only in the cookie, so a DB read
@@ -31,6 +33,7 @@ type Querier interface {
 	// The user's most-clicked active services within a rolling window, most-used
 	// first (powers "frequently used" — docs/01 §4.5).
 	FrequentServiceIDs(ctx context.Context, arg FrequentServiceIDsParams) ([]pgtype.UUID, error)
+	GetAnnouncementByID(ctx context.Context, id pgtype.UUID) (Announcement, error)
 	GetCategoryBySlug(ctx context.Context, slug string) (Category, error)
 	// Active services in the admin-curated order for a role (docs/01 §3).
 	GetRoleDefaults(ctx context.Context, role string) ([]pgtype.UUID, error)
@@ -38,6 +41,9 @@ type Querier interface {
 	GetSession(ctx context.Context, id string) (Session, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
+	// Active = within its time window and addressed to the user's role (or all),
+	// most-severe first (docs/01 §4.7).
+	ListActiveAnnouncements(ctx context.Context, role string) ([]Announcement, error)
 	// (service_id, category slug) pairs for active services, to assemble the
 	// many-to-many in Go when building the catalog snapshot.
 	ListActiveServiceCategories(ctx context.Context) ([]ListActiveServiceCategoriesRow, error)
@@ -66,6 +72,7 @@ type Querier interface {
 	// editable entries (concept §4.4).
 	SeedFavoritesFromRoleDefaults(ctx context.Context, arg SeedFavoritesFromRoleDefaultsParams) error
 	SoftDeleteService(ctx context.Context, id pgtype.UUID) (int64, error)
+	UpdateAnnouncement(ctx context.Context, arg UpdateAnnouncementParams) (Announcement, error)
 	UpdateService(ctx context.Context, arg UpdateServiceParams) (Service, error)
 	// Display prefs persist server-side so they follow the user across devices.
 	UpdateUserPrefs(ctx context.Context, arg UpdateUserPrefsParams) (User, error)

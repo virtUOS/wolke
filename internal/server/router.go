@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/virtUOS/service-hub/internal/announce"
 	"github.com/virtUOS/service-hub/internal/auth"
 	"github.com/virtUOS/service-hub/internal/catalog"
 	"github.com/virtUOS/service-hub/internal/config"
@@ -36,6 +37,7 @@ type Deps struct {
 	Prefs     service.PrefsStore
 	Favorites service.FavoritesStore
 	Usage     usage.Store
+	Announce  announce.Store
 	// Admin enables the admin write API + audit read (mounted behind requireAdmin).
 	Admin *AdminDeps
 }
@@ -108,6 +110,9 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 				pr.With(requireUserJSON).Get("/api/usage/frequent", frequent(deps.Catalog, deps.Usage))
 			}
 		}
+		if deps.Announce != nil {
+			pr.With(requireUserJSON).Get("/api/announcements", userAnnouncements(deps.Announce))
+		}
 		if deps.Catalog != nil {
 			pr.With(requireUserJSON).Get("/api/catalog", catalogList(deps.Catalog))
 			pr.With(requireUserJSON).Get("/api/catalog/defaults", catalogDefaults(deps.Catalog, deps.Defaults))
@@ -123,6 +128,9 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 				ar.Delete("/services/{id}", adminDeleteService(ad))
 				ar.Put("/role-defaults/{role}", adminSetRoleDefaults(ad))
 				ar.Post("/categories", adminCreateCategory(ad))
+				ar.Get("/announcements", adminListAnnouncements(ad))
+				ar.Post("/announcements", adminCreateAnnouncement(ad))
+				ar.Patch("/announcements/{id}", adminUpdateAnnouncement(ad))
 				ar.Get("/audit", adminListAudit(ad))
 			})
 		}
