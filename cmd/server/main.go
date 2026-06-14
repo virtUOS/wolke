@@ -75,6 +75,7 @@ func run() error {
 		deps.Search = db
 		deps.Favorites = db
 		deps.Usage = db
+		deps.Announce = db
 		deps.Admin = &server.AdminDeps{Store: db, Invalidate: cache.Invalidate, Audit: db}
 	}
 
