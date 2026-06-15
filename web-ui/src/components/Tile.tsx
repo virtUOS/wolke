@@ -39,7 +39,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
   const description = localized(service.description, locale)
 
   return (
-    <div className="rounded-lg border border-surface bg-bg shadow-sm">
+    <div className="rounded-lg border border-surface bg-bg shadow-sm transition-shadow hover:shadow-md">
       <div className="relative flex items-start gap-3 p-4">
         {onToggleFavorite && (
           <button
@@ -99,7 +99,10 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
 
       {open && (
         <div id={regionId} className="border-t border-surface px-4 py-3 text-sm text-text">
-          <p>{description}</p>
+          {/* Wrap long German compounds rather than overflow (docs/03 §8). */}
+          <p className="hyphens-auto break-words" lang={locale}>
+            {description}
+          </p>
           {service.doc_url && !service.doc_only && (
             <a
               href={service.doc_url}
