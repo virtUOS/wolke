@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Announcement, AnnouncementInput, Audience, Severity } from '@/lib/api'
 import { useAdminActions, useAdminAnnouncements } from '@/lib/admin-hooks'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 
 const SEVERITIES: Severity[] = ['info', 'warning', 'critical']
 const AUDIENCES: Audience[] = ['all', 'student', 'teacher', 'staff']
@@ -101,7 +102,7 @@ function AnnouncementForm({
     >
       <label className="block text-sm">
         <span className="mb-1 block font-medium">Titel (de)</span>
-        <input value={titleDe} onChange={(e) => setTitleDe(e.target.value)} className={input} />
+        <Input value={titleDe} onChange={(e) => setTitleDe(e.target.value)} />
       </label>
       <label className="block text-sm">
         <span className="mb-1 block font-medium">Text (de)</span>
