@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { type AdminService, type Category } from '@/lib/api'
 import { useAdminActions, useAdminServices } from '@/lib/admin-hooks'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Dialog } from '@/components/ui/dialog'
 import { ServiceForm } from './ServiceForm'
 
 type Mode = { kind: 'list' } | { kind: 'new' } | { kind: 'edit'; service: AdminService }
@@ -41,6 +43,7 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
   }
 
   const list = services.data?.services ?? []
+  const pendingDelete = list.find((s) => s.id === confirmDelete)
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -64,36 +67,42 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
                 {!s.is_active && <Badge className="ml-2">inaktiv</Badge>}
                 <span className="ml-2 text-xs text-text-muted">{s.categories.join(', ')}</span>
               </span>
-              {confirmDelete === s.id ? (
-                <span className="flex items-center gap-2 text-sm">
-                  <span className="text-text-muted">Löschen?</span>
-                  <button
-                    onClick={() => actions.deleteService.mutate(s.id, { onSettled: () => setConfirmDelete(null) })}
-                    className="rounded-md bg-primary px-2 py-1 text-xs text-white hover:bg-primary-hover"
-                  >
-                    Ja
+              <span className="flex items-center gap-2">
+                <button onClick={() => setMode({ kind: 'edit', service: s })} className="text-sm text-primary hover:text-primary-hover">
+                  Bearbeiten
+                </button>
+                {s.is_active && (
+                  <button onClick={() => setConfirmDelete(s.id)} className="text-sm text-text-muted hover:text-primary">
+                    Löschen
                   </button>
-                  <button onClick={() => setConfirmDelete(null)} className="rounded-md border border-surface px-2 py-1 text-xs hover:bg-surface">
-                    Nein
-                  </button>
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <button onClick={() => setMode({ kind: 'edit', service: s })} className="text-sm text-primary hover:text-primary-hover">
-                    Bearbeiten
-                  </button>
-                  {s.is_active && (
-                    <button onClick={() => setConfirmDelete(s.id)} className="text-sm text-text-muted hover:text-primary">
-                      Löschen
-                    </button>
-                  )}
-                </span>
-              )}
+                )}
+              </span>
             </li>
           ))}
           {list.length === 0 && <li className="px-3 py-2 text-sm text-text-muted">Keine Dienste.</li>}
         </ul>
       )}
+
+      <Dialog
+        open={confirmDelete !== null}
+        onOpenChange={(o) => !o && setConfirmDelete(null)}
+        title="Dienst löschen?"
+        description={`„${pendingDelete?.name ?? ''}" wird deaktiviert und verschwindet aus dem Katalog.`}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirmDelete(null)}>
+              Abbrechen
+            </Button>
+            <Button
+              onClick={() =>
+                confirmDelete && actions.deleteService.mutate(confirmDelete, { onSettled: () => setConfirmDelete(null) })
+              }
+            >
+              Löschen
+            </Button>
+          </>
+        }
+      />
     </div>
   )
 }
