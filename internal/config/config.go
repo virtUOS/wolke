@@ -113,13 +113,19 @@ func Defaults() Config {
 			DefaultLocale: "de",
 			Theme: Theme{
 				// TBD: lock against the UOS Corporate Design manual (concept §8.1).
+				// The full brand-overridable palette (docs/03 §2). Names are
+				// stable; a skin overrides values via branding.yaml.
 				Light: map[string]string{
 					"primary": "#A6093D", "primary_hover": "#8A0732", "accent": "#F2C879",
-					"surface": "#F4F4F5", "text": "#18181B",
+					"surface": "#F4F4F5", "surface_2": "#ECECEE", "border": "#E2E2E5",
+					"text": "#18181B", "text_muted": "#6B6B70",
+					"info": "#2563EB", "warning": "#B45309", "success": "#15803D", "danger": "#B91C1C",
 				},
 				Dark: map[string]string{
 					"primary": "#C2355C", "primary_hover": "#A6093D", "accent": "#F2C879",
-					"surface": "#1E1E21", "text": "#F4F4F5",
+					"surface": "#1E1E21", "surface_2": "#27272B", "border": "#34343A",
+					"text": "#F4F4F5", "text_muted": "#9A9AA1",
+					"info": "#60A5FA", "warning": "#FBBF24", "success": "#4ADE80", "danger": "#F87171",
 				},
 			},
 		},
