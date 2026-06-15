@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import type { Category } from '@/lib/api'
 import { useCatalog } from '@/lib/hooks'
+import { IconButton } from '@/components/ui/icon-button'
 import { ServicesAdmin } from './ServicesAdmin'
 import { CategoriesAdmin } from './CategoriesAdmin'
 import { RoleDefaultsAdmin } from './RoleDefaultsAdmin'
@@ -26,9 +27,9 @@ export function AdminView({ locale, onExit }: { locale: string; onExit: () => vo
   return (
     <div>
       <div className="mb-6 flex items-center gap-3">
-        <button onClick={onExit} aria-label="Zurück zum Dashboard" className="rounded-md p-2 text-text-muted hover:bg-surface hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">
+        <IconButton onClick={onExit} aria-label="Zurück zum Dashboard">
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-        </button>
+        </IconButton>
         <h1 className="flex items-center gap-2 text-2xl font-bold">
           <span aria-hidden="true" className="inline-block h-7 w-1.5 rounded bg-primary" />
           Administration
