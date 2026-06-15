@@ -2,7 +2,9 @@ import { useState } from 'react'
 import type { Announcement, AnnouncementInput, Audience, Severity } from '@/lib/api'
 import { useAdminActions, useAdminAnnouncements } from '@/lib/admin-hooks'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Field } from '@/components/ui/field'
 import { Select } from '@/components/ui/select'
 import { List, ListItem } from '@/components/ui/list'
@@ -101,46 +103,41 @@ function AnnouncementForm({
           dismissible,
         })
       }}
-      className="space-y-3 rounded-md border border-surface p-4"
+      className="space-y-3 rounded-md border border-border p-4"
     >
       <Field label="Titel (de)">
         <Input value={titleDe} onChange={(e) => setTitleDe(e.target.value)} />
       </Field>
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium">Text (de)</span>
-        <textarea value={bodyDe} onChange={(e) => setBodyDe(e.target.value)} rows={2} className={input} />
-      </label>
+      <Field label="Text (de)">
+        <Textarea value={bodyDe} onChange={(e) => setBodyDe(e.target.value)} rows={2} />
+      </Field>
       <div className="flex flex-wrap gap-3">
-        <label className="text-sm">
-          <span className="mb-1 block font-medium">Schweregrad</span>
+        <Field label="Schweregrad">
           <Select value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}>
             {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
           </Select>
-        </label>
-        <label className="text-sm">
-          <span className="mb-1 block font-medium">Zielgruppe</span>
+        </Field>
+        <Field label="Zielgruppe">
           <Select value={audience} onChange={(e) => setAudience(e.target.value as Audience)}>
             {AUDIENCES.map((a) => <option key={a} value={a}>{a}</option>)}
           </Select>
-        </label>
-        <label className="text-sm">
-          <span className="mb-1 block font-medium">Endet am (optional)</span>
-          <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={select} />
-        </label>
+        </Field>
+        <Field label="Endet am (optional)">
+          <Input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
+        </Field>
         <label className="flex items-center gap-2 self-end text-sm">
           <input type="checkbox" checked={dismissible} onChange={(e) => setDismissible(e.target.checked)} />
           Schließbar
         </label>
       </div>
       <div className="flex gap-2">
-        <button type="submit" disabled={!valid || submitting} className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-white hover:bg-primary-hover disabled:opacity-50">
+        <Button type="submit" disabled={!valid || submitting}>
           {initial ? 'Speichern' : 'Veröffentlichen'}
-        </button>
-        <button type="button" onClick={onCancel} className="h-9 rounded-md border border-surface px-4 text-sm hover:bg-surface">Abbrechen</button>
+        </Button>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Abbrechen
+        </Button>
       </div>
     </form>
   )
 }
-
-const input = 'w-full rounded-md border border-surface bg-surface px-2 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]'
-const select = 'h-9 rounded-md border border-surface bg-surface px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]'
