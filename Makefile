@@ -110,6 +110,11 @@ build: embed ## Build the single binary with the SPA embedded
 serve: build ## Build + run the embedded binary (loads .env) — browse PUBLIC_URL
 	@set -a; [ -f .env ] && . ./.env || true; set +a; ./bin/server
 
+.PHONY: mcp
+mcp: ## Build the admin MCP server (stdio) -> bin/mcp; a client launches it
+	go build -o bin/mcp ./cmd/mcp
+	@echo "built bin/mcp — point an MCP client at it (see README → Admin MCP server)"
+
 .PHONY: check
 check: lint test web-check ## Run the full local gate (Go + frontend)
 
