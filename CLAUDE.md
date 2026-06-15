@@ -28,8 +28,10 @@ Docker. Usability and simplicity are the product goals — prefer the boring, si
 - **Go:** stdlib idioms, `log/slog` (JSON), errors wrapped with context, no panics in handlers.
   `gofmt` + `golangci-lint` clean. Queries via sqlc; migrations via goose, forward-only.
 - **TS/React:** function components + hooks, TanStack Query for all server state, no browser
-  storage of app data (prefs persist via the API), shadcn/ui primitives over hand-rolled ones,
-  `lucide-react` for icons (validate names against the allowlist used by the backend).
+  storage of app data (prefs persist via the API), shadcn/ui primitives over hand-rolled ones
+  (reusable primitives live in `web-ui/src/components/ui/` — see its README for the conventions;
+  they're pure presentation, data lives in containers), `lucide-react` for icons (validate names
+  against the allowlist used by the backend).
 - **Styling:** Tailwind + the CSS-variable tokens in `docs/03`. Brand red = brand + interaction
   only. Respect `prefers-reduced-motion`.
 - **i18n:** localized strings as `{de,en}`; ship `de`, keep `en` wired. Never break layout on long
