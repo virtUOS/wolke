@@ -11,21 +11,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/virtUOS/service-hub/internal/auth"
-	"github.com/virtUOS/service-hub/internal/config"
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/auth"
+	"github.com/virtuos/wolke/internal/config"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // End-to-end OIDC BFF test against a real mock IdP (docs/04 §3). Skipped unless
 // both a mock issuer and a database are configured. The mock is set up to issue
 // eduPersonAffiliation=student and groups=[dashboard-admins] for client
-// "service-hub" (see the JSON_CONFIG in the README/dev notes), so this asserts
+// "wolke" (see the JSON_CONFIG in the README/dev notes), so this asserts
 // the config-driven role/admin mapping end-to-end.
 //
 // Run it (IPv4 avoids a mock-oauth2-server IPv6 crash):
 //
 //	OIDC_TEST_ISSUER=http://127.0.0.1:8455/default \
-//	DATABASE_URL=postgres://servicehub:devpass@localhost:5432/servicehub?sslmode=disable \
+//	DATABASE_URL=postgres://wolke:devpass@localhost:5432/wolke?sslmode=disable \
 //	go test ./internal/server -run TestOIDC -v
 func TestOIDCLoginFlow(t *testing.T) {
 	issuer := os.Getenv("OIDC_TEST_ISSUER")
@@ -55,7 +55,7 @@ func TestOIDCLoginFlow(t *testing.T) {
 	cfg.PublicURL = base
 	cfg.SessionSecret = "integration-test-secret"
 	cfg.OIDC.IssuerURL = issuer
-	cfg.OIDC.ClientID = "service-hub"
+	cfg.OIDC.ClientID = "wolke"
 	cfg.OIDC.ClientSecret = "any-secret-mock-accepts"
 	cfg.OIDC.Scopes = []string{"openid", "profile", "email"}
 

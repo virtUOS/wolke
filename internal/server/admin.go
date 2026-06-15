@@ -9,8 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/virtUOS/service-hub/internal/service"
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/service"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // AdminDeps are what the admin endpoints need: the use-case store, the catalog

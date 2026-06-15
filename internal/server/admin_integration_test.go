@@ -11,8 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/virtUOS/service-hub/internal/service"
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/service"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // Integration: admin API roundtrip through the handlers (create → list → audit →

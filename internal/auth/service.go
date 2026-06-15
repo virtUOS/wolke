@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/virtUOS/service-hub/internal/config"
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/config"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // Cookie names shared with the HTTP layer.

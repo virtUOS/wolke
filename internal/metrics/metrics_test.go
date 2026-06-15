@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 func scrape(t *testing.T, h http.Handler, auth string) (*httptest.ResponseRecorder, string) {
@@ -50,9 +50,9 @@ func TestMetricsExposeSeries(t *testing.T) {
 
 	_, body := scrape(t, m.Handler(""), "")
 	for _, want := range []string{
-		`servicehub_service_clicks_total{role="student",service="MyShare"}`,
-		"servicehub_http_request_duration_seconds",
-		"servicehub_active_sessions",
+		`wolke_service_clicks_total{role="student",service="MyShare"}`,
+		"wolke_http_request_duration_seconds",
+		"wolke_active_sessions",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("scrape missing %q", want)
@@ -77,10 +77,10 @@ func TestRefreshGauges(t *testing.T) {
 	}
 	_, body := scrape(t, m.Handler(""), "")
 	for _, want := range []string{
-		"servicehub_active_sessions 7",
-		`servicehub_catalog_services{state="active"} 5`,
-		`servicehub_catalog_services{state="inactive"} 2`,
-		`servicehub_announcements_active{severity="warning"} 1`,
+		"wolke_active_sessions 7",
+		`wolke_catalog_services{state="active"} 5`,
+		`wolke_catalog_services{state="inactive"} 2`,
+		`wolke_announcements_active{severity="warning"} 1`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("scrape missing %q", want)

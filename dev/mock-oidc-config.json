@@ -1,5 +1,4 @@
 {
-  "//": "Dev/test config for navikt mock-oauth2-server. interactiveLogin=false makes the authorize endpoint auto-issue a code (no login page), and the tokenCallbacks inject claims for client_id=service-hub so the OIDC integration test can assert config-driven role/admin mapping (eduPersonAffiliation -> student, groups contains dashboard-admins). Use 127.0.0.1 (not localhost): the server crashes on IPv6 peers.",
   "interactiveLogin": false,
   "tokenCallbacks": [
     {
@@ -7,7 +6,7 @@
       "requestMappings": [
         {
           "requestParam": "client_id",
-          "match": "service-hub",
+          "match": "wolke",
           "claims": {
             "sub": "stud-1",
             "name": "Test Student",

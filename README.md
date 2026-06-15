@@ -1,4 +1,4 @@
-# UOS Service Hub — Planning Package
+# wolke — Planning Package
 
 > Working title. A personalized, authenticated portal that gets every member of the
 > university to the right IT service (or its documentation) in as few taps as possible.
@@ -106,10 +106,10 @@ Point a local MCP client at it (e.g. Claude Desktop / Claude Code `mcpServers`):
 ```json
 {
   "mcpServers": {
-    "service-hub-admin": {
+    "wolke-admin": {
       "command": "/abs/path/to/bin/mcp",
       "env": {
-        "DATABASE_URL": "postgres://servicehub:devpass@localhost:5432/servicehub?sslmode=disable",
+        "DATABASE_URL": "postgres://wolke:devpass@localhost:5432/wolke?sslmode=disable",
         "MCP_ADMIN_SUB": "stud-1"
       }
     }
@@ -134,7 +134,7 @@ OIDC_TEST_ISSUER=http://127.0.0.1:8455/default make test   # use 127.0.0.1, not 
 ```
 
 To run the app against the mock for manual login, set `OIDC_ISSUER_URL`,
-`OIDC_CLIENT_ID=service-hub`, and a `SESSION_SECRET` in `.env` before `make run`.
+`OIDC_CLIENT_ID=wolke`, and a `SESSION_SECRET` in `.env` before `make run`.
 
 ### End-to-end stack (Compose, for staging / pre-release)
 

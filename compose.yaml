@@ -7,15 +7,15 @@ services:
   postgres:
     image: docker.io/library/postgres:17
     environment:
-      POSTGRES_USER: servicehub
+      POSTGRES_USER: wolke
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpass}
-      POSTGRES_DB: servicehub
+      POSTGRES_DB: wolke
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
       - internal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U servicehub -d servicehub"]
+      test: ["CMD-SHELL", "pg_isready -U wolke -d wolke"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -30,7 +30,7 @@ services:
       - -dir
       - /src/migrations
       - postgres
-      - postgres://servicehub:${POSTGRES_PASSWORD:-devpass}@postgres:5432/servicehub?sslmode=disable
+      - postgres://wolke:${POSTGRES_PASSWORD:-devpass}@postgres:5432/wolke?sslmode=disable
       - up
     depends_on:
       postgres:
@@ -46,7 +46,7 @@ services:
       # in Phase 1, OIDC redirect_uri — even though the app serves plain HTTP here.
       PUBLIC_URL: https://localhost
       HTTP_ADDR: ":8080"
-      DATABASE_URL: postgres://servicehub:${POSTGRES_PASSWORD:-devpass}@postgres:5432/servicehub?sslmode=disable
+      DATABASE_URL: postgres://wolke:${POSTGRES_PASSWORD:-devpass}@postgres:5432/wolke?sslmode=disable
       SESSION_SECRET: ${SESSION_SECRET:-compose-dev-secret-change-me}
       # Trust X-Forwarded-* only from the Compose network (Caddy's subnet).
       TRUSTED_PROXIES: 172.28.0.0/16

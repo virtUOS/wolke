@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // Integration test against a seeded Postgres (run: make db && make migrate &&

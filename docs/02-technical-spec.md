@@ -233,7 +233,7 @@ it represents roles and admins, so the mapping is data, supplied via config (env
 ```yaml
 oidc:
   issuer_url:    https://idp.example.edu/realms/main   # discovery does the rest
-  client_id:     uos-service-hub
+  client_id:     uos-wolke
   client_secret: ${OIDC_CLIENT_SECRET}
   scopes: [openid, profile, email]
   # which ID-token / userinfo claim carries affiliation, and how its values map to our 3 roles

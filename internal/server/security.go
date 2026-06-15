@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"github.com/virtUOS/service-hub/internal/auth"
+	"github.com/virtuos/wolke/internal/auth"
 )
 
 // Per-key rate limits (per session token, else client IP). Generous enough not
