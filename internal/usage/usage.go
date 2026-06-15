@@ -33,6 +33,27 @@ func Record(ctx context.Context, db Store, userID, serviceID pgtype.UUID, role s
 	return nil
 }
 
+// RollupStore is the persistence the rollup job needs.
+type RollupStore interface {
+	RollupClicks(ctx context.Context) error
+	PurgeOldClicks(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
+}
+
+// Rollup aggregates raw click events into usage_daily, then purges raw events
+// older than the retention window (docs/01 §8.9, docs/04 maintenance). Aggregate
+// history is recomputed only for days whose raw events still exist, so purged
+// days stay frozen at their last value.
+func Rollup(ctx context.Context, db RollupStore, retention time.Duration) error {
+	if err := db.RollupClicks(ctx); err != nil {
+		return fmt.Errorf("rollup clicks: %w", err)
+	}
+	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-retention), Valid: true}
+	if _, err := db.PurgeOldClicks(ctx, cutoff); err != nil {
+		return fmt.Errorf("purge old clicks: %w", err)
+	}
+	return nil
+}
+
 // Frequent returns the user's most-used active service ids since `since`. The
 // caller resolves them to full services via the catalog cache.
 func Frequent(ctx context.Context, db Store, userID pgtype.UUID, since time.Time, limit int) ([]pgtype.UUID, error) {

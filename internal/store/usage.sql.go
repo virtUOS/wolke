@@ -49,6 +49,18 @@ func (q *Queries) FrequentServiceIDs(ctx context.Context, arg FrequentServiceIDs
 	return items, nil
 }
 
+const purgeOldClicks = `-- name: PurgeOldClicks :execrows
+delete from click_events where clicked_at < $1
+`
+
+func (q *Queries) PurgeOldClicks(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeOldClicks, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const recordClick = `-- name: RecordClick :exec
 insert into click_events (user_id, service_id, user_role)
 values ($1, $2, $3)
@@ -65,5 +77,22 @@ type RecordClickParams struct {
 // history intact when a user or service is removed.
 func (q *Queries) RecordClick(ctx context.Context, arg RecordClickParams) error {
 	_, err := q.db.Exec(ctx, recordClick, arg.UserID, arg.ServiceID, arg.UserRole)
+	return err
+}
+
+const rollupClicks = `-- name: RollupClicks :exec
+insert into usage_daily (day, service_id, user_role, clicks)
+select date(clicked_at), service_id, user_role, count(*)
+from click_events
+where service_id is not null
+group by date(clicked_at), service_id, user_role
+on conflict (day, service_id, user_role) do update set clicks = excluded.clicks
+`
+
+// Recompute usage_daily from the raw events still present (the retention
+// window). Idempotent: SET (not add). Days whose raw events have been purged are
+// no longer recomputed, so their aggregate rows stay frozen at their last value.
+func (q *Queries) RollupClicks(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, rollupClicks)
 	return err
 }

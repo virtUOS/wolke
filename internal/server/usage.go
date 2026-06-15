@@ -6,12 +6,14 @@ import (
 	"time"
 
 	"github.com/virtUOS/service-hub/internal/catalog"
+	"github.com/virtUOS/service-hub/internal/metrics"
 	"github.com/virtUOS/service-hub/internal/usage"
 )
 
 // recordClick ingests a launch-click for the current user (docs/01 §5.4,
-// docs/02 §12). Fire-and-forget from the SPA; returns 204.
-func recordClick(db usage.Store) http.HandlerFunc {
+// docs/02 §12) and increments the per-service/role metric. Fire-and-forget from
+// the SPA; returns 204.
+func recordClick(db usage.Store, cache *catalog.Cache, m *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
 		var body struct {
@@ -29,6 +31,13 @@ func recordClick(db usage.Store) http.HandlerFunc {
 		if err := usage.Record(r.Context(), db, user.ID, serviceID, user.PrimaryRole); err != nil {
 			writeProblem(w, http.StatusInternalServerError, "click_failed", "Could not record the event.")
 			return
+		}
+		if m != nil && cache != nil {
+			if snap, err := cache.Get(r.Context()); err == nil {
+				if svc, ok := snap.ServiceByID(body.ServiceID); ok {
+					m.IncClick(svc.Name, user.PrimaryRole)
+				}
+			}
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}

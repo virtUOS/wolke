@@ -17,9 +17,12 @@ type Querier interface {
 	AdminListAnnouncements(ctx context.Context, lim int32) ([]Announcement, error)
 	// Full catalog including soft-deleted (inactive) services.
 	AdminListServices(ctx context.Context) ([]Service, error)
+	CountActiveAnnouncementsBySeverity(ctx context.Context) ([]CountActiveAnnouncementsBySeverityRow, error)
+	CountActiveSessions(ctx context.Context) (int64, error)
 	// A trivial query used in Phase 0 to prove the sqlc -> pgx pipeline end-to-end.
 	// Real catalog queries arrive in Phase 1.
 	CountCategories(ctx context.Context) (int64, error)
+	CountServicesByState(ctx context.Context) ([]CountServicesByStateRow, error)
 	CreateAnnouncement(ctx context.Context, arg CreateAnnouncementParams) (Announcement, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	CreateService(ctx context.Context, arg CreateServiceParams) (Service, error)
@@ -58,11 +61,16 @@ type Querier interface {
 	ListServiceCategorySlugs(ctx context.Context, serviceID pgtype.UUID) ([]string, error)
 	MarkFavoritesSeeded(ctx context.Context, userID pgtype.UUID) error
 	NextFavoriteSort(ctx context.Context, userID pgtype.UUID) (int32, error)
+	PurgeOldClicks(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
 	// A lightweight launch-click event (docs/01 §5.4). user_role is denormalized so
 	// aggregate metrics (Phase 4) need no join. NULLs on user/service delete keep
 	// history intact when a user or service is removed.
 	RecordClick(ctx context.Context, arg RecordClickParams) error
 	RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) (int64, error)
+	// Recompute usage_daily from the raw events still present (the retention
+	// window). Idempotent: SET (not add). Days whose raw events have been purged are
+	// no longer recomputed, so their aggregate rows stay frozen at their last value.
+	RollupClicks(ctx context.Context) error
 	// Fuzzy/substring search over name, localized descriptions, and category labels
 	// (docs/01 §4.6, docs/02 §5). Returns active service ids ranked by name
 	// similarity then name. Categories are attached from the catalog snapshot in the

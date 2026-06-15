@@ -15,6 +15,7 @@ import (
 	"github.com/virtUOS/service-hub/internal/auth"
 	"github.com/virtUOS/service-hub/internal/catalog"
 	"github.com/virtUOS/service-hub/internal/config"
+	"github.com/virtUOS/service-hub/internal/metrics"
 	"github.com/virtUOS/service-hub/internal/service"
 	"github.com/virtUOS/service-hub/internal/usage"
 	"github.com/virtUOS/service-hub/internal/web"
@@ -25,6 +26,8 @@ type Deps struct {
 	Logger *slog.Logger
 	// Ready is the readiness probe for /readyz; nil means always ready.
 	Ready func(context.Context) error
+	// Metrics, when set, enables the request histogram + token-gated /metrics.
+	Metrics *metrics.Metrics
 	// Auth and Users enable the real OIDC BFF + session-gated routes. When Auth
 	// is nil (e.g. local dev with no IdP configured), the Phase 0 login stub is
 	// used instead, so the app still runs.
@@ -55,12 +58,19 @@ func New(cfg *config.Config, deps Deps) (http.Handler, error) {
 	r.Use(tp.Forwarded())
 	r.Use(requestLogger(deps.Logger))
 	r.Use(recoverer(deps.Logger))
+	if deps.Metrics != nil {
+		r.Use(metricsMiddleware(deps.Metrics))
+	}
 
 	// Public, session-free routes.
 	r.Get("/healthz", healthz)
 	r.Get("/readyz", readyz(deps.Ready))
 	r.Get("/api/branding", branding(cfg.Branding))
 	mountBranding(r, cfg.BrandingDir)
+	// Ops: token-gated, never exposed publicly (Caddy also 404s it — docs/02 §7).
+	if deps.Metrics != nil {
+		r.Handle("/metrics", deps.Metrics.Handler(cfg.MetricsToken))
+	}
 
 	spaHandler, err := buildSPA()
 	if err != nil {
@@ -105,7 +115,7 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 			pr.With(requireUserJSON).Delete("/api/favorites/items", removeFavorite(deps.Favorites))
 		}
 		if deps.Usage != nil {
-			pr.With(requireUserJSON).Post("/api/events/click", recordClick(deps.Usage))
+			pr.With(requireUserJSON).Post("/api/events/click", recordClick(deps.Usage, deps.Catalog, deps.Metrics))
 			if deps.Catalog != nil {
 				pr.With(requireUserJSON).Get("/api/usage/frequent", frequent(deps.Catalog, deps.Usage))
 			}
