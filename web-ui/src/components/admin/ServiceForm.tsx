@@ -2,6 +2,12 @@ import { useMemo, useState } from 'react'
 import { localized, type AdminService, type Category, type Service, type ServiceDraft } from '@/lib/api'
 import { iconByName, iconNames } from '@/lib/icons'
 import { cn } from '@/lib/utils'
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Field } from '@/components/ui/field'
+import { IconButton } from '@/components/ui/icon-button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Tile } from '../Tile'
 
 interface ServiceFormProps {
@@ -79,26 +85,26 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
     <form onSubmit={submit} className="grid gap-6 md:grid-cols-2">
       <div className="space-y-4">
         <Field label="Name">
-          <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <Field label="Beschreibung (Deutsch)">
-          <textarea value={descDe} onChange={(e) => setDescDe(e.target.value)} rows={2} className={inputCls} />
+          <Textarea value={descDe} onChange={(e) => setDescDe(e.target.value)} rows={2} />
         </Field>
         <Field label="Beschreibung (English)">
-          <textarea value={descEn} onChange={(e) => setDescEn(e.target.value)} rows={2} className={inputCls} />
+          <Textarea value={descEn} onChange={(e) => setDescEn(e.target.value)} rows={2} />
         </Field>
         <Field label="Service-URL (leer = nur Dokumentation)">
-          <input value={serviceUrl} onChange={(e) => setServiceUrl(e.target.value)} placeholder="https://…" className={inputCls} />
+          <Input value={serviceUrl} onChange={(e) => setServiceUrl(e.target.value)} placeholder="https://…" />
         </Field>
         <Field label="Dokumentations-URL">
-          <input value={docUrl} onChange={(e) => setDocUrl(e.target.value)} placeholder="https://…" className={inputCls} />
+          <Input value={docUrl} onChange={(e) => setDocUrl(e.target.value)} placeholder="https://…" />
         </Field>
 
         <fieldset>
           <legend className="mb-1 text-sm font-medium">Kategorien</legend>
           <div className="flex flex-wrap gap-2">
             {categories.map((c) => (
-              <label key={c.slug} className={cn('cursor-pointer rounded-md border px-2 py-1 text-sm', cats.has(c.slug) ? 'border-primary bg-primary text-white' : 'border-surface text-text-muted')}>
+              <label key={c.slug} className={cn('cursor-pointer rounded-md border px-2 py-1 text-sm', cats.has(c.slug) ? 'border-primary bg-primary text-white' : 'border-border text-text-muted')}>
                 <input type="checkbox" className="sr-only" checked={cats.has(c.slug)} onChange={() => toggleCat(c.slug)} />
                 {localized(c.label, locale)}
               </label>
@@ -108,21 +114,20 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
 
         <fieldset>
           <legend className="mb-1 text-sm font-medium">Icon</legend>
-          <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto rounded-md border border-surface p-2">
+          <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto rounded-md border border-border p-2">
             {iconNames.map((n) => {
               const Ico = iconByName(n)
               return (
-                <button
+                <IconButton
                   key={n}
-                  type="button"
                   aria-label={n}
                   aria-pressed={icon === n}
                   title={n}
                   onClick={() => setIcon(n)}
-                  className={cn('rounded-md p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]', icon === n ? 'bg-primary text-white' : 'text-text-muted hover:bg-surface')}
+                  className={cn(icon === n && 'bg-primary text-white hover:bg-primary hover:text-white')}
                 >
                   <Ico className="h-5 w-5" aria-hidden="true" />
-                </button>
+                </IconButton>
               )
             })}
           </div>
@@ -138,39 +143,28 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
         </div>
 
         {!valid && (
-          <ul className="rounded-md border border-surface p-3 text-sm text-text-muted">
+          <ul className="rounded-md border border-border p-3 text-sm text-text-muted">
             {errors.map((e) => (
               <li key={e}>• {e}</li>
             ))}
           </ul>
         )}
-        {error && <p role="alert" className="text-sm text-[var(--warning,#b45309)]">{error}</p>}
+        {error && (
+          <Alert variant="danger" role="alert">
+            {error}
+          </Alert>
+        )}
 
         <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={!valid || submitting}
-            className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-white hover:bg-primary-hover disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-          >
+          <Button type="submit" disabled={!valid || submitting}>
             {initial ? 'Speichern' : 'Anlegen'}
-          </button>
-          <button type="button" onClick={onCancel} className="h-9 rounded-md border border-surface px-4 text-sm hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">
+          </Button>
+          <Button type="button" variant="outline" onClick={onCancel}>
             Abbrechen
-          </button>
+          </Button>
         </div>
       </div>
     </form>
   )
 }
 
-const inputCls =
-  'w-full rounded-md border border-surface bg-surface px-2 py-1.5 text-sm text-text placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]'
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block text-sm">
-      <span className="mb-1 block font-medium">{label}</span>
-      {children}
-    </label>
-  )
-}
