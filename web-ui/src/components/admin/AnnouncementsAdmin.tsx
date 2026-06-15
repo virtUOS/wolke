@@ -5,6 +5,7 @@ import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Field } from '@/components/ui/field'
 import { Select } from '@/components/ui/select'
+import { List, ListItem } from '@/components/ui/list'
 
 const SEVERITIES: Severity[] = ['info', 'warning', 'critical']
 const AUDIENCES: Audience[] = ['all', 'student', 'teacher', 'staff']
@@ -43,17 +44,17 @@ export function AnnouncementsAdmin() {
         />
       )}
 
-      <ul className="divide-y divide-surface rounded-md border border-surface">
+      <List className="text-sm">
         {(list.data?.announcements ?? []).map((a) => (
-          <li key={a.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+          <ListItem key={a.id}>
             <Badge variant={severityVariant(a.severity)}>{a.severity}</Badge>
             <span className="min-w-0 flex-1 truncate">{a.title.de}</span>
             <span className="text-xs text-text-muted">{a.audience}{a.ends_at ? ` · bis ${a.ends_at.slice(0, 16).replace('T', ' ')}` : ''}</span>
             <button onClick={() => { setEditing(a); setShowForm(true) }} className="text-primary hover:text-primary-hover">Bearbeiten</button>
-          </li>
+          </ListItem>
         ))}
-        {(list.data?.announcements ?? []).length === 0 && <li className="px-3 py-2 text-sm text-text-muted">Keine Ankündigungen.</li>}
-      </ul>
+        {(list.data?.announcements ?? []).length === 0 && <ListItem className="text-text-muted">Keine Ankündigungen.</ListItem>}
+      </List>
     </div>
   )
 }
