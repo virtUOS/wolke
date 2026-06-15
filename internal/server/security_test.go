@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/virtUOS/service-hub/internal/config"
+	"github.com/virtuos/wolke/internal/config"
 )
 
 func TestSecurityHeaders(t *testing.T) {

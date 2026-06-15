@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/virtUOS/service-hub/internal/catalog"
-	"github.com/virtUOS/service-hub/internal/metrics"
-	"github.com/virtUOS/service-hub/internal/usage"
+	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/metrics"
+	"github.com/virtuos/wolke/internal/usage"
 )
 
 // recordClick ingests a launch-click for the current user (docs/01 §5.4,

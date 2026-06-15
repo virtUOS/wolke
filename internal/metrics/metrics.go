@@ -1,5 +1,5 @@
 // Package metrics holds the Prometheus collectors and the scrape endpoint
-// (docs/02 §7). The metric prefix is the neutral product name (servicehub_), not
+// (docs/02 §7). The metric prefix is the neutral product name (wolke_), not
 // an institution name, per the white-label rule (CLAUDE.md rule 8). Exported
 // labels are aggregate only — never a user identifier.
 package metrics
@@ -13,7 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // Metrics owns a private registry and the app's collectors.
@@ -33,24 +33,24 @@ func New() *Metrics {
 	m := &Metrics{
 		reg: prometheus.NewRegistry(),
 		ClicksTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "servicehub_service_clicks_total",
+			Name: "wolke_service_clicks_total",
 			Help: "Launch clicks per service and role.",
 		}, []string{"service", "role"}),
 		RequestDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "servicehub_http_request_duration_seconds",
+			Name:    "wolke_http_request_duration_seconds",
 			Help:    "HTTP request duration by route, method, and status code.",
 			Buckets: prometheus.DefBuckets,
 		}, []string{"route", "method", "code"}),
 		activeSessions: prometheus.NewGauge(prometheus.GaugeOpts{
-			Name: "servicehub_active_sessions",
+			Name: "wolke_active_sessions",
 			Help: "Currently valid server-side sessions.",
 		}),
 		catalogServices: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "servicehub_catalog_services",
+			Name: "wolke_catalog_services",
 			Help: "Number of catalog services by state.",
 		}, []string{"state"}),
 		announcementsActive: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "servicehub_announcements_active",
+			Name: "wolke_announcements_active",
 			Help: "Active announcements by severity.",
 		}, []string{"severity"}),
 	}

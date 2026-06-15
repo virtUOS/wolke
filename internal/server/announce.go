@@ -7,8 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/virtUOS/service-hub/internal/announce"
-	"github.com/virtUOS/service-hub/internal/service"
+	"github.com/virtuos/wolke/internal/announce"
+	"github.com/virtuos/wolke/internal/service"
 )
 
 // userAnnouncements serves the active announcements scoped to the current user's

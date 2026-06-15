@@ -53,22 +53,22 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_USER: servicehub
+          POSTGRES_USER: wolke
           POSTGRES_PASSWORD: devpass
-          POSTGRES_DB: servicehub
+          POSTGRES_DB: wolke
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U servicehub -d servicehub"
+          --health-cmd "pg_isready -U wolke -d wolke"
           --health-interval 5s --health-timeout 3s --health-retries 10
       mock-oidc:
         image: ghcr.io/navikt/mock-oauth2-server:2.1.10
         ports:
           - 8455:8080
         env:
-          JSON_CONFIG: '{"interactiveLogin":false,"tokenCallbacks":[{"issuerId":"default","requestMappings":[{"requestParam":"client_id","match":"service-hub","claims":{"sub":"stud-1","name":"Test Student","email":"stud@example.edu","eduPersonAffiliation":"student","groups":["dashboard-admins"]}}]}]}'
+          JSON_CONFIG: '{"interactiveLogin":false,"tokenCallbacks":[{"issuerId":"default","requestMappings":[{"requestParam":"client_id","match":"wolke","claims":{"sub":"stud-1","name":"Test Student","email":"stud@example.edu","eduPersonAffiliation":"student","groups":["dashboard-admins"]}}]}]}'
     env:
-      DATABASE_URL: postgres://servicehub:devpass@localhost:5432/servicehub?sslmode=disable
+      DATABASE_URL: postgres://wolke:devpass@localhost:5432/wolke?sslmode=disable
       # IPv4: mock-oauth2-server crashes on IPv6 peers.
       OIDC_TEST_ISSUER: http://127.0.0.1:8455/default
     steps:

@@ -15,7 +15,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	"github.com/virtUOS/service-hub/internal/config"
+	"github.com/virtuos/wolke/internal/config"
 )
 
 // Authenticator wraps the provider-agnostic OIDC client: discovery, the OAuth2

@@ -17,10 +17,10 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/virtUOS/service-hub/internal/adminmcp"
-	"github.com/virtUOS/service-hub/internal/config"
-	"github.com/virtUOS/service-hub/internal/service"
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/adminmcp"
+	"github.com/virtuos/wolke/internal/config"
+	"github.com/virtuos/wolke/internal/service"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 func main() {
@@ -60,7 +60,7 @@ func run() error {
 	}
 
 	mgr := adminmcp.New(db, service.Actor{ID: admin.ID, Kind: service.ActorMCP})
-	srv := mcp.NewServer(&mcp.Implementation{Name: "service-hub-admin", Version: "0.1.0"}, nil)
+	srv := mcp.NewServer(&mcp.Implementation{Name: "wolke-admin", Version: "0.1.0"}, nil)
 	registerTools(srv, mgr)
 
 	log.Info("admin MCP server ready (stdio)", "admin", adminSub)

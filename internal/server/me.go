@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // meResponse is the current-user read model (docs/02 §12): identity, role/admin,

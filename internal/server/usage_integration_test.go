@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/virtUOS/service-hub/internal/catalog"
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // Integration: recording clicks feeds "frequently used" (docs/01 §4.5).

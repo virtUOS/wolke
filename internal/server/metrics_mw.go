@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/virtUOS/service-hub/internal/metrics"
+	"github.com/virtuos/wolke/internal/metrics"
 )
 
 // metricsMiddleware records each request's duration by matched route, method,

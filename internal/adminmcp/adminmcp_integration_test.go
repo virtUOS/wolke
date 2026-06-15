@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/virtUOS/service-hub/internal/service"
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/service"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // Enforces the MCP safety contract (CLAUDE.md rule 4, docs/02 §8): propose_*

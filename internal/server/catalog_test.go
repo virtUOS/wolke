@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/virtUOS/service-hub/internal/catalog"
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // withUser returns a request carrying an authenticated user in context, as

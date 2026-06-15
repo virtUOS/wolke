@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/virtUOS/service-hub/internal/config"
+	"github.com/virtuos/wolke/internal/config"
 )
 
 // Identity is the result of mapping verified OIDC claims to our domain. It is

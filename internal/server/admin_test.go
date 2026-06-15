@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 func TestRequireAdmin(t *testing.T) {

@@ -14,13 +14,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/virtUOS/service-hub/internal/auth"
-	"github.com/virtUOS/service-hub/internal/catalog"
-	"github.com/virtUOS/service-hub/internal/config"
-	"github.com/virtUOS/service-hub/internal/metrics"
-	"github.com/virtUOS/service-hub/internal/server"
-	"github.com/virtUOS/service-hub/internal/store"
-	"github.com/virtUOS/service-hub/internal/usage"
+	"github.com/virtuos/wolke/internal/auth"
+	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
+	"github.com/virtuos/wolke/internal/metrics"
+	"github.com/virtuos/wolke/internal/server"
+	"github.com/virtuos/wolke/internal/store"
+	"github.com/virtuos/wolke/internal/usage"
 )
 
 // catalogCacheTTL bounds how long the in-process catalog snapshot is served

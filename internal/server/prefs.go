@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/virtUOS/service-hub/internal/service"
+	"github.com/virtuos/wolke/internal/service"
 )
 
 // updatePrefs handles PATCH /api/me/prefs (docs/02 §12). Unspecified fields keep

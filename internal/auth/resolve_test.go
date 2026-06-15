@@ -3,7 +3,7 @@ package auth
 import (
 	"testing"
 
-	"github.com/virtUOS/service-hub/internal/config"
+	"github.com/virtuos/wolke/internal/config"
 )
 
 func defaultRoleMapping() config.RoleMapping {

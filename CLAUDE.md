@@ -1,4 +1,4 @@
-# CLAUDE.md — UOS Service Hub
+# CLAUDE.md — wolke
 
 Standing instructions for working in this repo. Read `docs/01`–`docs/04` for the full spec.
 

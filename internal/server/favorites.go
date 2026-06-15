@@ -7,8 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/virtUOS/service-hub/internal/catalog"
-	"github.com/virtUOS/service-hub/internal/service"
+	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/service"
 )
 
 // listFavorites returns the user's favorited services, resolved via the catalog

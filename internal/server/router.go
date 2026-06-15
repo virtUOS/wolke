@@ -11,14 +11,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/virtUOS/service-hub/internal/announce"
-	"github.com/virtUOS/service-hub/internal/auth"
-	"github.com/virtUOS/service-hub/internal/catalog"
-	"github.com/virtUOS/service-hub/internal/config"
-	"github.com/virtUOS/service-hub/internal/metrics"
-	"github.com/virtUOS/service-hub/internal/service"
-	"github.com/virtUOS/service-hub/internal/usage"
-	"github.com/virtUOS/service-hub/internal/web"
+	"github.com/virtuos/wolke/internal/announce"
+	"github.com/virtuos/wolke/internal/auth"
+	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
+	"github.com/virtuos/wolke/internal/metrics"
+	"github.com/virtuos/wolke/internal/service"
+	"github.com/virtuos/wolke/internal/usage"
+	"github.com/virtuos/wolke/internal/web"
 )
 
 // Deps are the runtime dependencies the router needs from main.

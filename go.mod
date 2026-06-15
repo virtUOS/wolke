@@ -1,4 +1,4 @@
-module github.com/virtUOS/service-hub
+module github.com/virtuos/wolke
 
 go 1.26.0
 

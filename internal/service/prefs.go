@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // ValidationError is a business-rule violation the HTTP/MCP layers map to a 400.

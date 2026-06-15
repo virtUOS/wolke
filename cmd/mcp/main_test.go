@@ -7,9 +7,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/virtUOS/service-hub/internal/adminmcp"
-	"github.com/virtUOS/service-hub/internal/service"
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/adminmcp"
+	"github.com/virtuos/wolke/internal/service"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // clientFor connects an in-memory MCP client to a server with the given manager.

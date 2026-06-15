@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/virtUOS/service-hub/internal/config"
+	"github.com/virtuos/wolke/internal/config"
 )
 
 // sessionCookieName is the BFF session cookie. In Phase 0 it carries a stub

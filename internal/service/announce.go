@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // AnnouncementInput is the validated shape for creating/editing an announcement.

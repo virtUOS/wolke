@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/virtUOS/service-hub/internal/announce"
-	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtuos/wolke/internal/announce"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 // Integration: announcement create + role/window scoping + audit. Needs DATABASE_URL.

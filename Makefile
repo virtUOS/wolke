@@ -1,12 +1,12 @@
-# Service Hub — developer commands. The primary loop is no-Docker:
+# wolke — developer commands. The primary loop is no-Docker:
 #   1) make db          (one-time: start local Postgres via podman)
 #   2) make migrate
 #   3) make run         (terminal A: Go API + always-ready /healthz on :8080)
 #   4) make web-dev     (terminal B: Vite SPA on :5173, proxying /api to :8080)
 # See README.md "Local development".
 
-DATABASE_URL ?= postgres://servicehub:devpass@localhost:5432/servicehub?sslmode=disable
-PG_CONTAINER ?= servicehub-pg
+DATABASE_URL ?= postgres://wolke:devpass@localhost:5432/wolke?sslmode=disable
+PG_CONTAINER ?= wolke-pg
 export DATABASE_URL
 
 .DEFAULT_GOAL := help
@@ -21,7 +21,7 @@ help: ## List available targets
 db: ## Start (or resume) the local Postgres 17 container
 	@podman start $(PG_CONTAINER) 2>/dev/null || \
 	  podman run -d --name $(PG_CONTAINER) \
-	    -e POSTGRES_USER=servicehub -e POSTGRES_PASSWORD=devpass -e POSTGRES_DB=servicehub \
+	    -e POSTGRES_USER=wolke -e POSTGRES_PASSWORD=devpass -e POSTGRES_DB=wolke \
 	    -p 5432:5432 docker.io/library/postgres:17
 	@echo "Postgres up on :5432 ($(PG_CONTAINER))"
 
@@ -29,7 +29,7 @@ db: ## Start (or resume) the local Postgres 17 container
 db-stop: ## Stop the local Postgres container
 	@podman stop $(PG_CONTAINER)
 
-OIDC_CONTAINER ?= servicehub-oidc
+OIDC_CONTAINER ?= wolke-oidc
 OIDC_TEST_ISSUER ?= http://127.0.0.1:8455/default
 export OIDC_TEST_ISSUER
 
@@ -59,7 +59,7 @@ sqlc: ## Regenerate type-safe queries from SQL
 
 .PHONY: seed
 seed: ## Load dev catalog seed data (idempotent; dev only)
-	podman exec -i $(PG_CONTAINER) psql -q -U servicehub -d servicehub < dev/seed.sql
+	podman exec -i $(PG_CONTAINER) psql -q -U wolke -d wolke < dev/seed.sql
 	@echo "seeded dev catalog"
 
 ## --- Backend ---
