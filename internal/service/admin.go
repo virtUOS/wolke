@@ -90,6 +90,27 @@ func validHTTPURL(s string) bool {
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
+// ValidateDraft exposes service validation for the MCP propose step, which must
+// validate without writing (docs/02 §8).
+func ValidateDraft(in Draft) error { return validateServiceInput(in) }
+
+// GetAdminService returns one service (including inactive) with its categories,
+// or a NotFoundError. Read-only.
+func GetAdminService(ctx context.Context, db store.Querier, id pgtype.UUID) (AdminService, error) {
+	s, err := db.GetServiceByID(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return AdminService{}, &NotFoundError{What: "service"}
+	}
+	if err != nil {
+		return AdminService{}, fmt.Errorf("get service: %w", err)
+	}
+	slugs, err := db.ListServiceCategorySlugs(ctx, id)
+	if err != nil {
+		return AdminService{}, fmt.Errorf("list categories: %w", err)
+	}
+	return toAdminService(s, slugs), nil
+}
+
 // CreateService validates, inserts the service + its categories, and audit-logs
 // the write — all in one transaction.
 func CreateService(ctx context.Context, db AdminDB, actor Actor, in Draft) (AdminService, error) {
