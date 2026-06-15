@@ -50,7 +50,7 @@ func TestClickThenFrequent(t *testing.T) {
 		r := httptest.NewRequest(http.MethodPost, target, strings.NewReader(body))
 		r = r.WithContext(context.WithValue(r.Context(), userCtxKey{}, user))
 		rec := httptest.NewRecorder()
-		recordClick(db)(rec, r)
+		recordClick(db, cache, nil)(rec, r)
 		return rec
 	}
 

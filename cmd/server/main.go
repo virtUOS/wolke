@@ -17,13 +17,54 @@ import (
 	"github.com/virtUOS/service-hub/internal/auth"
 	"github.com/virtUOS/service-hub/internal/catalog"
 	"github.com/virtUOS/service-hub/internal/config"
+	"github.com/virtUOS/service-hub/internal/metrics"
 	"github.com/virtUOS/service-hub/internal/server"
 	"github.com/virtUOS/service-hub/internal/store"
+	"github.com/virtUOS/service-hub/internal/usage"
 )
 
 // catalogCacheTTL bounds how long the in-process catalog snapshot is served
 // before a refresh; admin writes also invalidate it explicitly (Phase 3).
 const catalogCacheTTL = 60 * time.Second
+
+const (
+	gaugeRefreshInterval = 30 * time.Second
+	usageRollupInterval  = time.Hour
+	usageRetention       = 90 * 24 * time.Hour // raw click_events retention (docs/01 §8.9)
+)
+
+// refreshGauges periodically updates the metric gauges from the database.
+func refreshGauges(ctx context.Context, log *slog.Logger, m *metrics.Metrics, src metrics.GaugeSource) {
+	t := time.NewTicker(gaugeRefreshInterval)
+	defer t.Stop()
+	for {
+		if err := m.RefreshGauges(ctx, src); err != nil {
+			log.Debug("refresh gauges", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// runUsageRollup periodically rolls click_events into usage_daily and purges
+// raw events past the retention window (docs/04 maintenance).
+func runUsageRollup(ctx context.Context, log *slog.Logger, db *store.DB) {
+	t := time.NewTicker(usageRollupInterval)
+	defer t.Stop()
+	for {
+		if err := usage.Rollup(ctx, db, usageRetention); err != nil {
+			log.Warn("usage rollup", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -61,7 +102,8 @@ func run() error {
 		logger.Warn("DATABASE_URL not set; running without a database (dev shell)")
 	}
 
-	deps := server.Deps{Logger: logger, Ready: ready}
+	m := metrics.New()
+	deps := server.Deps{Logger: logger, Ready: ready, Metrics: m}
 
 	// Catalog read model: an in-process cache over the DB, invalidated on admin
 	// writes (Phase 3). Reads serve from cache (docs/02 §9).
@@ -108,6 +150,12 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Background workers: refresh the metric gauges and roll up click events.
+	if db != nil {
+		go refreshGauges(ctx, logger, m, db)
+		go runUsageRollup(ctx, logger, db)
+	}
 
 	errCh := make(chan error, 1)
 	go func() {
