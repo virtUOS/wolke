@@ -1,0 +1,79 @@
+import * as React from 'react'
+import { cn } from '@/lib/utils'
+import { IconButton } from './icon-button'
+
+// Popover — an icon-triggered floating panel (hand-rolled, no Radix). Used for
+// the settings panel and other "click a control, get a small panel" cases. It is
+// a Popover, not a DropdownMenu: its panels hold form controls, so it carries
+// role="dialog" (a menu/menuitem pattern would be wrong here). Implements the
+// behaviours a Radix Popover gives — outside-click and Escape to dismiss, focus
+// returned to the trigger, aria-haspopup/expanded/controls wiring — so it can be
+// swapped to one later without changing callers. A true actions menu can layer a
+// menu role on this foundation when one is actually needed.
+interface PopoverProps {
+  /** Accessible name for the icon trigger and the panel. */
+  label: string
+  /** The trigger's icon (marked aria-hidden by the caller). */
+  icon: React.ReactNode
+  children: React.ReactNode
+  /** Which edge the panel aligns to. */
+  align?: 'start' | 'end'
+  /** Extra classes for the panel (e.g. a width). */
+  panelClassName?: string
+}
+
+export function Popover({ label, icon, children, align = 'end', panelClassName }: PopoverProps) {
+  const [open, setOpen] = React.useState(false)
+  const rootRef = React.useRef<HTMLDivElement>(null)
+  const triggerRef = React.useRef<HTMLButtonElement>(null)
+  const panelId = React.useId()
+
+  React.useEffect(() => {
+    if (!open) return
+    function onPointerDown(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={rootRef} className="relative">
+      <IconButton
+        ref={triggerRef}
+        aria-label={label}
+        title={label}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {icon}
+      </IconButton>
+      {open && (
+        <div
+          id={panelId}
+          role="dialog"
+          aria-label={label}
+          className={cn(
+            'absolute z-20 mt-1 rounded-md border border-border bg-bg p-3 text-sm shadow-lg',
+            align === 'end' ? 'right-0' : 'left-0',
+            panelClassName,
+          )}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
