@@ -3,6 +3,7 @@ import type { Announcement, AnnouncementInput, Audience, Severity } from '@/lib/
 import { useAdminActions, useAdminAnnouncements } from '@/lib/admin-hooks'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Field } from '@/components/ui/field'
 
 const SEVERITIES: Severity[] = ['info', 'warning', 'critical']
 const AUDIENCES: Audience[] = ['all', 'student', 'teacher', 'staff']
@@ -100,10 +101,9 @@ function AnnouncementForm({
       }}
       className="space-y-3 rounded-md border border-surface p-4"
     >
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium">Titel (de)</span>
+      <Field label="Titel (de)">
         <Input value={titleDe} onChange={(e) => setTitleDe(e.target.value)} />
-      </label>
+      </Field>
       <label className="block text-sm">
         <span className="mb-1 block font-medium">Text (de)</span>
         <textarea value={bodyDe} onChange={(e) => setBodyDe(e.target.value)} rows={2} className={input} />
