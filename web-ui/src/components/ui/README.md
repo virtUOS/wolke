@@ -3,9 +3,17 @@
 The reusable, **presentational** building blocks the rest of the app composes (and that we sync to
 Claude Design). They are the leaves of the component tree — the styled vocabulary, not the wiring.
 
-This convention exists so the set stays coherent as it grows (it currently holds `button`; the full
-set lands in the design-system Phase C) and so every primitive ports cleanly to Claude Design later.
-An enforcement test (`src/__tests__/ui-primitives.test.ts`) keeps the hard rules honest.
+This convention exists so the set stays coherent as it grows and so every primitive ports cleanly to
+Claude Design later. An enforcement test (`src/__tests__/ui-primitives.test.ts`) keeps the hard rules
+honest.
+
+The set: `button`, `icon-button`, `pill-button`, `card`, `badge`, `input`, `label`, `field`,
+`select`, `alert`, `list` (List/ListItem), `dialog`, `popover`. The interactive overlays
+(`dialog`, `popover`) are hand-rolled but implement the Radix behaviour set (focus trap/return,
+Escape + outside-click dismiss, ARIA) behind Radix-shaped APIs, so Radix can be swapped in later
+without touching callers. `select` is a styled native `<select>` and `list` is a styled `<ul>`
+(not a `<table>`) — reach for richer primitives (Radix Select, a real Table) only when the data
+actually needs them.
 
 ## Rules
 
