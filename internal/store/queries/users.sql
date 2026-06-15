@@ -15,6 +15,9 @@ returning *;
 -- name: GetUserByID :one
 select * from users where id = $1;
 
+-- name: GetUserBySub :one
+select * from users where oidc_sub = @oidc_sub;
+
 -- name: UpdateUserPrefs :one
 -- Display prefs persist server-side so they follow the user across devices.
 update users

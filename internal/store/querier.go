@@ -43,6 +43,7 @@ type Querier interface {
 	GetServiceByID(ctx context.Context, id pgtype.UUID) (Service, error)
 	GetSession(ctx context.Context, id string) (Session, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
+	GetUserBySub(ctx context.Context, oidcSub string) (User, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
 	// Active = within its time window and addressed to the user's role (or all),
 	// most-severe first (docs/01 §4.7).

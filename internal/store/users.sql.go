@@ -36,6 +36,31 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	return i, err
 }
 
+const getUserBySub = `-- name: GetUserBySub :one
+select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded from users where oidc_sub = $1
+`
+
+func (q *Queries) GetUserBySub(ctx context.Context, oidcSub string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserBySub, oidcSub)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.OidcSub,
+		&i.DisplayName,
+		&i.Email,
+		&i.PrimaryRole,
+		&i.IsAdmin,
+		&i.ViewMode,
+		&i.Theme,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+		&i.FavoritesOrder,
+		&i.FavoritesSeparateTab,
+		&i.FavoritesSeeded,
+	)
+	return i, err
+}
+
 const updateUserPrefs = `-- name: UpdateUserPrefs :one
 update users
 set view_mode              = $1,
