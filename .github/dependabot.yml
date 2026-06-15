@@ -1,0 +1,40 @@
+version: 2
+updates:
+  # Backend Go modules (incl. the pinned go tools: goose, sqlc, golangci-lint).
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      go-modules:
+        patterns: ["*"]
+
+  # Frontend npm dependencies.
+  - package-ecosystem: npm
+    directory: "/web-ui"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-prod:
+        dependency-type: production
+      npm-dev:
+        dependency-type: development
+
+  # Container base images (Dockerfile + compose.yaml).
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # GitHub Actions used by the workflows.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]

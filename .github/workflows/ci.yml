@@ -25,7 +25,19 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm run test
+      - run: npm run coverage
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            pct=$(node -p "require('./coverage/coverage-summary.json').total.lines.pct")
+            echo "### Frontend coverage: ${pct}% lines" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: web-ui/coverage
+          retention-days: 7
       - run: npm run build
       - uses: actions/upload-artifact@v4
         with:
@@ -34,7 +46,7 @@ jobs:
           retention-days: 1
 
   backend:
-    name: Backend (lint, test, embedded build)
+    name: Backend (lint, test+coverage, embedded build)
     runs-on: ubuntu-latest
     needs: frontend
     services:
@@ -83,8 +95,21 @@ jobs:
             sleep 1
           done
           echo "mock OIDC did not become ready"; exit 1
-      - name: Test (race, with real Postgres + mock OIDC)
-        run: go test -race ./...
+      - name: Test (race + coverage, with real Postgres + mock OIDC)
+        run: go test -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+      - name: Coverage summary
+        if: always()
+        run: |
+          total=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}')
+          echo "### Backend coverage: ${total} statements" >> "$GITHUB_STEP_SUMMARY"
+          go tool cover -html=coverage.out -o coverage.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: |
+            coverage.out
+            coverage.html
+          retention-days: 7
       - name: Build embedded binary
         run: |
           # Use the SPA built by the frontend job so the embed is the real app.

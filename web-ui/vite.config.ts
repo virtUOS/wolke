@@ -27,5 +27,13 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './vitest.setup.ts',
+    coverage: {
+      provider: 'v8',
+      reportsDirectory: 'coverage',
+      reporter: ['text', 'text-summary', 'json-summary', 'html'],
+      include: ['src/**/*.{ts,tsx}'],
+      // Exclude tests, the entrypoint, and the test harness from the denominator.
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/main.tsx', 'src/vite-env.d.ts'],
+    },
   },
 })
