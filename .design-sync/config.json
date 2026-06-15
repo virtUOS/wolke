@@ -1,0 +1,14 @@
+{
+  "projectId": "29b8b69c-612b-46df-9566-9327316ee3ec",
+  "pkg": "wolke-web",
+  "globalName": "Wolke",
+  "shape": "package",
+  "srcDir": "src/components/ui",
+  "tsconfig": "tsconfig.json",
+  "cssEntry": "wolke-ds.generated.css",
+  "readmeHeader": ".design-sync/conventions.md",
+  "runtimeFontPrefixes": ["Inter"],
+  "overrides": {
+    "Dialog": { "cardMode": "single", "viewport": "560x380" }
+  }
+}
