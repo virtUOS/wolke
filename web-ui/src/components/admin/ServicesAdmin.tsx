@@ -4,6 +4,7 @@ import { useAdminActions, useAdminServices } from '@/lib/admin-hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
+import { List, ListItem } from '@/components/ui/list'
 import { ServiceForm } from './ServiceForm'
 
 type Mode = { kind: 'list' } | { kind: 'new' } | { kind: 'edit'; service: AdminService }
@@ -59,9 +60,9 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
       {services.isLoading ? (
         <p className="text-sm text-text-muted" aria-busy="true">Lädt…</p>
       ) : (
-        <ul className="divide-y divide-surface rounded-md border border-surface">
+        <List>
           {list.map((s) => (
-            <li key={s.id} className="flex items-center gap-3 px-3 py-2">
+            <ListItem key={s.id}>
               <span className="min-w-0 flex-1">
                 <span className="font-medium">{s.name}</span>
                 {!s.is_active && <Badge className="ml-2">inaktiv</Badge>}
@@ -77,10 +78,10 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
                   </button>
                 )}
               </span>
-            </li>
+            </ListItem>
           ))}
-          {list.length === 0 && <li className="px-3 py-2 text-sm text-text-muted">Keine Dienste.</li>}
-        </ul>
+          {list.length === 0 && <ListItem className="text-sm text-text-muted">Keine Dienste.</ListItem>}
+        </List>
       )}
 
       <Dialog
