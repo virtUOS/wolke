@@ -15,6 +15,7 @@ coverage.*
 /web-ui/node_modules/
 /web-ui/dist/
 /web-ui/.vite/
+/web-ui/coverage/
 
 # Local config & secrets (examples ARE committed; real ones are not)
 .env
