@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { type AdminService, type Category } from '@/lib/api'
 import { useAdminActions, useAdminServices } from '@/lib/admin-hooks'
+import { Badge } from '@/components/ui/badge'
 import { ServiceForm } from './ServiceForm'
 
 type Mode = { kind: 'list' } | { kind: 'new' } | { kind: 'edit'; service: AdminService }
@@ -60,7 +61,7 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
             <li key={s.id} className="flex items-center gap-3 px-3 py-2">
               <span className="min-w-0 flex-1">
                 <span className="font-medium">{s.name}</span>
-                {!s.is_active && <span className="ml-2 rounded bg-surface px-1.5 py-0.5 text-xs text-text-muted">inaktiv</span>}
+                {!s.is_active && <Badge className="ml-2">inaktiv</Badge>}
                 <span className="ml-2 text-xs text-text-muted">{s.categories.join(', ')}</span>
               </span>
               {confirmDelete === s.id ? (
