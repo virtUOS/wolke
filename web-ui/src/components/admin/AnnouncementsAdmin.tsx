@@ -4,6 +4,7 @@ import { useAdminActions, useAdminAnnouncements } from '@/lib/admin-hooks'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Field } from '@/components/ui/field'
+import { Select } from '@/components/ui/select'
 
 const SEVERITIES: Severity[] = ['info', 'warning', 'critical']
 const AUDIENCES: Audience[] = ['all', 'student', 'teacher', 'staff']
@@ -111,15 +112,15 @@ function AnnouncementForm({
       <div className="flex flex-wrap gap-3">
         <label className="text-sm">
           <span className="mb-1 block font-medium">Schweregrad</span>
-          <select value={severity} onChange={(e) => setSeverity(e.target.value as Severity)} className={select}>
+          <Select value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}>
             {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
+          </Select>
         </label>
         <label className="text-sm">
           <span className="mb-1 block font-medium">Zielgruppe</span>
-          <select value={audience} onChange={(e) => setAudience(e.target.value as Audience)} className={select}>
+          <Select value={audience} onChange={(e) => setAudience(e.target.value as Audience)}>
             {AUDIENCES.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
+          </Select>
         </label>
         <label className="text-sm">
           <span className="mb-1 block font-medium">Endet am (optional)</span>
