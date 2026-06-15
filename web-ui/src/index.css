@@ -7,23 +7,44 @@
    (docs/03 §2); the branding payload overrides the values at runtime. --bg is
    not part of the branding token set, so it stays defined here. */
 :root {
-  --bg: #ffffff;
+  /* Brand-overridable palette (docs/03 §2) — these fallbacks mirror the backend
+     defaults and are replaced at runtime by GET /api/branding. */
   --surface: #f4f4f5;
+  --surface-2: #ececee;
+  --border: #e2e2e5;
   --text: #18181b;
   --text-muted: #6b6b70;
   --accent: #f2c879;
   --primary: #a6093d;
   --primary-hover: #8a0732;
+  --info: #2563eb;
+  --warning: #b45309;
+  --success: #15803d;
+  --danger: #b91c1c;
+
+  /* Structural tokens (not brand-overridable; identical across skins). --bg is
+     deliberately excluded from the branding payload — it's the app canvas. */
+  --bg: #ffffff;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
 }
 
 .dark {
-  --bg: #161618;
   --surface: #1e1e21;
+  --surface-2: #27272b;
+  --border: #34343a;
   --text: #f4f4f5;
   --text-muted: #9a9aa1;
   --accent: #f2c879;
   --primary: #c2355c;
   --primary-hover: #a6093d;
+  --info: #60a5fa;
+  --warning: #fbbf24;
+  --success: #4ade80;
+  --danger: #f87171;
+
+  --bg: #161618;
 }
 
 body {

@@ -29,40 +29,43 @@ Concretely:
 > variables below. **Keep the variable names stable; only values change.** A fork re-skins by
 > editing one file and swapping logo assets — no recompile.
 
+Tokens are **semantic** (named by role, not by hue) so a skin re-colours by value alone. They split
+into two classes by *who owns the value*:
+
+**Brand-overridable palette** — served as two maps (`theme.light`, `theme.dark`) by `GET /api/branding`,
+applied at runtime as CSS variables; `.dark` on `<html>` selects which map is live. These are what a
+deployer changes in `branding.yaml`. Key names use `_` in the payload (`primary_hover`) and map to
+`--primary-hover` CSS vars.
+
+| Token (`--name`) | Light | Dark | Role |
+|---|---|---|---|
+| `--primary`        | `#A6093D` | `#C2355C` | brand + primary actions, active tab |
+| `--primary-hover`  | `#8A0732` | `#A6093D` | primary pressed/hover |
+| `--accent`         | `#F2C879` | `#F2C879` | sparing accent (info callout) |
+| `--surface`        | `#F4F4F5` | `#1E1E21` | page background behind cards |
+| `--surface-2`      | `#ECECEE` | `#27272B` | tile footer / inset zones |
+| `--border`         | `#E2E2E5` | `#34343A` | hairlines, dividers, card edges |
+| `--text`           | `#18181B` | `#F4F4F5` | body text |
+| `--text-muted`     | `#6B6B70` | `#9A9AA1` | sub-labels, secondary text |
+| `--info`           | `#2563EB` | `#60A5FA` | informational state / banner |
+| `--warning`        | `#B45309` | `#FBBF24` | warning state / banner |
+| `--success`        | `#15803D` | `#4ADE80` | success state / confirmations |
+| `--danger`         | `#B91C1C` | `#F87171` | destructive actions, critical state |
+
+Announcement severities map onto these: `info`→`--info`, `warning`→`--warning`, `critical`→`--danger`.
+Brand red (`--primary`) is for **brand + interaction only** — never large fills, or it stops meaning
+"actionable"; `--danger` is the distinct true-red for destructive/critical, so the two don't blur.
+
+**Structural tokens** — *not* brand-overridable; defined statically in `index.css` and identical across
+skins (a deployer re-colours, but doesn't restructure). They flip on `.dark` where it matters.
+
 ```css
-/* Brand */
---uos-red-600:   #A6093D;   /* primary — logo block, primary actions, active tab */
---uos-red-700:   #8A0732;   /* primary pressed/hover-dark */
---uos-red-300:   #E2879D;   /* tints, the muted warning panel in the PDF */
-
-/* Accent (used sparingly, e.g. the "VirtOUS" info callout in the PDF) */
---uos-amber-300: #F2C879;
---uos-amber-100: #FBEBC8;
-
-/* Neutrals — light */
---bg:            #FFFFFF;
---surface:       #F4F4F5;   /* page background behind cards */
---surface-2:     #ECECEE;   /* tile footer / inset zone */
---border:        #E2E2E5;
---text:          #18181B;
---text-muted:    #6B6B70;
-
-/* Neutrals — dark */
---bg-dark:       #161618;
---surface-dark:  #1E1E21;
---surface-2-dark:#27272B;
---border-dark:   #34343A;
---text-dark:     #F4F4F5;
---text-muted-dark:#9A9AA1;
-
-/* Semantic (announcements) */
---info:     #2563EB;
---warning:  #B45309;
---critical: var(--uos-red-600);
+--bg:        #FFFFFF;  /* .dark: #161618 — app canvas; deliberately not in the branding payload */
+--radius-sm: 0.25rem;  --radius-md: 0.375rem;  --radius-lg: 0.5rem;   /* corner scale */
 ```
 
-Map these to Tailwind theme tokens and to CSS variables that flip on `.dark`. Brand red is for
-**brand + interaction only** — never for large fills, or it stops meaning "actionable."
+Type scale (rem, structural, mapped to Tailwind `fontSize`): `0.75 / 0.875 / 1 / 1.25 / 1.5 / 2 / 2.5`.
+Spacing and elevation use Tailwind's default scales — no custom tokens (keep it boring).
 
 ## 3. Typography
 

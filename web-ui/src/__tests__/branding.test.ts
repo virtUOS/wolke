@@ -23,4 +23,14 @@ describe('applyBrandingTokens', () => {
     expect(el?.textContent).toContain('.dark')
     expect(document.title).toBe('IT Service')
   })
+
+  it('maps multi-segment underscore token names to hyphenated CSS vars', () => {
+    applyBrandingTokens({
+      ...branding,
+      theme: { light: { surface_2: '#ECECEE', text_muted: '#6B6B70' }, dark: {} },
+    })
+    const css = document.getElementById('branding-tokens')?.textContent
+    expect(css).toContain('--surface-2: #ECECEE')
+    expect(css).toContain('--text-muted: #6B6B70')
+  })
 })

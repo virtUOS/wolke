@@ -10,7 +10,11 @@ export default {
     extend: {
       colors: {
         bg: 'var(--bg)',
-        surface: 'var(--surface)',
+        surface: {
+          DEFAULT: 'var(--surface)',
+          2: 'var(--surface-2)',
+        },
+        border: 'var(--border)',
         text: {
           DEFAULT: 'var(--text)',
           muted: 'var(--text-muted)',
@@ -20,6 +24,19 @@ export default {
           DEFAULT: 'var(--primary)',
           hover: 'var(--primary-hover)',
         },
+        info: 'var(--info)',
+        warning: 'var(--warning)',
+        success: 'var(--success)',
+        danger: 'var(--danger)',
+      },
+      borderRadius: {
+        // Tie the corner scale to tokens. Values match Tailwind's md/lg, so
+        // existing rounded-md/lg usage is unchanged; aligning the full type
+        // scale (docs/03 §3) is deferred — it resizes rendered text and needs a
+        // visual pass, not a token-only change.
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
       },
     },
   },

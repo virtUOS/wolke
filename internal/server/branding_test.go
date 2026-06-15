@@ -37,6 +37,36 @@ func TestBrandingReturnsDefaultSkin(t *testing.T) {
 	}
 }
 
+func TestBrandingDefaultPaletteComplete(t *testing.T) {
+	cfg := config.Defaults()
+	h := newTestRouter(t, &cfg, Deps{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/branding", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	var b config.Branding
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// The full brand-overridable palette (docs/03 §2) must ship in both maps so a
+	// skin can recolour every semantic role without falling back to a CSS default.
+	want := []string{
+		"primary", "primary_hover", "accent",
+		"surface", "surface_2", "border",
+		"text", "text_muted",
+		"info", "warning", "success", "danger",
+	}
+	for _, key := range want {
+		if v, ok := b.Theme.Light[key]; !ok || v == "" {
+			t.Errorf("theme.light missing token %q", key)
+		}
+		if v, ok := b.Theme.Dark[key]; !ok || v == "" {
+			t.Errorf("theme.dark missing token %q", key)
+		}
+	}
+}
+
 func TestBrandingReflectsOverride(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.Branding.ProductName = "Campus Apps"
