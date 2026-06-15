@@ -134,6 +134,21 @@ func adminDeleteService(d AdminDeps) http.HandlerFunc {
 	}
 }
 
+func adminGetRoleDefaults(d AdminDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ids, err := d.Store.GetRoleDefaults(r.Context(), chi.URLParam(r, "role"))
+		if err != nil {
+			writeProblem(w, http.StatusInternalServerError, "internal", "Could not read role defaults.")
+			return
+		}
+		out := make([]string, 0, len(ids))
+		for _, id := range ids {
+			out = append(out, uuidString(id))
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"service_ids": out})
+	}
+}
+
 func adminSetRoleDefaults(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		role := chi.URLParam(r, "role")

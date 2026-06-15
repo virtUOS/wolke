@@ -10,6 +10,9 @@ import {
   usePrefsMutation,
   useSearch,
 } from '@/lib/hooks'
+import { useAnnouncements } from '@/lib/admin-hooks'
+import { AdminView } from './admin/AdminView'
+import { AnnouncementBanner } from './AnnouncementBanner'
 import { CatalogView } from './CatalogView'
 import { FavoritesSection } from './FavoritesPanel'
 import { type TileActions } from './Tile'
@@ -32,6 +35,8 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('services')
   const [query, setQuery] = useState('')
+  const [adminOpen, setAdminOpen] = useState(false)
+  const announcements = useAnnouncements()
 
   useApplyTheme(me.theme)
   const prefs = usePrefsMutation()
@@ -90,30 +95,42 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         favoritesSeparateTab={separateTab}
         onChangeOrder={(order) => prefs.mutate({ favorites_order: order })}
         onChangeSeparateTab={(on) => prefs.mutate({ favorites_separate_tab: on })}
+        isAdmin={me.is_admin}
+        adminActive={adminOpen}
+        onToggleAdmin={() => setAdminOpen((v) => !v)}
       />
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        {searching ? (
-          <SearchPanel
-            query={query}
-            isLoading={search.isLoading}
-            results={search.data?.services ?? []}
-            categories={categories}
-            locale={locale}
-            view={view}
-            actions={actions}
-          />
-        ) : separateTab ? (
-          // Tab layout: favorites get their own tab.
-          tab === 'favorites' ? favSection('h1') : catalogSection
-        ) : (
-          // Default single page: favorites on top, then the category catalog.
-          <div className="space-y-10">
-            {favSection('h1')}
-            {catalogSection}
-          </div>
-        )}
-      </main>
+      {adminOpen && me.is_admin ? (
+        <main className="mx-auto max-w-6xl px-4 py-6">
+          <AdminView locale={locale} onExit={() => setAdminOpen(false)} />
+        </main>
+      ) : (
+        <>
+          <AnnouncementBanner announcements={announcements.data?.announcements ?? []} locale={locale} />
+          <main className="mx-auto max-w-6xl px-4 py-6">
+            {searching ? (
+              <SearchPanel
+                query={query}
+                isLoading={search.isLoading}
+                results={search.data?.services ?? []}
+                categories={categories}
+                locale={locale}
+                view={view}
+                actions={actions}
+              />
+            ) : separateTab ? (
+              // Tab layout: favorites get their own tab.
+              tab === 'favorites' ? favSection('h1') : catalogSection
+            ) : (
+              // Default single page: favorites on top, then the category catalog.
+              <div className="space-y-10">
+                {favSection('h1')}
+                {catalogSection}
+              </div>
+            )}
+          </main>
+        </>
+      )}
     </div>
   )
 }

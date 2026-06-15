@@ -100,6 +100,81 @@ export const api = {
     // Fire-and-forget; a failed event must never disrupt the launch.
     void send('POST', '/api/events/click', { service_id: serviceID }).catch(() => {})
   },
+
+  // announcements (user-facing)
+  announcements: (signal?: AbortSignal) => getJSON<{ announcements: Announcement[] }>('/api/announcements', signal),
+
+  // admin
+  adminServices: (signal?: AbortSignal) => getJSON<{ services: AdminService[] }>('/api/admin/services', signal),
+  createService: (d: ServiceDraft) => send<AdminService>('POST', '/api/admin/services', d),
+  updateService: (id: string, d: ServiceDraft) => send<AdminService>('PATCH', `/api/admin/services/${id}`, d),
+  deleteService: (id: string) => send<void>('DELETE', `/api/admin/services/${id}`),
+  roleDefaults: (role: string, signal?: AbortSignal) =>
+    getJSON<{ service_ids: string[] }>(`/api/admin/role-defaults/${role}`, signal),
+  setRoleDefaults: (role: string, serviceIDs: string[]) =>
+    send<void>('PUT', `/api/admin/role-defaults/${role}`, { service_ids: serviceIDs }),
+  createCategory: (slug: string, label: Localized, sort: number) =>
+    send<{ slug: string }>('POST', '/api/admin/categories', { slug, label, sort }),
+  adminAnnouncements: (signal?: AbortSignal) =>
+    getJSON<{ announcements: Announcement[] }>('/api/admin/announcements', signal),
+  createAnnouncement: (a: AnnouncementInput) => send<Announcement>('POST', '/api/admin/announcements', a),
+  updateAnnouncement: (id: string, a: AnnouncementInput) =>
+    send<Announcement>('PATCH', `/api/admin/announcements/${id}`, a),
+  audit: (signal?: AbortSignal) => getJSON<{ entries: AuditEntry[] }>('/api/admin/audit', signal),
+}
+
+export interface AdminService {
+  id: string
+  name: string
+  description: Localized
+  service_url?: string
+  doc_url?: string
+  icon: string
+  is_active: boolean
+  categories: string[]
+}
+
+export interface ServiceDraft {
+  name: string
+  description: Localized
+  service_url: string
+  doc_url: string
+  icon: string
+  categories: string[]
+}
+
+export type Severity = 'info' | 'warning' | 'critical'
+export type Audience = 'all' | 'student' | 'teacher' | 'staff'
+
+export interface Announcement {
+  id: string
+  title: Localized
+  body: Localized
+  severity: Severity
+  audience: Audience
+  starts_at?: string
+  ends_at?: string
+  dismissible: boolean
+}
+
+export interface AnnouncementInput {
+  title: Localized
+  body: Localized
+  severity: Severity
+  audience: Audience
+  starts_at?: string | null
+  ends_at?: string | null
+  dismissible: boolean
+}
+
+export interface AuditEntry {
+  id: number
+  actor_id: string
+  actor_kind: string
+  action: string
+  target_id?: string
+  diff?: unknown
+  created_at: string
 }
 
 // localized picks the active-locale string with sensible fallbacks, never
