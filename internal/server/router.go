@@ -61,6 +61,10 @@ func New(cfg *config.Config, deps Deps) (http.Handler, error) {
 	if deps.Metrics != nil {
 		r.Use(metricsMiddleware(deps.Metrics))
 	}
+	r.Use(securityHeaders)
+	r.Use(csrfGuard)
+	// Rate-limit state-changing methods globally; catalog reads stay unthrottled.
+	r.Use(writeRateLimit(newKeyedLimiter(writeRatePerMinute)))
 
 	// Public, session-free routes.
 	r.Get("/healthz", healthz)
@@ -101,6 +105,7 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 	r.Get("/auth/callback", deps.Auth.Callback)
 	r.Post("/auth/logout", deps.Auth.Logout)
 
+	searchLimiter := newKeyedLimiter(searchRatePerMinute)
 	r.Group(func(pr chi.Router) {
 		pr.Use(loadSession(deps.Auth, deps.Users))
 		pr.With(requireUserJSON).Get("/api/me", me)
@@ -126,7 +131,7 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 		if deps.Catalog != nil {
 			pr.With(requireUserJSON).Get("/api/catalog", catalogList(deps.Catalog))
 			pr.With(requireUserJSON).Get("/api/catalog/defaults", catalogDefaults(deps.Catalog, deps.Defaults))
-			pr.With(requireUserJSON).Get("/api/search", search(deps.Catalog, deps.Search))
+			pr.With(requireUserJSON, searchLimiter.middleware).Get("/api/search", search(deps.Catalog, deps.Search))
 		}
 		if deps.Admin != nil {
 			ad := *deps.Admin
