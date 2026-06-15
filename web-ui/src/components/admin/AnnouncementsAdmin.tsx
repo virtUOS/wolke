@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Announcement, AnnouncementInput, Audience, Severity } from '@/lib/api'
 import { useAdminActions, useAdminAnnouncements } from '@/lib/admin-hooks'
+import { Badge, type BadgeProps } from '@/components/ui/badge'
 
 const SEVERITIES: Severity[] = ['info', 'warning', 'critical']
 const AUDIENCES: Audience[] = ['all', 'student', 'teacher', 'staff']
@@ -42,7 +43,7 @@ export function AnnouncementsAdmin() {
       <ul className="divide-y divide-surface rounded-md border border-surface">
         {(list.data?.announcements ?? []).map((a) => (
           <li key={a.id} className="flex items-center gap-3 px-3 py-2 text-sm">
-            <span className={'rounded px-1.5 py-0.5 text-xs ' + severityChip(a.severity)}>{a.severity}</span>
+            <Badge variant={severityVariant(a.severity)}>{a.severity}</Badge>
             <span className="min-w-0 flex-1 truncate">{a.title.de}</span>
             <span className="text-xs text-text-muted">{a.audience}{a.ends_at ? ` · bis ${a.ends_at.slice(0, 16).replace('T', ' ')}` : ''}</span>
             <button onClick={() => { setEditing(a); setShowForm(true) }} className="text-primary hover:text-primary-hover">Bearbeiten</button>
@@ -54,10 +55,12 @@ export function AnnouncementsAdmin() {
   )
 }
 
-function severityChip(s: Severity): string {
-  if (s === 'critical') return 'bg-primary text-white'
-  if (s === 'warning') return 'bg-[var(--accent)] text-[#18181b]'
-  return 'bg-surface text-text-muted'
+// Announcement severities map onto the feedback tokens (docs/03 §2): critical
+// reads as danger, not brand red, so the brand colour keeps meaning "actionable".
+function severityVariant(s: Severity): BadgeProps['variant'] {
+  if (s === 'critical') return 'danger'
+  if (s === 'warning') return 'warning'
+  return 'info'
 }
 
 function AnnouncementForm({
