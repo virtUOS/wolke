@@ -3,6 +3,7 @@ import { BookOpen, ChevronDown, ChevronUp, ExternalLink, Star } from 'lucide-rea
 import { localized, type Category, type Service } from '@/lib/api'
 import { iconByName } from '@/lib/icons'
 import { cn } from '@/lib/utils'
+import { Card } from '@/components/ui/card'
 
 // TileActions bundles the favorite/launch handlers shared by every tile grid,
 // so views pass one object instead of drilling several props.
@@ -39,7 +40,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
   const description = localized(service.description, locale)
 
   return (
-    <div className="rounded-lg border border-surface bg-bg shadow-sm transition-shadow hover:shadow-md">
+    <Card elevation="sm" interactive>
       <div className="relative flex items-start gap-3 p-4">
         {onToggleFavorite && (
           <button
@@ -115,6 +116,6 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           )}
         </div>
       )}
-    </div>
+    </Card>
   )
 }
