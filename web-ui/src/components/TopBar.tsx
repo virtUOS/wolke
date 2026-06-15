@@ -1,7 +1,8 @@
 import { LayoutGrid, LogOut, Moon, Rows3, Search, Sun } from 'lucide-react'
 import type { Branding } from '@/lib/branding'
 import type { Me } from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { IconButton } from '@/components/ui/icon-button'
+import { PillButton } from '@/components/ui/pill-button'
 import { SettingsMenu } from './SettingsMenu'
 
 export type Tab = 'services' | 'favorites'
@@ -72,17 +73,9 @@ export function TopBar({
 
         <div className="ml-auto flex items-center gap-2">
           {isAdmin && (
-            <button
-              type="button"
-              onClick={onToggleAdmin}
-              aria-current={adminActive ? 'page' : undefined}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]',
-                adminActive ? 'bg-primary text-white' : 'text-text-muted hover:bg-surface hover:text-text',
-              )}
-            >
+            <PillButton active={adminActive} aria-current={adminActive ? 'page' : undefined} onClick={onToggleAdmin}>
               Admin
-            </button>
+            </PillButton>
           )}
           <label className="relative hidden sm:block">
             <span className="sr-only">Dienste durchsuchen</span>
@@ -96,16 +89,21 @@ export function TopBar({
             />
           </label>
 
-          <IconToggle
+          <IconButton
             onClick={onToggleView}
-            label={view === 'table' ? 'Zur Listenansicht wechseln' : 'Zur Tabellenansicht wechseln'}
+            aria-label={view === 'table' ? 'Zur Listenansicht wechseln' : 'Zur Tabellenansicht wechseln'}
+            title={view === 'table' ? 'Zur Listenansicht wechseln' : 'Zur Tabellenansicht wechseln'}
           >
             {view === 'table' ? <Rows3 className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
-          </IconToggle>
+          </IconButton>
 
-          <IconToggle onClick={onToggleTheme} label={isDark ? 'Helles Design' : 'Dunkles Design'}>
+          <IconButton
+            onClick={onToggleTheme}
+            aria-label={isDark ? 'Helles Design' : 'Dunkles Design'}
+            title={isDark ? 'Helles Design' : 'Dunkles Design'}
+          >
             {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </IconToggle>
+          </IconButton>
 
           <SettingsMenu
             order={favoritesOrder}
@@ -117,9 +115,9 @@ export function TopBar({
           <span className="ml-1 hidden max-w-[12ch] truncate text-sm text-text-muted md:inline" title={userName}>
             {userName}
           </span>
-          <IconToggle onClick={onLogout} label="Abmelden">
+          <IconButton onClick={onLogout} aria-label="Abmelden" title="Abmelden">
             <LogOut className="h-5 w-5" />
-          </IconToggle>
+          </IconButton>
         </div>
       </div>
 
@@ -143,30 +141,8 @@ export function TopBar({
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
-      type="button"
-      aria-current={active ? 'page' : undefined}
-      onClick={onClick}
-      className={cn(
-        'rounded-md px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]',
-        active ? 'bg-primary text-white' : 'text-text-muted hover:bg-surface hover:text-text',
-      )}
-    >
+    <PillButton active={active} aria-current={active ? 'page' : undefined} onClick={onClick}>
       {children}
-    </button>
-  )
-}
-
-function IconToggle({ onClick, label, children }: { onClick: () => void; label: string; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className="rounded-md p-2 text-text-muted hover:bg-surface hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-    >
-      {children}
-    </button>
+    </PillButton>
   )
 }
