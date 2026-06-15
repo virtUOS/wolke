@@ -83,6 +83,46 @@ Useful targets (`make help` lists all):
 | `make sqlc` | Regenerate type-safe queries after editing SQL |
 | `make migrate` / `make migrate-down` | Apply / roll back migrations |
 | `make build` | Build the single binary with the SPA **embedded** (prod-like) |
+| `make mcp` | Build the admin MCP server (`bin/mcp`) |
+
+### Admin MCP server
+
+A second binary (`cmd/mcp`) lets an admin manage the catalog from a chat client.
+It shares `internal/service`, so every write gets the same validation, soft-delete,
+and audit (`actor_kind=mcp`) as the form. Writes are **staged**: `service.propose_*`
+validates and returns a preview + `change_token` (no write); only `change.confirm`
+with a valid, unexpired, single-use token mutates (docs/02 §8).
+
+It runs over **stdio** and acts as one admin, named by `MCP_ADMIN_SUB` (the OIDC
+subject of a user who is `is_admin` and has logged in at least once); it refuses
+to start otherwise — never unauthenticated.
+
+```bash
+make mcp   # → bin/mcp
+```
+
+Point a local MCP client at it (e.g. Claude Desktop / Claude Code `mcpServers`):
+
+```json
+{
+  "mcpServers": {
+    "service-hub-admin": {
+      "command": "/abs/path/to/bin/mcp",
+      "env": {
+        "DATABASE_URL": "postgres://servicehub:devpass@localhost:5432/servicehub?sslmode=disable",
+        "MCP_ADMIN_SUB": "stud-1"
+      }
+    }
+  }
+}
+```
+
+**Add a service via chat:** ask the assistant to add it → it calls
+`service.propose_create` and shows the preview + `change_token` → you approve →
+it calls `change.confirm`. The service appears live and the write is in the audit
+log. Tools: `service.list/get`, `category.list`, `service.propose_create/update/delete`,
+`change.confirm/discard`. (A hosted authenticated HTTP/SSE transport is the open
+alternative in docs/02 §8; stdio is the local default.)
 
 Integration tests that need Postgres read `DATABASE_URL` and **skip** when it is
 unset, so `go test ./...` is safe without a database; `make test` (after `make db
