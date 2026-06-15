@@ -61,11 +61,11 @@ export function TopBar({
 
         {showTabs && (
           <nav aria-label="Hauptnavigation" className="ml-2 flex items-center gap-1">
-            <TabButton active={tab === 'services'} onClick={() => onTab('services')}>
-              Dienste
-            </TabButton>
             <TabButton active={tab === 'favorites'} onClick={() => onTab('favorites')}>
               Favoriten
+            </TabButton>
+            <TabButton active={tab === 'services'} onClick={() => onTab('services')}>
+              Dienste
             </TabButton>
           </nav>
         )}

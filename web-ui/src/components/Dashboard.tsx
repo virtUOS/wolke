@@ -33,7 +33,8 @@ function useEffectiveView(mode: Me['view_mode']): 'list' | 'table' {
 export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const locale = branding.default_locale || 'de'
   const qc = useQueryClient()
-  const [tab, setTab] = useState<Tab>('services')
+  // With its own tab, favorites is the primary landing tab (shown first).
+  const [tab, setTab] = useState<Tab>(me.favorites_separate_tab ? 'favorites' : 'services')
   const [query, setQuery] = useState('')
   const [adminOpen, setAdminOpen] = useState(false)
   const announcements = useAnnouncements()
