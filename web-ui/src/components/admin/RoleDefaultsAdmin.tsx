@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { api, type Service } from '@/lib/api'
 import { useAdminActions } from '@/lib/admin-hooks'
 import { useCatalog } from '@/lib/hooks'
+import { PillButton } from '@/components/ui/pill-button'
 
 const ROLES = ['student', 'teacher', 'staff'] as const
 
@@ -45,14 +46,14 @@ export function RoleDefaultsAdmin() {
       <h2 className="text-lg font-semibold">Rollen-Standardansicht</h2>
       <div className="flex gap-1">
         {ROLES.map((r) => (
-          <button
+          <PillButton
             key={r}
-            onClick={() => { setRole(r); setSaved(false) }}
+            active={role === r}
             aria-current={role === r ? 'true' : undefined}
-            className={role === r ? 'rounded-md bg-primary px-3 py-1.5 text-sm text-white' : 'rounded-md px-3 py-1.5 text-sm text-text-muted hover:bg-surface'}
+            onClick={() => { setRole(r); setSaved(false) }}
           >
             {r}
-          </button>
+          </PillButton>
         ))}
       </div>
 
