@@ -126,6 +126,7 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 				ar.Post("/services", adminCreateService(ad))
 				ar.Patch("/services/{id}", adminUpdateService(ad))
 				ar.Delete("/services/{id}", adminDeleteService(ad))
+				ar.Get("/role-defaults/{role}", adminGetRoleDefaults(ad))
 				ar.Put("/role-defaults/{role}", adminSetRoleDefaults(ad))
 				ar.Post("/categories", adminCreateCategory(ad))
 				ar.Get("/announcements", adminListAnnouncements(ad))

@@ -23,6 +23,9 @@ interface TopBarProps {
   favoritesSeparateTab: boolean
   onChangeOrder: (order: Me['favorites_order']) => void
   onChangeSeparateTab: (on: boolean) => void
+  isAdmin: boolean
+  adminActive: boolean
+  onToggleAdmin: () => void
 }
 
 // The persistent top bar (docs/01 §4.1, docs/03 §6): logo, the two primary tabs
@@ -44,6 +47,9 @@ export function TopBar({
   favoritesSeparateTab,
   onChangeOrder,
   onChangeSeparateTab,
+  isAdmin,
+  adminActive,
+  onToggleAdmin,
 }: TopBarProps) {
   return (
     <header className="sticky top-0 z-10 border-b border-surface bg-bg">
@@ -65,6 +71,19 @@ export function TopBar({
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={onToggleAdmin}
+              aria-current={adminActive ? 'page' : undefined}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]',
+                adminActive ? 'bg-primary text-white' : 'text-text-muted hover:bg-surface hover:text-text',
+              )}
+            >
+              Admin
+            </button>
+          )}
           <label className="relative hidden sm:block">
             <span className="sr-only">Dienste durchsuchen</span>
             <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
