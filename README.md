@@ -62,64 +62,41 @@ make clean        Remove build artifacts
 
 ## Deployment (Docker Compose)
 
-The `Dockerfile` builds the SPA (Node), embeds it into a static Go binary, and produces **two small distroless images**: `runtime` (the app, ~20 MB) and `migrate` (goose + the SQL migrations, ~40 MB — no compiler or source). Both run as a non-root user with read-only root filesystems.
+The `Dockerfile` builds the SPA (Node), embeds it into a static Go binary, and produces **two small distroless images**, both run as a non-root user with read-only root filesystems. On every push to `main` (and every `v*` tag) CI publishes them to GHCR as **separate packages**:
 
-### The shipped stack (`compose.yaml`)
+| Image | Contents | Package |
+|-------|----------|---------|
+| app (`runtime`, ~20 MB) | the server + embedded SPA | `ghcr.io/<owner>/<repo>` |
+| migrate (~40 MB) | goose + the SQL migrations (no compiler/source) | `ghcr.io/<owner>/<repo>/migrate` |
 
-The repo ships a production-shaped `compose.yaml`: Caddy terminates TLS and is the only exposed surface, the app and a one-shot migrate step sit behind it, and Postgres lives on an internal-only network with no route to the internet. Every service drops Linux capabilities, runs read-only, and sets `no-new-privileges`; Caddy waits on the app's `/readyz` healthcheck before accepting traffic.
+Two compose files ship: **`compose.yaml`** builds from source (staging / a quick end-to-end run), and **`compose.prod.yaml`** pulls the released images (production). Both put Caddy in front as the only exposed surface, keep Postgres on an internal-only network, run a one-shot migrate step before the app, and harden every service (`no-new-privileges`, `cap_drop: ALL`, read-only roots). Caddy waits on the app's `/readyz` healthcheck before accepting traffic.
 
-Secrets **fail closed** — set them (in a `.env` next to `compose.yaml`, or the environment) or `compose up` aborts rather than booting with a default:
+### Production — `compose.prod.yaml` (pulls images)
 
-```bash
-POSTGRES_PASSWORD=$(openssl rand -base64 24)
-SESSION_SECRET=$(openssl rand -base64 32)
-```
-
-Then:
+No source tree or build toolchain on the host. Point it at the published images and a released version, then bring it up:
 
 ```bash
-docker compose up -d          # or: podman-compose up -d
+export IMAGE_REPO=ghcr.io/<owner>/<repo>     # e.g. ghcr.io/virtuos/wolke
+export WOLKE_VERSION=1.4.0                    # a released tag, or a @sha256 digest
+docker compose -f compose.prod.yaml up -d     # or: podman-compose -f compose.prod.yaml up -d
 ```
 
-Caddy serves HTTPS on :443 (its internal CA for `localhost`; real certificates for a public hostname). Rootless podman can't bind <1024 — set `CADDY_HTTPS_PORT=8443` then.
+The migrate service pulls `…/migrate:$WOLKE_VERSION`, runs `goose up` to completion (idempotent — a no-op when already current), and the app starts only once it succeeds.
 
-### Adapting it
+Everything **fails closed** — these must be set (in a `.env` beside the file, or the environment) or `compose up` aborts: `IMAGE_REPO`, `WOLKE_VERSION`, `POSTGRES_PASSWORD`, `SESSION_SECRET`, `PUBLIC_URL`, `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`. Before the first deploy, put the real hostname in the `Caddyfile` (replace `localhost`) and provide a `config.yaml` next to the compose file.
 
-A minimal app + migrate pair, if you wire your own proxy and database:
+### Staging / end-to-end — `compose.yaml` (builds from source)
 
-```yaml
-services:
-  migrate:
-    build:
-      context: .
-      target: migrate              # tiny goose image; migrations are baked in
-    command: ["postgres", "${DATABASE_URL}", "up"]
-    depends_on: [db]
-    restart: on-failure
-
-  app:
-    build: .                       # default target = runtime
-    environment:
-      DATABASE_URL: postgres://wolke:…@db:5432/wolke?sslmode=disable
-      PUBLIC_URL: https://wolke.example.edu
-      SESSION_SECRET: "openssl rand -base64 32"
-      OIDC_ISSUER_URL: https://your-idp.example.edu/realms/uni
-      OIDC_CLIENT_ID: wolke
-      OIDC_CLIENT_SECRET: "your-client-secret"
-      TRUSTED_PROXIES: "10.0.0.0/8"
-      CONFIG_FILE: /config.yaml
-      BRANDING_DIR: /branding
-    volumes:
-      - ./branding:/branding:ro
-      - ./config.yaml:/config.yaml:ro
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
+```bash
+POSTGRES_PASSWORD=$(openssl rand -base64 24) SESSION_SECRET=$(openssl rand -base64 32) \
+  docker compose up -d --build
 ```
 
-Put Caddy (or nginx) in front on port 443. `TRUSTED_PROXIES` must cover the proxy's network so `X-Forwarded-For` is trusted.
+Caddy serves HTTPS on :443 (its internal CA for `localhost`; real certificates for a public hostname). Rootless podman can't bind <1024 — set `CADDY_HTTPS_PORT=8443` then. Bring up the mock IdP for a full login flow with `--profile idp`.
 
-**Branding and OIDC claim mapping** live in `config.yaml` (copy from `config.example.yaml`). This is the one file you edit to reskin for a different institution — colors, logo paths, product name, and which OIDC claim maps to which role.
+### Notes
+
+**Branding and OIDC claim mapping** live in `config.yaml` (copy from `config.example.yaml`). This is the one file you edit to reskin for a different institution — colors, logo paths, product name, and which OIDC claim maps to which role. `TRUSTED_PROXIES` must cover the proxy's network so `X-Forwarded-For` is trusted (it's preset to the compose `edge` subnet).
 
 **Migrations run automatically** via the `migrate` service on every deploy. They are forward-only (goose); rolling back requires an explicit `make migrate-down` in dev.
 
