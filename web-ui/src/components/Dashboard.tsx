@@ -3,6 +3,7 @@ import { Wrench, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Branding } from '@/lib/branding'
 import { api, localized, type Category, type Me, type Service, type ServiceTag } from '@/lib/api'
+import { t } from '@/lib/i18n'
 import {
   useApplyTheme,
   useCatalog,
@@ -53,6 +54,7 @@ function filterServices(services: Service[], cats: string[], query: string, tag:
 
 export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const locale = branding.default_locale || 'de'
+  const tr = t(locale)
   const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('favoriten')
   const [query, setQuery] = useState('')
@@ -117,15 +119,15 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
 
   // Section heading for the current tab/filter (find the category once).
   const heading = useMemo(() => {
-    if (tab === 'favoriten') return 'Favoriten'
-    if (tagFilter === 'wartung') return 'In Wartung'
-    if (cats.length === 0) return 'Alle Dienste'
+    if (tab === 'favoriten') return tr.dash.favorites
+    if (tagFilter === 'wartung') return tr.dash.inMaintenance
+    if (cats.length === 0) return tr.dash.allServices
     if (cats.length === 1) {
       const c = allCategories.find((x) => x.slug === cats[0])
       return c ? localized(c.label, locale) : cats[0]
     }
-    return `${cats.length} Kategorien`
-  }, [tab, tagFilter, cats, allCategories, locale])
+    return tr.dash.categoriesCount(cats.length)
+  }, [tab, tagFilter, cats, allCategories, locale, tr])
 
   const favCount = favoriteServices.length
   const firstName = me.display_name.split(' ')[0]
@@ -187,8 +189,8 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Dienste durchsuchen…"
-          aria-label="Dienste suchen"
+          placeholder={tr.dash.searchPlaceholder}
+          aria-label={tr.dash.searchLabel}
           style={{ width: isMobile ? '100%' : 260 }}
           className="h-9 rounded-md border border-border bg-surface px-3 text-sm text-text placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
         />
@@ -198,7 +200,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
       {tab === 'dienste' && allCategories.length > 0 && (
         <div
           role="group"
-          aria-label="Kategorien filtern"
+          aria-label={tr.dash.filterCategories}
           style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: isMobile ? 16 : 20 }}
         >
           <PillButton
@@ -206,7 +208,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             aria-pressed={cats.length === 0 && !tagFilter}
             onClick={() => toggleCat('')}
           >
-            Alle
+            {tr.dash.all}
           </PillButton>
           {tagFilter === 'wartung' && (
             <PillButton
@@ -216,7 +218,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
               <Wrench className="h-[13px] w-[13px]" aria-hidden="true" />
-              In Wartung
+              {tr.dash.inMaintenance}
               <X className="h-[13px] w-[13px]" aria-hidden="true" />
             </PillButton>
           )}
@@ -241,14 +243,10 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           locale={locale}
           layout={layout}
           actions={actions}
-          emptyMessage={
-            query
-              ? `Keine Dienste für „${query}" gefunden.`
-              : 'Noch keine Favoriten — markiere Dienste mit dem Stern.'
-          }
+          emptyMessage={query ? tr.dash.searchEmpty(query) : tr.dash.favEmpty}
         />
       ) : catalog.isLoading ? (
-        <p style={{ fontSize: 14, color: 'var(--text-muted)' }} aria-busy="true">Lädt…</p>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)' }} aria-busy="true">{tr.common.loading}</p>
       ) : (
         <CatalogView
           services={diensteServices}

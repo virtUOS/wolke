@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { localized, type Category } from '@/lib/api'
+import { t } from '@/lib/i18n'
 import { useAdminActions } from '@/lib/admin-hooks'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
 export function CategoriesAdmin({ categories, locale }: { categories: Category[]; locale: string }) {
+  const s = t(locale)
   const actions = useAdminActions()
   const [slug, setSlug] = useState('')
   const [de, setDe] = useState('')
@@ -29,14 +31,14 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
           setDe('')
           setEn('')
         },
-        onError: (err) => setError(err instanceof Error ? err.message : 'Fehlgeschlagen.'),
+        onError: (err) => setError(err instanceof Error ? err.message : s.admin.failed),
       },
     )
   }
 
   return (
     <div className="space-y-4">
-      <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Kategorien</h2>
+      <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.categoriesHeading}</h2>
       <ul className="flex flex-wrap gap-2">
         {categories.map((c) => (
           <li key={c.slug} className="rounded-md border border-surface px-2 py-1 text-sm">
@@ -47,29 +49,29 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
 
       <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
         <label className="text-sm">
-          <span className="mb-1 block font-medium">Slug</span>
+          <span className="mb-1 block font-medium">{s.admin.slug}</span>
           <Input
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
-            placeholder="z. B. forschung"
+            placeholder={s.admin.slugPlaceholder}
             className="w-40"
             aria-invalid={slug.trim() !== '' && !slugValid}
           />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block font-medium">Label (de)</span>
+          <span className="mb-1 block font-medium">{s.admin.labelDe}</span>
           <Input value={de} onChange={(e) => setDe(e.target.value)} className="w-40" />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block font-medium">Label (en)</span>
+          <span className="mb-1 block font-medium">{s.admin.labelEn}</span>
           <Input value={en} onChange={(e) => setEn(e.target.value)} className="w-40" />
         </label>
         <Button type="submit" size="sm" disabled={!slugValid || de.trim() === ''}>
-          Kategorie anlegen
+          {s.admin.createCategory}
         </Button>
       </form>
       {slug.trim() !== '' && !slugValid && (
-        <p className="text-sm text-danger">Slug: nur Kleinbuchstaben, Ziffern und Bindestriche (z. B. „forschung").</p>
+        <p className="text-sm text-danger">{s.admin.slugError}</p>
       )}
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     </div>

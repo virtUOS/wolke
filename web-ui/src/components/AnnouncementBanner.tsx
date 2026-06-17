@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle, Info, OctagonAlert } from 'lucide-react'
 import { localized, type Announcement, type Severity } from '@/lib/api'
+import { t } from '@/lib/i18n'
 import { Alert } from '@/components/ui/alert'
 import type { alertVariants } from '@/components/ui/alert'
 import type { VariantProps } from 'class-variance-authority'
@@ -11,18 +12,19 @@ import type { VariantProps } from 'class-variance-authority'
 // announcements are visible.
 export function AnnouncementBanner({ announcements, locale }: { announcements: Announcement[]; locale: string }) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const s = t(locale)
   const visible = announcements.filter((a) => !dismissed.has(a.id))
   if (visible.length === 0) return null
 
   return (
-    <div role="region" aria-label="Ankündigungen" aria-live="polite" className="space-y-2">
+    <div role="region" aria-label={s.announce.region} aria-live="polite" className="space-y-2">
       {visible.map((a) => (
         <Alert
           key={a.id}
           variant={severityVariant(a.severity)}
           icon={severityIcon(a.severity)}
           title={localized(a.title, locale)}
-          dismissLabel="Ankündigung schließen"
+          dismissLabel={s.announce.dismiss}
           onDismiss={
             a.dismissible && a.severity !== 'critical'
               ? () => setDismissed((d) => new Set(d).add(a.id))
