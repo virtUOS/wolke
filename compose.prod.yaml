@@ -1,10 +1,13 @@
-# Production stack: Caddy (TLS) → app → Postgres, with a one-shot migrate step.
-# Unlike compose.yaml (the build-from-source staging stack), this PULLS released
-# images from the registry — no source tree or build toolchain on the host:
+# Production stack: Caddy (TLS) → app → Postgres. Unlike compose.yaml (the
+# build-from-source staging stack), this PULLS the released app image from the
+# registry — no source tree or build toolchain on the host:
 #
 #   export IMAGE_REPO=ghcr.io/<owner>/<repo>   # e.g. ghcr.io/virtuos/wolke
 #   export WOLKE_VERSION=1.4.0                  # a released tag (or a digest)
 #   docker compose -f compose.prod.yaml up -d
+#
+# The app applies forward-only migrations itself on startup (advisory-locked, so
+# replicas don't race), so there's no separate migrate step.
 #
 # Everything fails closed: the image coordinates, DB password, session secret,
 # public URL, and OIDC client settings must all be set (in a .env beside this
@@ -46,28 +49,8 @@ services:
       timeout: 3s
       retries: 10
 
-  # Forward-only migrations, pulled as the tiny goose+SQL image, run to completion
-  # before the app starts. goose `up` is idempotent (a no-op when already current).
-  migrate:
-    image: ${IMAGE_REPO:?set IMAGE_REPO (e.g. ghcr.io/owner/repo)}/migrate:${WOLKE_VERSION:?set WOLKE_VERSION}
-    command:
-      - postgres
-      - postgres://wolke:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/wolke?sslmode=disable
-      - up
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - backend
-    restart: on-failure
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    read_only: true
-
   app:
-    image: ${IMAGE_REPO:?set IMAGE_REPO}:${WOLKE_VERSION:?set WOLKE_VERSION}
+    image: ${IMAGE_REPO:?set IMAGE_REPO (e.g. ghcr.io/owner/repo)}:${WOLKE_VERSION:?set WOLKE_VERSION}
     environment:
       PUBLIC_URL: ${PUBLIC_URL:?set PUBLIC_URL (e.g. https://wolke.example.edu)}
       HTTP_ADDR: ":8080"
@@ -89,9 +72,10 @@ services:
       - ./config.yaml:/config.yaml:ro
       # Optional: override the image's baked-in default branding.
       # - ./branding:/branding:ro
+    # The app auto-migrates on startup, so it only needs the database reachable.
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
     networks:
       - edge
       - backend

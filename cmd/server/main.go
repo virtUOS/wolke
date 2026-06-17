@@ -99,6 +99,16 @@ func run() error {
 		db    *store.DB
 	)
 	if cfg.DatabaseURL != "" {
+		// Auto-migrate on startup (forward-only, advisory-locked). Set
+		// AUTO_MIGRATE=false to manage migrations out of band (e.g. the goose CLI).
+		if os.Getenv("AUTO_MIGRATE") != "false" {
+			migCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			err := migrateUp(migCtx, cfg.DatabaseURL, logger)
+			cancel()
+			if err != nil {
+				return err
+			}
+		}
 		var err error
 		db, err = store.Open(context.Background(), cfg.DatabaseURL)
 		if err != nil {
