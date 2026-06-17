@@ -67,6 +67,15 @@ func runUsageRollup(ctx context.Context, log *slog.Logger, db *store.DB) {
 }
 
 func main() {
+	// `server healthcheck` is the container probe (distroless has no shell/curl,
+	// so the binary probes itself). It must run before run() loads full config.
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		if err := healthcheck(); err != nil {
+			slog.Error("healthcheck failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		slog.Error("server exited with error", "error", err)
 		os.Exit(1)

@@ -62,37 +62,47 @@ make clean        Remove build artifacts
 
 ## Deployment (Docker Compose)
 
-The Dockerfile produces a three-stage build: Node builds the SPA, Go embeds it and builds a static binary, and the final image is a small distroless runtime.
+The `Dockerfile` builds the SPA (Node), embeds it into a static Go binary, and produces **two small distroless images**: `runtime` (the app, ~20 MB) and `migrate` (goose + the SQL migrations, ~40 MB — no compiler or source). Both run as a non-root user with read-only root filesystems.
 
-A minimal `docker-compose.yml`:
+### The shipped stack (`compose.yaml`)
+
+The repo ships a production-shaped `compose.yaml`: Caddy terminates TLS and is the only exposed surface, the app and a one-shot migrate step sit behind it, and Postgres lives on an internal-only network with no route to the internet. Every service drops Linux capabilities, runs read-only, and sets `no-new-privileges`; Caddy waits on the app's `/readyz` healthcheck before accepting traffic.
+
+Secrets **fail closed** — set them (in a `.env` next to `compose.yaml`, or the environment) or `compose up` aborts rather than booting with a default:
+
+```bash
+POSTGRES_PASSWORD=$(openssl rand -base64 24)
+SESSION_SECRET=$(openssl rand -base64 32)
+```
+
+Then:
+
+```bash
+docker compose up -d          # or: podman-compose up -d
+```
+
+Caddy serves HTTPS on :443 (its internal CA for `localhost`; real certificates for a public hostname). Rootless podman can't bind <1024 — set `CADDY_HTTPS_PORT=8443` then.
+
+### Adapting it
+
+A minimal app + migrate pair, if you wire your own proxy and database:
 
 ```yaml
 services:
-  db:
-    image: postgres:17
-    environment:
-      POSTGRES_USER: wolke
-      POSTGRES_PASSWORD: changeme
-      POSTGRES_DB: wolke
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
   migrate:
-    build: .
-    entrypoint: ["/goose", "-dir", "/migrations", "postgres", "${DATABASE_URL}", "up"]
-    volumes:
-      - ./migrations:/migrations
+    build:
+      context: .
+      target: migrate              # tiny goose image; migrations are baked in
+    command: ["postgres", "${DATABASE_URL}", "up"]
     depends_on: [db]
     restart: on-failure
 
   app:
-    build: .
-    ports:
-      - "8080:8080"
+    build: .                       # default target = runtime
     environment:
-      DATABASE_URL: postgres://wolke:changeme@db:5432/wolke?sslmode=disable
+      DATABASE_URL: postgres://wolke:…@db:5432/wolke?sslmode=disable
       PUBLIC_URL: https://wolke.example.edu
-      SESSION_SECRET: "replace-with-openssl-rand-base64-32"
+      SESSION_SECRET: "openssl rand -base64 32"
       OIDC_ISSUER_URL: https://your-idp.example.edu/realms/uni
       OIDC_CLIENT_ID: wolke
       OIDC_CLIENT_SECRET: "your-client-secret"
@@ -102,13 +112,12 @@ services:
     volumes:
       - ./branding:/branding:ro
       - ./config.yaml:/config.yaml:ro
-    depends_on: [migrate]
-
-volumes:
-  pgdata:
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 ```
 
-Put Caddy (or nginx) in front on port 443. `TRUSTED_PROXIES` should cover Caddy's network so `X-Forwarded-For` is trusted.
+Put Caddy (or nginx) in front on port 443. `TRUSTED_PROXIES` must cover the proxy's network so `X-Forwarded-For` is trusted.
 
 **Branding and OIDC claim mapping** live in `config.yaml` (copy from `config.example.yaml`). This is the one file you edit to reskin for a different institution — colors, logo paths, product name, and which OIDC claim maps to which role.
 
