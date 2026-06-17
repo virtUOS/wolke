@@ -86,6 +86,10 @@ jobs:
         run: go tool golangci-lint run ./...
       - name: Apply migrations
         run: go tool goose -dir migrations postgres "$DATABASE_URL" up
+      - name: Seed dev catalog
+        # The DB-backed integration tests assert against the dev seed (categories,
+        # services, role defaults). Mirrors `make seed`; psql ships on the runner.
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f dev/seed.sql
       - name: Wait for mock OIDC
         run: |
           for i in $(seq 1 30); do
