@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { localized, type AdminService, type Category, type Service, type ServiceDraft } from '@/lib/api'
+import { localized, type AdminService, type Category, type Service, type ServiceDraft, type ServiceTag } from '@/lib/api'
 import { iconByName, iconNames } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { Alert } from '@/components/ui/alert'
@@ -33,7 +33,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
   const [docUrl, setDocUrl] = useState(initial?.doc_url ?? '')
   const [icon, setIcon] = useState(initial?.icon ?? 'app-window')
   const [cats, setCats] = useState<Set<string>>(new Set(initial?.categories ?? []))
-  const [tag, setTag] = useState<string>(initial?.tag ?? '')
+  const [tag, setTag] = useState<ServiceTag | ''>(initial?.tag ?? '')
 
   const preview: Service = useMemo(
     () => ({
@@ -45,7 +45,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
       icon,
       categories: [...cats],
       doc_only: serviceUrl.trim() === '',
-      tag: (tag as Service['tag']) || undefined,
+      tag: tag || undefined,
     }),
     [name, descDe, descEn, serviceUrl, docUrl, icon, cats, tag],
   )

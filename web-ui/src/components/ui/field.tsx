@@ -24,7 +24,10 @@ interface FieldProps {
 }
 
 export function Field({ label, error, hint, required, className, children }: FieldProps) {
-  const id = React.useId()
+  const generatedId = React.useId()
+  // A caller-set id on the control wins, mirroring the aria-* merge below, so
+  // Field never silently clobbers an explicit id.
+  const id = children.props.id ?? generatedId
   const errorId = `${id}-error`
   const hintId = `${id}-hint`
   const describedBy =

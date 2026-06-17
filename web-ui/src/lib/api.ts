@@ -80,7 +80,10 @@ async function errorFromResponse(res: Response, fallback: string): Promise<ApiEr
   return new ApiError(res.status, fallback)
 }
 
-async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
+// getJSON is the shared GET primitive: JSON accept header, ApiError on failure
+// (with the server's problem+json detail). Exported so other lib modules (e.g.
+// branding) don't re-implement fetch + error handling.
+export async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal, headers: { Accept: 'application/json' } })
   if (!res.ok) {
     throw await errorFromResponse(res, `GET ${url} → ${res.status}`)
@@ -162,7 +165,8 @@ export interface ServiceDraft {
   doc_url: string
   icon: string
   categories: string[]
-  tag: string
+  // '' means "no status label"; the backend treats empty as unset.
+  tag: ServiceTag | ''
 }
 
 export type Severity = 'info' | 'warning' | 'critical'

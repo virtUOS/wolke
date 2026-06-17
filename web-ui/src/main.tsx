@@ -12,6 +12,10 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: (count, err) => !(err instanceof ApiError && err.status >= 400 && err.status < 500) && count < 2,
+      // Catalog/me/branding are stable across a session; treat data as fresh for
+      // 30s so navigating tabs or refocusing the window doesn't refetch on every
+      // mount. Writes still invalidate explicitly (see admin-hooks).
+      staleTime: 30_000,
     },
   },
 })
