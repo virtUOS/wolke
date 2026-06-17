@@ -58,6 +58,7 @@ func New(cfg *config.Config, deps Deps) (http.Handler, error) {
 	r.Use(tp.Forwarded())
 	r.Use(requestLogger(deps.Logger))
 	r.Use(recoverer(deps.Logger))
+	r.Use(limitRequestBody)
 	if deps.Metrics != nil {
 		r.Use(metricsMiddleware(deps.Metrics))
 	}
