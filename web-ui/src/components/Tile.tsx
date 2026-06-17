@@ -113,7 +113,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
                 href={service.doc_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={s.tile.docs + s.tile.newTab}
+                aria-label={s.tile.docsLink + s.tile.newTab}
                 onClick={(e) => e.stopPropagation()}
                 style={{ color: 'var(--text-muted)', display: 'inline-flex' }}
                 className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
@@ -186,9 +186,9 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
             <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em' }}>
               {service.name}
             </span>
-            {service.tag === 'beta' && <Badge variant="info">Beta</Badge>}
-            {service.tag === 'wartung' && <Badge variant="warning">Wartung</Badge>}
-            {docsOnly && <Badge variant="neutral">Dokumentation</Badge>}
+            {service.tag === 'beta' && <Badge variant="info">{s.tile.beta}</Badge>}
+            {service.tag === 'wartung' && <Badge variant="warning">{s.tile.maintenance}</Badge>}
+            {docsOnly && <Badge variant="neutral">{s.tile.docs}</Badge>}
           </div>
           <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-muted)' }}>
             {description}
@@ -218,7 +218,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
                 href={service.doc_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={s.tile.docs + s.tile.newTab}
+                aria-label={s.tile.docsLink + s.tile.newTab}
                 onClick={(e) => e.stopPropagation()}
                 style={{
                   pointerEvents: 'auto',
@@ -229,7 +229,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
                 className="hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
               >
                 <FileText className="h-[14px] w-[14px]" aria-hidden="true" />
-                {s.tile.docs}
+                {s.tile.docsLink}
               </a>
             )
           )}

@@ -73,7 +73,8 @@ const de = {
     removeFav: (name: string) => `${name} aus Favoriten entfernen`,
     beta: 'Beta',
     maintenance: 'Wartung',
-    docs: 'Dokumentation',
+    docs: 'Dokumentation', // the docs-only status badge
+    docsLink: 'Doku', // the link to external documentation (short)
   },
   catalog: {
     empty: 'Keine Dienste gefunden.',
@@ -213,7 +214,8 @@ const en: Strings = {
     removeFav: (name: string) => `Remove ${name} from favorites`,
     beta: 'Beta',
     maintenance: 'Maintenance',
-    docs: 'Documentation',
+    docs: 'Documentation', // the docs-only status badge
+    docsLink: 'docs', // the link to external documentation (short)
   },
   catalog: {
     empty: 'No services found.',

@@ -41,7 +41,7 @@ describe('Tile', () => {
   it('description is always visible and documentation link is in the footer', () => {
     render(<Tile service={service} categories={categories} locale="de" />)
     expect(screen.getByText('Persönlicher Netzspeicher.')).toBeInTheDocument()
-    const docsLink = screen.getByRole('link', { name: /Dokumentation/ })
+    const docsLink = screen.getByRole('link', { name: /Doku/ })
     expect(docsLink).toHaveAttribute('href', 'https://docs.example.edu/myshare')
   })
 
