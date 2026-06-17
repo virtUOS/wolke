@@ -8,6 +8,7 @@ import {
   useCatalog,
   useFavoriteActions,
   useFavorites,
+  usePrefersDark,
   usePrefsMutation,
 } from '@/lib/hooks'
 import { useAnnouncements } from '@/lib/admin-hooks'
@@ -61,8 +62,8 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const isMobile = useIsMobile()
   const layout = isMobile ? 'list' : 'grid'
 
-  const isDark =
-    me.theme === 'dark' || (me.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const prefersDark = usePrefersDark()
+  const isDark = me.theme === 'dark' || (me.theme === 'system' && prefersDark)
 
   useApplyTheme(me.theme)
   const prefs = usePrefsMutation()

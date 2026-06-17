@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type Catalog, type Me, type Service } from './api'
 
 type FavoritesData = { services: Service[] }
@@ -14,18 +14,6 @@ export function useCatalog() {
 
 export function useDefaults() {
   return useQuery({ queryKey: ['defaults'], queryFn: ({ signal }) => api.defaults(signal) })
-}
-
-// useSearch is enabled only for a non-empty query; previous results stay visible
-// while the next query loads (no flicker).
-export function useSearch(query: string) {
-  const q = query.trim()
-  return useQuery({
-    queryKey: ['search', q],
-    queryFn: ({ signal }) => api.search(q, signal),
-    enabled: q.length > 0,
-    placeholderData: keepPreviousData,
-  })
 }
 
 // usePrefsMutation persists theme/view-mode. It patches the cached `me`
@@ -91,6 +79,20 @@ export function useFavoriteActions() {
       onSettled,
     }),
   }
+}
+
+// usePrefersDark tracks the OS dark-mode preference and re-renders on change, so
+// values derived from it (e.g. the effective `isDark` when theme === 'system')
+// stay live instead of being frozen at the first render.
+export function usePrefersDark(): boolean {
+  const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-color-scheme: dark)')
+    const on = () => setDark(mql.matches)
+    mql.addEventListener('change', on)
+    return () => mql.removeEventListener('change', on)
+  }, [])
+  return dark
 }
 
 // useApplyTheme applies the effective theme as the `.dark` class on <html>,
