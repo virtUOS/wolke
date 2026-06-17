@@ -33,12 +33,36 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
-      - name: Build and push
+      - name: Build and push (app)
         uses: docker/build-push-action@v7
         with:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # The one-shot migration runner (goose + the SQL, distroless) ships as its
+      # own image so production can pull it instead of building on the host. Same
+      # tag scheme as the app, in a separate package: ghcr.io/<owner>/<repo>/migrate.
+      - name: Image metadata (migrate)
+        id: meta-migrate
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/migrate
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+      - name: Build and push (migrate)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: migrate
+          push: true
+          tags: ${{ steps.meta-migrate.outputs.tags }}
+          labels: ${{ steps.meta-migrate.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
