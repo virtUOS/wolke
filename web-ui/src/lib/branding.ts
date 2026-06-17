@@ -2,6 +2,8 @@
 // applies its token sets as CSS variables, so a fork re-skins by editing
 // branding.yaml — no rebuild (docs/02 §11; docs/03 §2).
 
+import { getJSON } from './api'
+
 export type ThemeTokens = Record<string, string>
 
 export interface Branding {
@@ -18,11 +20,7 @@ export interface Branding {
 }
 
 export async function fetchBranding(signal?: AbortSignal): Promise<Branding> {
-  const res = await fetch('/api/branding', { signal })
-  if (!res.ok) {
-    throw new Error(`GET /api/branding failed: ${res.status}`)
-  }
-  return (await res.json()) as Branding
+  return getJSON<Branding>('/api/branding', signal)
 }
 
 // tokensToCSS turns {primary_hover: "#8A0732"} into "--primary-hover: #8A0732;",

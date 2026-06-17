@@ -11,11 +11,18 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
   const [en, setEn] = useState('')
   const [error, setError] = useState<string | undefined>()
 
+  // Slugs are kebab-case (lowercase alphanumerics, hyphen-separated); the server
+  // re-validates, this gives immediate feedback.
+  const slugValid = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug.trim())
+  // Next sort is past the current max (not the last array element — the array
+  // isn't guaranteed ordered by sort).
+  const nextSort = (categories.length ? Math.max(...categories.map((c) => c.sort)) : 0) + 10
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     setError(undefined)
     actions.createCategory.mutate(
-      { slug: slug.trim(), label: { de: de.trim(), en: en.trim() }, sort: (categories.at(-1)?.sort ?? 0) + 10 },
+      { slug: slug.trim(), label: { de: de.trim(), en: en.trim() }, sort: nextSort },
       {
         onSuccess: () => {
           setSlug('')
@@ -41,7 +48,13 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
       <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
         <label className="text-sm">
           <span className="mb-1 block font-medium">Slug</span>
-          <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="z. B. forschung" className="w-40" />
+          <Input
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            placeholder="z. B. forschung"
+            className="w-40"
+            aria-invalid={slug.trim() !== '' && !slugValid}
+          />
         </label>
         <label className="text-sm">
           <span className="mb-1 block font-medium">Label (de)</span>
@@ -51,11 +64,14 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
           <span className="mb-1 block font-medium">Label (en)</span>
           <Input value={en} onChange={(e) => setEn(e.target.value)} className="w-40" />
         </label>
-        <Button type="submit" size="sm" disabled={slug.trim() === '' || de.trim() === ''}>
+        <Button type="submit" size="sm" disabled={!slugValid || de.trim() === ''}>
           Kategorie anlegen
         </Button>
       </form>
-      {error && <p role="alert" className="text-sm text-text-muted">{error}</p>}
+      {slug.trim() !== '' && !slugValid && (
+        <p className="text-sm text-danger">Slug: nur Kleinbuchstaben, Ziffern und Bindestriche (z. B. „forschung").</p>
+      )}
+      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     </div>
   )
 }

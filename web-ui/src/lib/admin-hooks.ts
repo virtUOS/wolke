@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, type AnnouncementInput, type ServiceDraft } from './api'
+import { api, type AnnouncementInput, type Localized, type ServiceDraft } from './api'
 
 export function useAdminServices() {
   return useQuery({ queryKey: ['admin', 'services'], queryFn: ({ signal }) => api.adminServices(signal) })
@@ -46,7 +46,7 @@ export function useAdminActions() {
       onSuccess: afterCatalogWrite,
     }),
     createCategory: useMutation({
-      mutationFn: (v: { slug: string; label: Record<string, string>; sort: number }) =>
+      mutationFn: (v: { slug: string; label: Localized; sort: number }) =>
         api.createCategory(v.slug, v.label, v.sort),
       onSuccess: afterCatalogWrite,
     }),

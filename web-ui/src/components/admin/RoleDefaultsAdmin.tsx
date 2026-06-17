@@ -17,6 +17,7 @@ export function RoleDefaultsAdmin() {
   const [role, setRole] = useState<(typeof ROLES)[number]>('student')
   const [ordered, setOrdered] = useState<string[]>([])
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | undefined>()
 
   const services = catalog.data?.services ?? []
   const byID = new Map(services.map((s) => [s.id, s]))
@@ -52,7 +53,7 @@ export function RoleDefaultsAdmin() {
             key={r}
             active={role === r}
             aria-current={role === r ? 'true' : undefined}
-            onClick={() => { setRole(r); setSaved(false) }}
+            onClick={() => { setRole(r); setSaved(false); setError(undefined) }}
           >
             {r}
           </PillButton>
@@ -90,10 +91,23 @@ export function RoleDefaultsAdmin() {
       )}
 
       <div className="flex items-center gap-3">
-        <Button onClick={() => actions.setRoleDefaults.mutate({ role, serviceIDs: ordered }, { onSuccess: () => setSaved(true) })}>
+        <Button
+          disabled={actions.setRoleDefaults.isPending}
+          onClick={() => {
+            setError(undefined)
+            actions.setRoleDefaults.mutate(
+              { role, serviceIDs: ordered },
+              {
+                onSuccess: () => setSaved(true),
+                onError: (e) => setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen.'),
+              },
+            )
+          }}
+        >
           Speichern
         </Button>
         {saved && <span className="text-sm text-text-muted" role="status">Gespeichert.</span>}
+        {error && <span className="text-sm text-danger" role="alert">{error}</span>}
       </div>
     </div>
   )

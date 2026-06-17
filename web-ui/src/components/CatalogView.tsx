@@ -7,11 +7,13 @@ interface CatalogViewProps {
   locale: string
   layout: 'grid' | 'list'
   actions?: TileActions
+  /** Shown when there are no services (e.g. the favorites tab's own copy). */
+  emptyMessage?: string
 }
 
 // Flat service grid (Editorial direction). Category grouping was removed —
 // filtering is done upstream via the category chips in Dashboard.
-export function CatalogView({ services, categories, locale, layout, actions }: CatalogViewProps) {
+export function CatalogView({ services, categories, locale, layout, actions, emptyMessage }: CatalogViewProps) {
   if (services.length === 0) {
     return (
       <div
@@ -24,7 +26,7 @@ export function CatalogView({ services, categories, locale, layout, actions }: C
           fontSize: 14,
         }}
       >
-        Keine Dienste gefunden.
+        {emptyMessage ?? 'Keine Dienste gefunden.'}
       </div>
     )
   }

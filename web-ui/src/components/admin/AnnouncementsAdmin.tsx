@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Announcement, AnnouncementInput, Audience, Severity } from '@/lib/api'
 import { useAdminActions, useAdminAnnouncements } from '@/lib/admin-hooks'
+import { Alert } from '@/components/ui/alert'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,26 +18,31 @@ export function AnnouncementsAdmin() {
   const actions = useAdminActions()
   const [editing, setEditing] = useState<Announcement | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [formError, setFormError] = useState<string | undefined>()
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Ankündigungen</h2>
-        <Button size="sm" onClick={() => { setEditing(null); setShowForm(true) }}>Neue Ankündigung</Button>
+        <Button size="sm" onClick={() => { setEditing(null); setFormError(undefined); setShowForm(true) }}>Neue Ankündigung</Button>
       </div>
 
       {showForm && (
         <AnnouncementForm
           key={editing?.id ?? 'new'}
           initial={editing}
+          error={formError}
           submitting={actions.createAnnouncement.isPending || actions.updateAnnouncement.isPending}
-          onCancel={() => setShowForm(false)}
+          onCancel={() => { setFormError(undefined); setShowForm(false) }}
           onSubmit={(input) => {
-            const done = () => setShowForm(false)
+            setFormError(undefined)
+            const onSuccess = () => setShowForm(false)
+            const onError = (e: unknown) =>
+              setFormError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen.')
             if (editing) {
-              actions.updateAnnouncement.mutate({ id: editing.id, input }, { onSuccess: done })
+              actions.updateAnnouncement.mutate({ id: editing.id, input }, { onSuccess, onError })
             } else {
-              actions.createAnnouncement.mutate(input, { onSuccess: done })
+              actions.createAnnouncement.mutate(input, { onSuccess, onError })
             }
           }}
         />
@@ -79,11 +85,13 @@ function AnnouncementForm({
   onSubmit,
   onCancel,
   submitting,
+  error,
 }: {
   initial: Announcement | null
   onSubmit: (input: AnnouncementInput) => void
   onCancel: () => void
   submitting?: boolean
+  error?: string
 }) {
   const [titleDe, setTitleDe] = useState(initial?.title.de ?? '')
   const [bodyDe, setBodyDe] = useState(initial?.body.de ?? '')
@@ -137,6 +145,11 @@ function AnnouncementForm({
           Schließbar
         </label>
       </div>
+      {error && (
+        <Alert variant="danger" role="alert">
+          {error}
+        </Alert>
+      )}
       <div className="flex gap-2">
         <Button type="submit" disabled={!valid || submitting}>
           {initial ? 'Speichern' : 'Veröffentlichen'}
