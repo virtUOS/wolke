@@ -115,6 +115,11 @@ mcp: ## Build the admin MCP server (stdio) -> bin/mcp; a client launches it
 	go build -o bin/mcp ./cmd/mcp
 	@echo "built bin/mcp — point an MCP client at it (see README → Admin MCP server)"
 
+.PHONY: catalog-mcp
+catalog-mcp: ## Build the public read-only catalog MCP server (stdio) -> bin/catalog-mcp
+	go build -o bin/catalog-mcp ./cmd/catalog-mcp
+	@echo "built bin/catalog-mcp — point an MCP client at it (see README → Public catalog MCP server)"
+
 .PHONY: check
 check: lint test web-check ## Run the full local gate (Go + frontend)
 

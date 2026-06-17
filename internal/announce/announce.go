@@ -29,6 +29,7 @@ type Announcement struct {
 // Store is the read surface the announce package needs.
 type Store interface {
 	ListActiveAnnouncements(ctx context.Context, role string) ([]store.Announcement, error)
+	ListAllActiveAnnouncements(ctx context.Context) ([]store.Announcement, error)
 	AdminListAnnouncements(ctx context.Context, lim int32) ([]store.Announcement, error)
 }
 
@@ -37,6 +38,16 @@ func ListActive(ctx context.Context, db Store, role string) ([]Announcement, err
 	rows, err := db.ListActiveAnnouncements(ctx, role)
 	if err != nil {
 		return nil, fmt.Errorf("list active announcements: %w", err)
+	}
+	return views(rows), nil
+}
+
+// ListAllActive returns every in-window announcement regardless of audience, for
+// the public catalog MCP server, which has no user role to filter on.
+func ListAllActive(ctx context.Context, db Store) ([]Announcement, error) {
+	rows, err := db.ListAllActiveAnnouncements(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list all active announcements: %w", err)
 	}
 	return views(rows), nil
 }

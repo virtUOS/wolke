@@ -246,6 +246,48 @@ For **Claude Desktop**, add to `claude_desktop_config.json`:
 
 ---
 
+## Public catalog MCP server
+
+A second, read-only MCP server that any university member can run — no admin rights, no user identity required. It exposes the same public catalog the web UI shows: which services exist, which are in **maintenance** or **beta**, where their **documentation** lives, plus search and active announcements. It has **no write path at all** (enforced at the package level), and never returns soft-deleted services.
+
+### Setup
+
+It needs only a database connection — set `DATABASE_URL`.
+
+```bash
+make catalog-mcp   # builds bin/catalog-mcp
+```
+
+For **Claude Desktop**, add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "wolke-catalog": {
+      "command": "/path/to/bin/catalog-mcp",
+      "env": {
+        "DATABASE_URL": "postgres://wolke:…@localhost:5432/wolke?sslmode=disable"
+      }
+    }
+  }
+}
+```
+
+> For defense-in-depth, point `DATABASE_URL` at a Postgres role with only `SELECT` grants — the server only ever reads.
+
+### Available tools
+
+| Tool | Description |
+|------|-------------|
+| `service.list` | Active services; optional `category` (slug) and `status` (`beta`/`wartung`) filters |
+| `service.get` | One active service by ID, with its documentation links and status |
+| `service.search` | Fuzzy search by name, description, or category |
+| `service.list_in_maintenance` | Active services currently tagged `wartung` |
+| `category.list` | The catalog categories |
+| `announcements.list` | Active announcements across all audiences (maintenance windows, outages) |
+
+---
+
 ## License
 
 Apache 2.0
