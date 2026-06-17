@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { ArrowRight, Moon, Shield, Sun, LogOut } from 'lucide-react'
 import type { Branding } from '@/lib/branding'
+import { t } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { IconButton } from '@/components/ui/icon-button'
@@ -38,6 +39,8 @@ export function TopBar({
   onAdmin,
   onLogout,
 }: TopBarProps) {
+  const locale = branding.default_locale || 'de'
+  const s = t(locale)
   return (
     <header
       style={{
@@ -67,20 +70,20 @@ export function TopBar({
         {/* View switcher. These are nav controls, not an ARIA tablist (there's no
             tabpanel/arrow-key model behind them), so they signal state with
             aria-current — consistent with the admin nav. */}
-        <nav aria-label="Hauptnavigation" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <nav aria-label={s.topbar.mainNav} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
           <PillButton
             active={tab === 'favoriten'}
             aria-current={tab === 'favoriten' ? 'page' : undefined}
             onClick={() => onTab('favoriten')}
           >
-            Favoriten
+            {s.topbar.favorites}
           </PillButton>
           <PillButton
             active={tab === 'dienste'}
             aria-current={tab === 'dienste' ? 'page' : undefined}
             onClick={() => onTab('dienste')}
           >
-            Dienste
+            {s.topbar.services}
           </PillButton>
         </nav>
 
@@ -89,13 +92,14 @@ export function TopBar({
         {/* Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <IconButton
-            aria-label={isDark ? 'Helles Design aktivieren' : 'Dunkles Design aktivieren'}
+            aria-label={isDark ? s.topbar.toLight : s.topbar.toDark}
             aria-pressed={isDark}
             onClick={onToggleTheme}
           >
             {isDark ? <Sun className="h-5 w-5" aria-hidden="true" /> : <Moon className="h-5 w-5" aria-hidden="true" />}
           </IconButton>
           <AccountMenu
+            locale={locale}
             initials={userInitials}
             name={userName}
             email={userEmail}
@@ -112,6 +116,7 @@ export function TopBar({
 // ── Account menu ────────────────────────────────────────────────────────────
 
 interface AccountMenuProps {
+  locale: string
   initials: string
   name: string
   email?: string
@@ -120,7 +125,8 @@ interface AccountMenuProps {
   onLogout: () => void
 }
 
-function AccountMenu({ initials, name, email, isAdmin, onAdmin, onLogout }: AccountMenuProps) {
+function AccountMenu({ locale, initials, name, email, isAdmin, onAdmin, onLogout }: AccountMenuProps) {
+  const s = t(locale)
   const [open, setOpen] = useState(false)
   const [confirmLogout, setConfirmLogout] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -161,7 +167,7 @@ function AccountMenu({ initials, name, email, isAdmin, onAdmin, onLogout }: Acco
       <button
         ref={triggerRef}
         type="button"
-        aria-label="Konto-Menü öffnen"
+        aria-label={s.topbar.openAccount}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
@@ -183,7 +189,7 @@ function AccountMenu({ initials, name, email, isAdmin, onAdmin, onLogout }: Acco
           id={panelId}
           ref={panelRef}
           role="dialog"
-          aria-label="Konto"
+          aria-label={s.topbar.account}
           tabIndex={-1}
           style={{
             position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 20,
@@ -222,7 +228,7 @@ function AccountMenu({ initials, name, email, isAdmin, onAdmin, onLogout }: Acco
               onClick={() => { setOpen(false); onAdmin() }}
             >
               <Shield className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-              <span style={{ flex: 1 }}>Administration</span>
+              <span style={{ flex: 1 }}>{s.topbar.administration}</span>
               <ArrowRight className="h-[15px] w-[15px] shrink-0 text-text-muted" aria-hidden="true" />
             </button>
           )}
@@ -234,7 +240,7 @@ function AccountMenu({ initials, name, email, isAdmin, onAdmin, onLogout }: Acco
             onClick={() => setConfirmLogout(true)}
           >
             <LogOut className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
-            <span style={{ flex: 1 }}>Abmelden</span>
+            <span style={{ flex: 1 }}>{s.topbar.logout}</span>
           </button>
         </div>
       )}
@@ -242,18 +248,17 @@ function AccountMenu({ initials, name, email, isAdmin, onAdmin, onLogout }: Acco
       <Dialog
         open={confirmLogout}
         onOpenChange={setConfirmLogout}
-        title="Abmelden?"
-        description="Single Sign-out für Ihre Uni-Sitzung."
+        title={s.topbar.logoutTitle}
+        description={s.topbar.logoutDesc}
         footer={
           <>
-            <Button variant="outline" onClick={() => setConfirmLogout(false)}>Abbrechen</Button>
-            <Button onClick={() => { setConfirmLogout(false); onLogout() }}>Abmelden</Button>
+            <Button variant="outline" onClick={() => setConfirmLogout(false)}>{s.common.cancel}</Button>
+            <Button onClick={() => { setConfirmLogout(false); onLogout() }}>{s.topbar.logout}</Button>
           </>
         }
       >
         <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: 'var(--text)', textWrap: 'pretty' } as React.CSSProperties}>
-          Sie werden gleichzeitig bei allen verbundenen Uni-Diensten — Stud.IP, Webmail, VPN,
-          Cloud-Speicher und weiteren — abgemeldet. Offene Sitzungen werden beendet.
+          {s.topbar.logoutBody}
         </p>
       </Dialog>
     </div>

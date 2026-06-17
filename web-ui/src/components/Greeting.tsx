@@ -1,26 +1,5 @@
 import { Wrench } from 'lucide-react'
-
-function getTimeGreeting(locale: string): string {
-  const h = new Date().getHours()
-  if (locale === 'en') {
-    if (h < 12) return 'Good morning'
-    if (h < 18) return 'Good afternoon'
-    return 'Good evening'
-  }
-  if (h < 11) return 'Guten Morgen'
-  if (h < 18) return 'Guten Tag'
-  return 'Guten Abend'
-}
-
-function formatDate(): string {
-  try {
-    return new Date().toLocaleDateString('de-DE', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-    })
-  } catch {
-    return ''
-  }
-}
+import { t } from '@/lib/i18n'
 
 interface GreetingProps {
   firstName: string
@@ -34,6 +13,7 @@ interface GreetingProps {
 // Editorial greeting header: time-of-day salutation, the date, and at-a-glance
 // counts (favorites, and a clickable "in maintenance" shortcut).
 export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCount, onShowMaintenance }: GreetingProps) {
+  const s = t(locale)
   return (
     <header style={{ marginBottom: isMobile ? 18 : 28 }}>
       <div
@@ -46,7 +26,7 @@ export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCou
           lineHeight: 1.05,
         }}
       >
-        {getTimeGreeting(locale)}, {firstName}.
+        {s.greeting.salutation()}, {firstName}.
       </div>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
         <span
@@ -55,13 +35,13 @@ export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCou
             textTransform: 'uppercase', color: 'var(--text-muted)',
           }}
         >
-          {formatDate()}
+          {s.greeting.today()}
         </span>
         {favCount > 0 && (
           <>
             <Dot />
             <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>
-              {favCount} {favCount === 1 ? 'Favorit' : 'Favoriten'}
+              {s.greeting.favCount(favCount)}
             </span>
           </>
         )}
@@ -79,7 +59,7 @@ export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCou
               }}
             >
               <Wrench className="h-[14px] w-[14px]" aria-hidden="true" />
-              {maintenanceCount} {maintenanceCount === 1 ? 'Dienst' : 'Dienste'} in Wartung
+              {s.greeting.maintenanceCount(maintenanceCount)}
             </button>
           </>
         )}

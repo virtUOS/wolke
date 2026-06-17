@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Announcement, AnnouncementInput, Audience, Severity } from '@/lib/api'
+import { t } from '@/lib/i18n'
 import { useAdminActions, useAdminAnnouncements } from '@/lib/admin-hooks'
 import { Alert } from '@/components/ui/alert'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
@@ -13,7 +14,8 @@ import { List, ListItem } from '@/components/ui/list'
 const SEVERITIES: Severity[] = ['info', 'warning', 'critical']
 const AUDIENCES: Audience[] = ['all', 'student', 'teacher', 'staff']
 
-export function AnnouncementsAdmin() {
+export function AnnouncementsAdmin({ locale }: { locale: string }) {
+  const s = t(locale)
   const list = useAdminAnnouncements()
   const actions = useAdminActions()
   const [editing, setEditing] = useState<Announcement | null>(null)
@@ -23,13 +25,14 @@ export function AnnouncementsAdmin() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Ankündigungen</h2>
-        <Button size="sm" onClick={() => { setEditing(null); setFormError(undefined); setShowForm(true) }}>Neue Ankündigung</Button>
+        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.announcementsHeading}</h2>
+        <Button size="sm" onClick={() => { setEditing(null); setFormError(undefined); setShowForm(true) }}>{s.admin.newAnnouncement}</Button>
       </div>
 
       {showForm && (
         <AnnouncementForm
           key={editing?.id ?? 'new'}
+          locale={locale}
           initial={editing}
           error={formError}
           submitting={actions.createAnnouncement.isPending || actions.updateAnnouncement.isPending}
@@ -38,7 +41,7 @@ export function AnnouncementsAdmin() {
             setFormError(undefined)
             const onSuccess = () => setShowForm(false)
             const onError = (e: unknown) =>
-              setFormError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen.')
+              setFormError(e instanceof Error ? e.message : s.admin.saveFailed)
             if (editing) {
               actions.updateAnnouncement.mutate({ id: editing.id, input }, { onSuccess, onError })
             } else {
@@ -53,11 +56,11 @@ export function AnnouncementsAdmin() {
           <ListItem key={a.id}>
             <Badge variant={severityVariant(a.severity)}>{a.severity}</Badge>
             <span className="min-w-0 flex-1 truncate">{a.title.de}</span>
-            <span className="text-xs text-text-muted">{a.audience}{a.ends_at ? ` · bis ${isoToLocalInput(a.ends_at).replace('T', ' ')}` : ''}</span>
-            <Button variant="ghost" size="sm" onClick={() => { setEditing(a); setShowForm(true) }}>Bearbeiten</Button>
+            <span className="text-xs text-text-muted">{a.audience}{a.ends_at ? ` · ${s.admin.until} ${isoToLocalInput(a.ends_at).replace('T', ' ')}` : ''}</span>
+            <Button variant="ghost" size="sm" onClick={() => { setEditing(a); setShowForm(true) }}>{s.common.edit}</Button>
           </ListItem>
         ))}
-        {(list.data?.announcements ?? []).length === 0 && <ListItem className="text-text-muted">Keine Ankündigungen.</ListItem>}
+        {(list.data?.announcements ?? []).length === 0 && <ListItem className="text-text-muted">{s.admin.noAnnouncements}</ListItem>}
       </List>
     </div>
   )
@@ -81,18 +84,21 @@ function isoToLocalInput(iso: string): string {
 }
 
 function AnnouncementForm({
+  locale,
   initial,
   onSubmit,
   onCancel,
   submitting,
   error,
 }: {
+  locale: string
   initial: Announcement | null
   onSubmit: (input: AnnouncementInput) => void
   onCancel: () => void
   submitting?: boolean
   error?: string
 }) {
+  const s = t(locale)
   const [titleDe, setTitleDe] = useState(initial?.title.de ?? '')
   const [bodyDe, setBodyDe] = useState(initial?.body.de ?? '')
   const [severity, setSeverity] = useState<Severity>(initial?.severity ?? 'info')
@@ -120,29 +126,29 @@ function AnnouncementForm({
       }}
       className="space-y-3 rounded-md border border-border p-4"
     >
-      <Field label="Titel (de)">
+      <Field label={s.admin.fTitleDe}>
         <Input value={titleDe} onChange={(e) => setTitleDe(e.target.value)} />
       </Field>
-      <Field label="Text (de)">
+      <Field label={s.admin.fTextDe}>
         <Textarea value={bodyDe} onChange={(e) => setBodyDe(e.target.value)} rows={2} />
       </Field>
       <div className="flex flex-wrap gap-3">
-        <Field label="Schweregrad">
+        <Field label={s.admin.fSeverity}>
           <Select value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}>
-            {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {SEVERITIES.map((sev) => <option key={sev} value={sev}>{sev}</option>)}
           </Select>
         </Field>
-        <Field label="Zielgruppe">
+        <Field label={s.admin.fAudience}>
           <Select value={audience} onChange={(e) => setAudience(e.target.value as Audience)}>
             {AUDIENCES.map((a) => <option key={a} value={a}>{a}</option>)}
           </Select>
         </Field>
-        <Field label="Endet am (optional)">
+        <Field label={s.admin.fEndsAt}>
           <Input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
         </Field>
         <label className="flex items-center gap-2 self-end text-sm">
           <input type="checkbox" checked={dismissible} onChange={(e) => setDismissible(e.target.checked)} />
-          Schließbar
+          {s.admin.dismissible}
         </label>
       </div>
       {error && (
@@ -152,10 +158,10 @@ function AnnouncementForm({
       )}
       <div className="flex gap-2">
         <Button type="submit" disabled={!valid || submitting}>
-          {initial ? 'Speichern' : 'Veröffentlichen'}
+          {initial ? s.common.save : s.admin.publish}
         </Button>
         <Button type="button" variant="outline" onClick={onCancel}>
-          Abbrechen
+          {s.common.cancel}
         </Button>
       </div>
     </form>

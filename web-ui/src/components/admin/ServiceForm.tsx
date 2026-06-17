@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { localized, type AdminService, type Category, type Service, type ServiceDraft, type ServiceTag } from '@/lib/api'
+import { t } from '@/lib/i18n'
 import { iconByName, iconNames } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { Alert } from '@/components/ui/alert'
@@ -26,6 +27,7 @@ const httpURL = (s: string) => /^https?:\/\/.+/.test(s)
 // icon picker, multi-category selection, and URL validation (docs/03 §6). The
 // server re-validates authoritatively; this gives immediate feedback.
 export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, submitting, error }: ServiceFormProps) {
+  const s = t(locale)
   const [name, setName] = useState(initial?.name ?? '')
   const [descDe, setDescDe] = useState(initial?.description.de ?? '')
   const [descEn, setDescEn] = useState(initial?.description.en ?? '')
@@ -38,7 +40,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
   const preview: Service = useMemo(
     () => ({
       id: 'preview',
-      name: name || 'Dienstname',
+      name: name || s.admin.previewName,
       description: { de: descDe, en: descEn },
       service_url: serviceUrl || undefined,
       doc_url: docUrl || undefined,
@@ -47,16 +49,16 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
       doc_only: serviceUrl.trim() === '',
       tag: tag || undefined,
     }),
-    [name, descDe, descEn, serviceUrl, docUrl, icon, cats, tag],
+    [name, descDe, descEn, serviceUrl, docUrl, icon, cats, tag, s],
   )
 
   const errors: string[] = []
-  if (name.trim() === '') errors.push('Name fehlt.')
-  if (descDe.trim() === '') errors.push('Beschreibung (de) fehlt.')
-  if (serviceUrl === '' && docUrl === '') errors.push('Service- oder Dokumentations-URL erforderlich.')
-  if (serviceUrl !== '' && !httpURL(serviceUrl)) errors.push('Service-URL muss mit http(s):// beginnen.')
-  if (docUrl !== '' && !httpURL(docUrl)) errors.push('Dokumentations-URL muss mit http(s):// beginnen.')
-  if (cats.size === 0) errors.push('Mindestens eine Kategorie wählen.')
+  if (name.trim() === '') errors.push(s.admin.errNameMissing)
+  if (descDe.trim() === '') errors.push(s.admin.errDescMissing)
+  if (serviceUrl === '' && docUrl === '') errors.push(s.admin.errUrlRequired)
+  if (serviceUrl !== '' && !httpURL(serviceUrl)) errors.push(s.admin.errServiceUrl)
+  if (docUrl !== '' && !httpURL(docUrl)) errors.push(s.admin.errDocUrl)
+  if (cats.size === 0) errors.push(s.admin.errCategory)
   const valid = errors.length === 0
 
   const toggleCat = (slug: string) =>
@@ -87,24 +89,24 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
   return (
     <form onSubmit={submit} className="grid gap-6 md:grid-cols-2">
       <div className="space-y-4">
-        <Field label="Name">
+        <Field label={s.admin.fName}>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field label="Beschreibung (Deutsch)">
+        <Field label={s.admin.fDescDe}>
           <Textarea value={descDe} onChange={(e) => setDescDe(e.target.value)} rows={2} />
         </Field>
-        <Field label="Beschreibung (English)">
+        <Field label={s.admin.fDescEn}>
           <Textarea value={descEn} onChange={(e) => setDescEn(e.target.value)} rows={2} />
         </Field>
-        <Field label="Service-URL (leer = nur Dokumentation)">
+        <Field label={s.admin.fServiceUrl}>
           <Input value={serviceUrl} onChange={(e) => setServiceUrl(e.target.value)} placeholder="https://…" />
         </Field>
-        <Field label="Dokumentations-URL">
+        <Field label={s.admin.fDocUrl}>
           <Input value={docUrl} onChange={(e) => setDocUrl(e.target.value)} placeholder="https://…" />
         </Field>
 
         <fieldset>
-          <legend className="mb-1 text-sm font-medium">Kategorien</legend>
+          <legend className="mb-1 text-sm font-medium">{s.admin.fCategories}</legend>
           <div className="flex flex-wrap gap-2">
             {categories.map((c) => (
               <label key={c.slug} className={cn('cursor-pointer rounded-md border px-2 py-1 text-sm', cats.has(c.slug) ? 'border-primary bg-primary text-white' : 'border-border text-text-muted')}>
@@ -116,19 +118,19 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
         </fieldset>
 
         <fieldset>
-          <legend className="mb-1 text-sm font-medium">Status-Label</legend>
+          <legend className="mb-1 text-sm font-medium">{s.admin.fStatus}</legend>
           <div className="flex flex-wrap gap-2">
             {(['', 'beta', 'wartung'] as const).map((value) => (
               <label key={value} className={cn('cursor-pointer rounded-md border px-2 py-1 text-sm', tag === value ? 'border-primary bg-primary text-white' : 'border-border text-text-muted')}>
                 <input type="radio" name="tag" className="sr-only" value={value} checked={tag === value} onChange={() => setTag(value)} />
-                {value === '' ? 'Keins' : value === 'beta' ? 'Beta' : 'Wartung'}
+                {value === '' ? s.admin.statusNone : value === 'beta' ? s.admin.statusBeta : s.admin.statusWartung}
               </label>
             ))}
           </div>
         </fieldset>
 
         <fieldset>
-          <legend className="mb-1 text-sm font-medium">Icon</legend>
+          <legend className="mb-1 text-sm font-medium">{s.admin.fIcon}</legend>
           <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto rounded-md border border-border p-2">
             {iconNames.map((n) => {
               const Ico = iconByName(n)
@@ -151,7 +153,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
 
       <div className="space-y-4">
         <div>
-          <p className="mb-2 text-sm font-medium text-text-muted">Vorschau</p>
+          <p className="mb-2 text-sm font-medium text-text-muted">{s.admin.preview}</p>
           <div className="max-w-sm">
             <Tile service={preview} categories={categories} locale={locale} />
           </div>
@@ -172,10 +174,10 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
 
         <div className="flex gap-2">
           <Button type="submit" disabled={!valid || submitting}>
-            {initial ? 'Speichern' : 'Anlegen'}
+            {initial ? s.common.save : s.admin.create}
           </Button>
           <Button type="button" variant="outline" onClick={onCancel}>
-            Abbrechen
+            {s.common.cancel}
           </Button>
         </div>
       </div>

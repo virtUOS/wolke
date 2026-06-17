@@ -1,4 +1,5 @@
 import type { Category, Service } from '@/lib/api'
+import { t } from '@/lib/i18n'
 import { Tile, type TileActions } from './Tile'
 
 interface CatalogViewProps {
@@ -26,7 +27,7 @@ export function CatalogView({ services, categories, locale, layout, actions, emp
           fontSize: 14,
         }}
       >
-        {emptyMessage ?? 'Keine Dienste gefunden.'}
+        {emptyMessage ?? t(locale).catalog.empty}
       </div>
     )
   }
