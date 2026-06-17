@@ -1,5 +1,7 @@
 .git
 .gitignore
+.github/
+.claude/
 bin/
 *.test
 coverage.*
@@ -9,11 +11,28 @@ coverage.*
 # Frontend deps/build are produced inside the image's web stage.
 web-ui/node_modules/
 web-ui/dist/
+web-ui/coverage/
+web-ui/.vite/
 
 # Real embedded assets are copied in from the web stage; keep only the
 # placeholder index.html (the assets/ dir is build output).
 internal/web/dist/assets/
 
-# Docs aren't needed in the build context.
+# Docs and prose aren't needed in the build context.
 docs/
 *.md
+
+# Compose/deploy/dev material isn't part of the app image.
+compose.yaml
+Caddyfile
+deploy/
+dev/
+notes
+
+# design-sync scratch, bundles, and handoff material (gitignored; also kept out
+# of the build context so they never bloat uploads or land in the build stage).
+.ds-sync/
+ds-bundle/
+.design-sync/
+design_handoff_wolke_dashboard/
+*.zip

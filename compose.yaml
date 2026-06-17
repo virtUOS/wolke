@@ -2,41 +2,72 @@
 # migrate step and an optional mock OIDC IdP (docs/04 §4). This is NOT the daily
 # loop — develop locally with `make run` + `make web-dev` (see README). Bring the
 # IdP up with `--profile idp`.
+#
+# Secrets fail closed: POSTGRES_PASSWORD and SESSION_SECRET must be set (in a
+# .env file next to this one, or the environment) or `compose up` aborts.
+#
+# Hardening applied to every service: no-new-privileges, all Linux capabilities
+# dropped (only the few each image genuinely needs are added back), and read-only
+# root filesystems with tmpfs for the paths that must be writable.
+#
+# Two networks isolate the datastore: `edge` carries Caddy↔app (and matches
+# TRUSTED_PROXIES); `backend` is internal-only (no egress) and carries app↔db.
 
 services:
   postgres:
     image: docker.io/library/postgres:17
     environment:
       POSTGRES_USER: wolke
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD (e.g. in .env)}
       POSTGRES_DB: wolke
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
-      - internal
+      - backend
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # The entrypoint starts as root to init the data dir, then drops to the
+    # postgres user — so it needs exactly these caps and nothing more.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U wolke -d wolke"]
       interval: 5s
       timeout: 3s
       retries: 10
 
-  # Forward-only migrations, run to completion before the app starts.
+  # Forward-only migrations, run to completion before the app starts. Uses the
+  # tiny `migrate` image (goose + SQL only); ENTRYPOINT already sets `-dir`.
   migrate:
     build:
       context: .
-      target: build
+      target: migrate
     command:
-      - /out/goose
-      - -dir
-      - /src/migrations
       - postgres
-      - postgres://wolke:${POSTGRES_PASSWORD:-devpass}@postgres:5432/wolke?sslmode=disable
+      - postgres://wolke:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD (e.g. in .env)}@postgres:5432/wolke?sslmode=disable
       - up
     depends_on:
       postgres:
         condition: service_healthy
     networks:
-      - internal
+      - backend
+    restart: on-failure
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
 
   app:
     build:
@@ -46,9 +77,9 @@ services:
       # in Phase 1, OIDC redirect_uri — even though the app serves plain HTTP here.
       PUBLIC_URL: https://localhost
       HTTP_ADDR: ":8080"
-      DATABASE_URL: postgres://wolke:${POSTGRES_PASSWORD:-devpass}@postgres:5432/wolke?sslmode=disable
-      SESSION_SECRET: ${SESSION_SECRET:-compose-dev-secret-change-me}
-      # Trust X-Forwarded-* only from the Compose network (Caddy's subnet).
+      DATABASE_URL: postgres://wolke:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD (e.g. in .env)}@postgres:5432/wolke?sslmode=disable
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET (openssl rand -base64 32)}
+      # Trust X-Forwarded-* only from the edge network (Caddy's subnet).
       TRUSTED_PROXIES: 172.28.0.0/16
       LOG_LEVEL: info
       # OIDC is wired in Phase 1; point it at the mock IdP then:
@@ -57,10 +88,27 @@ services:
       migrate:
         condition: service_completed_successfully
     networks:
-      - internal
+      - edge
+      - backend
     # Not published to the host: only Caddy reaches the app.
     expose:
       - "8080"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    # The binary probes itself (distroless has no shell); gates on /readyz so
+    # Caddy waits for real readiness, not just process start.
+    healthcheck:
+      test: ["CMD", "/server", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
   caddy:
     image: docker.io/library/caddy:2
@@ -74,9 +122,21 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     networks:
-      - internal
+      - edge
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Needed to bind 80/443; harmless when overridden to high ports.
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp
 
   # Provider-agnostic dev IdP (proves the OIDC client is not Keycloak-specific).
   # Started only with `--profile idp`; wired up in Phase 1.
@@ -88,7 +148,13 @@ services:
     expose:
       - "8080"
     networks:
-      - internal
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
 
 volumes:
   pgdata:
@@ -96,7 +162,16 @@ volumes:
   caddy_config:
 
 networks:
-  internal:
+  # Caddy ↔ app. Its subnet is what the app trusts for X-Forwarded-* headers
+  # (TRUSTED_PROXIES above), so keep the two in sync.
+  edge:
     ipam:
       config:
         - subnet: 172.28.0.0/16
+  # app ↔ Postgres (and the mock IdP). internal:true → no route to the internet,
+  # so the datastore is unreachable from outside the compose project.
+  backend:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16
