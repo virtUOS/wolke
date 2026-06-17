@@ -5,36 +5,58 @@ interface FavoritesSectionProps {
   favorites: Service[]
   categories: Category[]
   locale: string
-  view: 'list' | 'table'
+  layout: 'grid' | 'list'
   actions: TileActions
   /** Heading element to use — h1 when it leads the page, h2 inside a tab. */
   as?: 'h1' | 'h2'
 }
 
-// "Deine Favoriten": the user's favorited services as a flat grid, already
-// ordered server-side (by usage or alphabetically). No categories, no lists
-// (concept §4.4).
-export function FavoritesSection({ favorites, categories, locale, view, actions, as = 'h1' }: FavoritesSectionProps) {
-  const grid = view === 'table' ? 'grid gap-3 sm:grid-cols-2 lg:grid-cols-3' : 'grid gap-3'
+export function FavoritesSection({ favorites, categories, locale, layout, actions, as = 'h1' }: FavoritesSectionProps) {
   const Heading = as
-  const headingClass = as === 'h1' ? 'text-2xl font-bold' : 'text-lg font-semibold'
 
   return (
-    <section aria-labelledby="favorites">
-      <Heading id="favorites" className={`mb-4 flex items-center gap-2 ${headingClass}`}>
-        <span aria-hidden="true" className="inline-block h-7 w-1.5 rounded bg-primary" />
+    <section aria-labelledby="favorites-heading">
+      <Heading
+        id="favorites-heading"
+        style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em' }}
+      >
         Deine Favoriten
       </Heading>
       {favorites.length === 0 ? (
-        <p className="text-sm text-text-muted">Noch nichts gemerkt. Tippe ☆ auf einem Dienst, um ihn hier abzulegen.</p>
-      ) : (
-        <div className={grid}>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>
+          Noch nichts gemerkt. Tippe ☆ auf einem Dienst, um ihn hier abzulegen.
+        </p>
+      ) : layout === 'list' ? (
+        <div style={{ borderTop: '1px solid var(--border)' }}>
           {favorites.map((s) => (
             <Tile
               key={s.id}
               service={s}
               categories={categories}
               locale={locale}
+              layout="list"
+              favorited={actions.favoritedIDs.has(s.id)}
+              onToggleFavorite={actions.onToggleFavorite}
+              onLaunch={actions.onLaunch}
+            />
+          ))}
+        </div>
+      ) : (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(264px, 1fr))',
+            gap: 16,
+            alignItems: 'stretch',
+          }}
+        >
+          {favorites.map((s) => (
+            <Tile
+              key={s.id}
+              service={s}
+              categories={categories}
+              locale={locale}
+              layout="grid"
               favorited={actions.favoritedIDs.has(s.id)}
               onToggleFavorite={actions.onToggleFavorite}
               onLaunch={actions.onLaunch}

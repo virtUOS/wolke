@@ -3,7 +3,9 @@ import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { api, type Service } from '@/lib/api'
 import { useAdminActions } from '@/lib/admin-hooks'
 import { useCatalog } from '@/lib/hooks'
+import { Button } from '@/components/ui/button'
 import { PillButton } from '@/components/ui/pill-button'
+import { Select } from '@/components/ui/select'
 
 const ROLES = ['student', 'teacher', 'staff'] as const
 
@@ -43,7 +45,7 @@ export function RoleDefaultsAdmin() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Rollen-Standardansicht</h2>
+      <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Rollen-Standardansicht</h2>
       <div className="flex gap-1">
         {ROLES.map((r) => (
           <PillButton
@@ -78,26 +80,19 @@ export function RoleDefaultsAdmin() {
       {available.length > 0 && (
         <label className="block text-sm">
           <span className="mb-1 block font-medium">Hinzufügen</span>
-          <select
-            value=""
-            onChange={(e) => e.target.value && add(e.target.value)}
-            className="h-9 rounded-md border border-surface bg-surface px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-          >
+          <Select value="" onChange={(e) => e.target.value && add(e.target.value)}>
             <option value="">Dienst wählen…</option>
             {available.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
-          </select>
+          </Select>
         </label>
       )}
 
       <div className="flex items-center gap-3">
-        <button
-          onClick={() => actions.setRoleDefaults.mutate({ role, serviceIDs: ordered }, { onSuccess: () => setSaved(true) })}
-          className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-white hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-        >
+        <Button onClick={() => actions.setRoleDefaults.mutate({ role, serviceIDs: ordered }, { onSuccess: () => setSaved(true) })}>
           Speichern
-        </button>
+        </Button>
         {saved && <span className="text-sm text-text-muted" role="status">Gespeichert.</span>}
       </div>
     </div>

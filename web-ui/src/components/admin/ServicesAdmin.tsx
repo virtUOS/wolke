@@ -48,13 +48,8 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Dienste</h2>
-        <button
-          onClick={() => setMode({ kind: 'new' })}
-          className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-white hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-        >
-          Neuer Dienst
-        </button>
+        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Dienste</h2>
+        <Button size="sm" onClick={() => setMode({ kind: 'new' })}>Neuer Dienst</Button>
       </div>
 
       {services.isLoading ? (
@@ -68,14 +63,10 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
                 {!s.is_active && <Badge className="ml-2">inaktiv</Badge>}
                 <span className="ml-2 text-xs text-text-muted">{s.categories.join(', ')}</span>
               </span>
-              <span className="flex items-center gap-2">
-                <button onClick={() => setMode({ kind: 'edit', service: s })} className="text-sm text-primary hover:text-primary-hover">
-                  Bearbeiten
-                </button>
+              <span className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={() => setMode({ kind: 'edit', service: s })}>Bearbeiten</Button>
                 {s.is_active && (
-                  <button onClick={() => setConfirmDelete(s.id)} className="text-sm text-text-muted hover:text-primary">
-                    Löschen
-                  </button>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(s.id)}>Löschen</Button>
                 )}
               </span>
             </ListItem>

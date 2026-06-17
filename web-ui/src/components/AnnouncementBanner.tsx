@@ -15,7 +15,7 @@ export function AnnouncementBanner({ announcements, locale }: { announcements: A
   if (visible.length === 0) return null
 
   return (
-    <div role="region" aria-label="Ankündigungen" aria-live="polite" className="mx-auto max-w-6xl space-y-2 px-4 pt-4">
+    <div role="region" aria-label="Ankündigungen" aria-live="polite" className="space-y-2">
       {visible.map((a) => (
         <Alert
           key={a.id}

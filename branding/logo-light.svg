@@ -1,6 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="160" height="32" viewBox="0 0 160 32" role="img" aria-label="IT Service">
-  <!-- Placeholder default skin asset. Replace with the official UOS logo
-       (concept §8.1). The red bar motif is the page-title device from docs/03 §3. -->
-  <rect x="0" y="4" width="6" height="24" fill="#A6093D"/>
-  <text x="16" y="22" font-family="Inter, system-ui, sans-serif" font-size="18" font-weight="700" fill="#18181B">IT Service</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#A6093D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="">
+  <!-- Placeholder brand mark — cloud motif. Replace with the official logo (concept §8.1). -->
+  <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
 </svg>

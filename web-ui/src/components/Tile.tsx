@@ -1,9 +1,9 @@
-import { useId, useState } from 'react'
-import { BookOpen, ChevronDown, ChevronUp, ExternalLink, Star } from 'lucide-react'
+import { FileText, Star } from 'lucide-react'
 import { localized, type Category, type Service } from '@/lib/api'
 import { iconByName } from '@/lib/icons'
 import { cn } from '@/lib/utils'
-import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { IconButton } from '@/components/ui/icon-button'
 
 // TileActions bundles the favorite/launch handlers shared by every tile grid,
 // so views pass one object instead of drilling several props.
@@ -17,105 +17,219 @@ interface TileProps {
   service: Service
   locale: string
   categories: Category[]
-  /** When provided, the favorite star is shown (toggles the flat favorites set). */
+  /** When provided, the favorite star is shown. */
   favorited?: boolean
   onToggleFavorite?: (service: Service) => void
-  /** Fired when the launch zone is activated (records a click event). */
+  /** Fired when the main launch link is activated. */
   onLaunch?: (service: Service) => void
+  /** Desktop = grid (default); mobile = list. */
+  layout?: 'grid' | 'list'
 }
 
-// The two-zone tile (docs/01 §4.2, docs/03 §5): the top zone is a link that
-// launches the service (or, for doc-only entries, its documentation) in a new
-// tab; the bottom zone toggles the description in place and never navigates.
-// Three controls, three roles — so keyboard and screen-reader users get the same
-// crisp launch/explore split.
-export function Tile({ service, locale, categories, favorited, onToggleFavorite, onLaunch }: TileProps) {
-  const [open, setOpen] = useState(false)
-  const regionId = useId()
-
+// Editorial tile (docs/03 §5). The main tile area is a full-coverage <a> that
+// opens the service. The star and "Dokumentation" footer link are separate
+// interactive elements layered above it via pointer-events. Description is
+// always visible — no expand/collapse in the Editorial direction.
+export function Tile({ service, locale, categories, favorited, onToggleFavorite, onLaunch, layout = 'grid' }: TileProps) {
   const Icon = iconByName(service.icon)
   const launchHref = service.service_url || service.doc_url || '#'
+  const docsOnly = service.doc_only
   const primaryCategory = categories.find((c) => c.slug === service.categories[0])
-  const subLabel = primaryCategory ? localized(primaryCategory.label, locale) : ''
+  const categoryLabel = primaryCategory ? localized(primaryCategory.label, locale) : ''
   const description = localized(service.description, locale)
+  const accessibleLabel = `${service.name}${docsOnly ? ' – Dokumentation öffnen' : ' öffnen'}`
 
-  return (
-    <Card elevation="sm" interactive>
-      <div className="relative flex items-start gap-3 p-4">
-        {onToggleFavorite && (
-          <button
-            type="button"
-            aria-pressed={favorited}
-            aria-label={favorited ? `${service.name} aus Favoriten entfernen` : `${service.name} zu Favoriten hinzufügen`}
-            onClick={() => onToggleFavorite(service)}
-            className="absolute right-2 top-2 rounded-md p-1 text-text-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-          >
-            <Star className={cn('h-5 w-5', favorited && 'fill-[var(--primary)] text-primary')} aria-hidden="true" />
-          </button>
-        )}
+  const starBtn = onToggleFavorite ? (
+    <IconButton
+      variant="ghost"
+      size="sm"
+      aria-label={favorited ? `${service.name} aus Favoriten entfernen` : `${service.name} zu Favoriten hinzufügen`}
+      aria-pressed={favorited}
+      style={{ color: favorited ? 'var(--accent)' : 'var(--text-muted)', pointerEvents: 'auto', flexShrink: 0 }}
+      onClick={(e) => {
+        e.stopPropagation()
+        onToggleFavorite(service)
+      }}
+    >
+      <Star className={cn('h-5 w-5', favorited && 'fill-[var(--accent)]')} aria-hidden="true" />
+    </IconButton>
+  ) : null
 
-        {/* Top zone = launch. */}
+  // ── Mobile list row ────────────────────────────────────────────────────────
+  if (layout === 'list') {
+    return (
+      <div className="tile-list-item" style={{ position: 'relative', borderBottom: '1px solid var(--border)' }}>
         <a
           href={launchHref}
           target="_blank"
           rel="noopener noreferrer"
+          aria-label={accessibleLabel}
           onClick={() => onLaunch?.(service)}
-          className="group flex min-w-0 flex-1 items-start gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+          style={{ position: 'absolute', inset: 0 }}
+          className="tile-focus-link"
+        />
+        <div
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            padding: '12px 14px',
+            pointerEvents: 'none',
+          }}
         >
-          <span className="mt-0.5 shrink-0 rounded-md bg-surface p-2 text-primary">
-            <Icon className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-1.5">
-              <span className="truncate font-semibold text-text group-hover:text-primary">{service.name}</span>
-              {service.doc_only ? (
-                <BookOpen className="h-3.5 w-3.5 shrink-0 text-text-muted" aria-label="Nur Dokumentation" />
-              ) : (
-                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-text-muted opacity-0 group-hover:opacity-100" aria-hidden="true" />
-              )}
-            </span>
-            {subLabel && <span className="block truncate text-sm text-text-muted">{subLabel}</span>}
-          </span>
-        </a>
+          <div
+            aria-hidden="true"
+            style={{
+              width: 40, height: 40, borderRadius: 'var(--radius-md)', flexShrink: 0,
+              background: 'var(--surface-2)', display: 'grid', placeItems: 'center',
+              color: 'var(--text)',
+            }}
+          >
+            <Icon className="h-5 w-5" />
+          </div>
+
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em' }}>
+                {service.name}
+              </span>
+              {service.tag === 'beta' && <Badge variant="info">Beta</Badge>}
+              {service.tag === 'wartung' && <Badge variant="warning">Wartung</Badge>}
+              {docsOnly && <Badge variant="neutral">Dokumentation</Badge>}
+            </div>
+            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-muted)' }}>
+              {description}
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, pointerEvents: 'auto' }}>
+            {!docsOnly && service.doc_url && (
+              <a
+                href={service.doc_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Dokumentation"
+                onClick={(e) => e.stopPropagation()}
+                style={{ color: 'var(--text-muted)', display: 'inline-flex' }}
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
+              >
+                <FileText className="h-4 w-4" aria-hidden="true" />
+              </a>
+            )}
+            {starBtn}
+          </div>
+        </div>
       </div>
+    )
+  }
 
-      {/* Bottom zone = expand/collapse, never navigates. */}
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={regionId}
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-center gap-1.5 border-t border-surface px-4 py-2 text-sm text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"
+  // ── Desktop grid card ──────────────────────────────────────────────────────
+  return (
+    <div
+      className="tile-grid"
+      style={{
+        position: 'relative',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-md)',
+        height: '100%',
+        boxSizing: 'border-box',
+      }}
+    >
+      {/* Full-coverage launch link sits behind the content layer. */}
+      <a
+        href={launchHref}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={accessibleLabel}
+        onClick={() => onLaunch?.(service)}
+        style={{ position: 'absolute', inset: 0, borderRadius: 'var(--radius-md)' }}
+        className="tile-focus-link"
+      />
+
+      {/* Content — pointer-events:none lets clicks fall through to the link
+          except on the star and docs-link which re-enable them explicitly. */}
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 14,
+          padding: 20,
+          height: '100%',
+          boxSizing: 'border-box',
+          pointerEvents: 'none',
+        }}
       >
-        {open ? (
-          <>
-            <ChevronUp className="h-4 w-4" aria-hidden="true" /> Weniger Details
-          </>
-        ) : (
-          <>
-            <ChevronDown className="h-4 w-4" aria-hidden="true" /> Mehr Details
-          </>
-        )}
-      </button>
+        {/* Top row: icon chip + star */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+          <div
+            aria-hidden="true"
+            style={{
+              width: 44, height: 44, borderRadius: 'var(--radius-md)', flexShrink: 0,
+              background: 'var(--surface-2)', display: 'grid', placeItems: 'center',
+              color: 'var(--text)',
+            }}
+          >
+            <Icon className="h-[22px] w-[22px]" />
+          </div>
+          <div style={{ pointerEvents: 'auto', flexShrink: 0 }}>{starBtn}</div>
+        </div>
 
-      {open && (
-        <div id={regionId} className="border-t border-surface px-4 py-3 text-sm text-text">
-          {/* Wrap long German compounds rather than overflow (docs/03 §8). */}
-          <p className="hyphens-auto break-words" lang={locale}>
+        {/* Body: name + badge(s) + description */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em' }}>
+              {service.name}
+            </span>
+            {service.tag === 'beta' && <Badge variant="info">Beta</Badge>}
+            {service.tag === 'wartung' && <Badge variant="warning">Wartung</Badge>}
+            {docsOnly && <Badge variant="neutral">Dokumentation</Badge>}
+          </div>
+          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-muted)' }}>
             {description}
           </p>
-          {service.doc_url && !service.doc_only && (
-            <a
-              href={service.doc_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-flex items-center gap-1.5 text-primary hover:text-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-            >
-              <BookOpen className="h-4 w-4" aria-hidden="true" /> Dokumentation
-            </a>
+        </div>
+
+        {/* Footer: category label + docs link */}
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: 8, marginTop: 'auto',
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11, fontWeight: 600, letterSpacing: '.1em',
+              textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap',
+            }}
+          >
+            {categoryLabel}
+          </span>
+          {docsOnly ? (
+            <FileText className="h-[15px] w-[15px] shrink-0 text-text-muted" aria-hidden="true" />
+          ) : (
+            service.doc_url && (
+              <a
+                href={service.doc_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  pointerEvents: 'auto',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 12.5, fontWeight: 600,
+                  color: 'var(--text-muted)', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+                className="hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
+              >
+                <FileText className="h-[14px] w-[14px]" aria-hidden="true" />
+                Dokumentation
+              </a>
+            )
           )}
         </div>
-      )}
-    </Card>
+      </div>
+    </div>
   )
 }

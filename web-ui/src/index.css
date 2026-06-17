@@ -51,7 +51,40 @@ body {
   margin: 0;
   background-color: var(--bg);
   color: var(--text);
-  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-family: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+}
+
+/* Improved text-wrap for all paragraphs — matches reference. */
+p {
+  text-wrap: pretty;
+}
+
+/* Double-ring focus style matching the design reference. Applied to the full-coverage
+   launch links inside tile cards so the ring appears at the tile boundary. */
+.tile-focus-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--primary);
+}
+
+/* Editorial tile hover — border wash, 1px lift, accent bg tint. */
+.tile-grid {
+  transition: border-color .18s ease, transform .18s ease, background-color .18s ease;
+}
+.tile-grid:hover {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--accent) 7%, transparent) !important;
+}
+
+/* Mobile list-row hover — just the bg wash, no lift. */
+.tile-list-item {
+  transition: background-color .16s ease;
+}
+.tile-list-item:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent) !important;
 }
 
 /* Respect reduced-motion globally (docs/03 §8). */

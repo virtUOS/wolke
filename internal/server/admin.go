@@ -55,6 +55,7 @@ type serviceBody struct {
 	DocURL      string            `json:"doc_url"`
 	Icon        string            `json:"icon"`
 	Categories  []string          `json:"categories"`
+	Tag         string            `json:"tag"`
 }
 
 func (b serviceBody) draft() service.Draft {
@@ -65,6 +66,7 @@ func (b serviceBody) draft() service.Draft {
 		DocURL:      b.DocURL,
 		Icon:        b.Icon,
 		Categories:  b.Categories,
+		Tag:         b.Tag,
 	}
 }
 

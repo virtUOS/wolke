@@ -105,7 +105,7 @@ func Defaults() Config {
 			Admin: AdminMapping{Claim: "groups", Match: "dashboard-admins"},
 		},
 		Branding: Branding{
-			ProductName:   "IT Service",
+			ProductName:   "wolke",
 			OrgName:       "Universität Osnabrück",
 			LogoLight:     "/branding/logo-light.svg",
 			LogoDark:      "/branding/logo-dark.svg",

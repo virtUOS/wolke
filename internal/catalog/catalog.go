@@ -24,6 +24,7 @@ type Service struct {
 	Icon        string            `json:"icon"`
 	Categories  []string          `json:"categories"` // category slugs
 	DocOnly     bool              `json:"doc_only"`
+	Tag         string            `json:"tag,omitempty"` // "beta" | "wartung" | ""
 }
 
 // Category is the read model of a managed category.
@@ -103,6 +104,7 @@ func Load(ctx context.Context, db Store) (*Snapshot, error) {
 			Icon:        r.Icon,
 			Categories:  catsBySvc[id],
 			DocOnly:     !r.ServiceUrl.Valid || r.ServiceUrl.String == "",
+			Tag:         textStr(r.Tag),
 		}
 		if svc.Categories == nil {
 			svc.Categories = []string{}

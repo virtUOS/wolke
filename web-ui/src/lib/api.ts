@@ -3,6 +3,8 @@
 
 export type Localized = Record<string, string>
 
+export type ServiceTag = 'beta' | 'wartung'
+
 export interface Service {
   id: string
   name: string
@@ -12,6 +14,7 @@ export interface Service {
   icon: string
   categories: string[]
   doc_only: boolean
+  tag?: ServiceTag
 }
 
 export interface Category {
@@ -132,6 +135,7 @@ export interface AdminService {
   icon: string
   is_active: boolean
   categories: string[]
+  tag?: ServiceTag
 }
 
 export interface ServiceDraft {
@@ -141,6 +145,7 @@ export interface ServiceDraft {
   doc_url: string
   icon: string
   categories: string[]
+  tag: string
 }
 
 export type Severity = 'info' | 'warning' | 'critical'

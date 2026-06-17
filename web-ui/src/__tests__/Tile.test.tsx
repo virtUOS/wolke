@@ -30,7 +30,7 @@ const docOnly: Service = {
 }
 
 describe('Tile', () => {
-  it('top zone is a launch link opening the service in a new tab', () => {
+  it('tile is a launch link opening the service in a new tab', () => {
     render(<Tile service={service} categories={categories} locale="de" />)
     const link = screen.getByRole('link', { name: /MyShare/ })
     expect(link).toHaveAttribute('href', 'https://myshare.example.edu')
@@ -38,25 +38,18 @@ describe('Tile', () => {
     expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
   })
 
-  it('bottom zone toggles the description in place and never navigates', async () => {
-    const user = userEvent.setup()
+  it('description is always visible and documentation link is in the footer', () => {
     render(<Tile service={service} categories={categories} locale="de" />)
-    const expander = screen.getByRole('button', { name: /Mehr Details/ })
-    expect(expander).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByText('Persönlicher Netzspeicher.')).not.toBeInTheDocument()
-
-    await user.click(expander)
-    expect(screen.getByRole('button', { name: /Weniger Details/ })).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('Persönlicher Netzspeicher.')).toBeInTheDocument()
-    // The documentation link appears in the expanded region.
-    expect(screen.getByRole('link', { name: /Dokumentation/ })).toHaveAttribute('href', 'https://docs.example.edu/myshare')
+    const docsLink = screen.getByRole('link', { name: /Dokumentation/ })
+    expect(docsLink).toHaveAttribute('href', 'https://docs.example.edu/myshare')
   })
 
-  it('a doc-only entry launches its documentation and is marked informational', () => {
+  it('a doc-only entry launches its documentation and shows the Dokumentation badge', () => {
     render(<Tile service={docOnly} categories={categories} locale="de" />)
     const link = screen.getByRole('link', { name: /WLAN an der UOS/ })
     expect(link).toHaveAttribute('href', 'https://docs.example.edu/wifi')
-    expect(screen.getByLabelText('Nur Dokumentation')).toBeInTheDocument()
+    expect(screen.getByText('Dokumentation')).toBeInTheDocument()
   })
 
   it('shows the favorite star only when a handler is provided, with aria-pressed', async () => {
@@ -72,7 +65,7 @@ describe('Tile', () => {
     expect(onToggle).toHaveBeenCalledWith(service)
   })
 
-  it('fires onLaunch when the launch zone is activated', async () => {
+  it('fires onLaunch when the launch link is activated', async () => {
     const user = userEvent.setup()
     const onLaunch = vi.fn()
     render(<Tile service={service} categories={categories} locale="de" onLaunch={onLaunch} />)
