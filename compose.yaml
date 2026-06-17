@@ -1,7 +1,7 @@
-# End-to-end / staging stack: Caddy (TLS) → app → Postgres, with a one-shot
-# migrate step and an optional mock OIDC IdP (docs/04 §4). This is NOT the daily
-# loop — develop locally with `make run` + `make web-dev` (see README). Bring the
-# IdP up with `--profile idp`.
+# End-to-end / staging stack: Caddy (TLS) → app → Postgres, plus an optional mock
+# OIDC IdP (docs/04 §4). The app applies migrations itself on startup, so there's
+# no separate migrate step. This is NOT the daily loop — develop locally with
+# `make run` + `make web-dev` (see README). Bring the IdP up with `--profile idp`.
 #
 # Secrets fail closed: POSTGRES_PASSWORD and SESSION_SECRET must be set (in a
 # .env file next to this one, or the environment) or `compose up` aborts.
@@ -47,28 +47,6 @@ services:
       timeout: 3s
       retries: 10
 
-  # Forward-only migrations, run to completion before the app starts. Uses the
-  # tiny `migrate` image (goose + SQL only); ENTRYPOINT already sets `-dir`.
-  migrate:
-    build:
-      context: .
-      target: migrate
-    command:
-      - postgres
-      - postgres://wolke:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD (e.g. in .env)}@postgres:5432/wolke?sslmode=disable
-      - up
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - backend
-    restart: on-failure
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    read_only: true
-
   app:
     build:
       context: .
@@ -84,9 +62,11 @@ services:
       LOG_LEVEL: info
       # OIDC is wired in Phase 1; point it at the mock IdP then:
       # OIDC_ISSUER_URL: http://mock-oidc:8080/default
+    # The app applies migrations itself on startup (auto-migrate), so it only
+    # needs the database to be reachable.
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
     networks:
       - edge
       - backend
