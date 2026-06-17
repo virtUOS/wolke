@@ -28,5 +28,15 @@ where (starts_at is null or starts_at <= now())
   and (audience = 'all' or audience = @role)
 order by case severity when 'critical' then 0 when 'warning' then 1 else 2 end, created_at desc;
 
+-- name: ListAllActiveAnnouncements :many
+-- Active = within its time window, across ALL audiences. For the public,
+-- identity-less catalog MCP server, which has no user role to filter on and
+-- must not hide a maintenance notice addressed to a specific role.
+select *
+from announcements
+where (starts_at is null or starts_at <= now())
+  and (ends_at is null or ends_at > now())
+order by case severity when 'critical' then 0 when 'warning' then 1 else 2 end, created_at desc;
+
 -- name: AdminListAnnouncements :many
 select * from announcements order by created_at desc limit @lim;
