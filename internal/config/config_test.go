@@ -35,7 +35,7 @@ func TestDefaultsWhenNoFileNoEnv(t *testing.T) {
 	if cfg.PublicURL != "http://localhost:8080" {
 		t.Errorf("PublicURL = %q, want default", cfg.PublicURL)
 	}
-	if cfg.Branding.ProductName != "IT Service" {
+	if cfg.Branding.ProductName != "wolke" {
 		t.Errorf("ProductName = %q, want default UOS skin", cfg.Branding.ProductName)
 	}
 	if got := cfg.Branding.Theme.Light["primary"]; got != "#A6093D" {

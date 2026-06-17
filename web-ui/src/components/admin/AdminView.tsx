@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react'
 import type { Category } from '@/lib/api'
 import { useCatalog } from '@/lib/hooks'
 import { IconButton } from '@/components/ui/icon-button'
+import { PillButton } from '@/components/ui/pill-button'
 import { ServicesAdmin } from './ServicesAdmin'
 import { CategoriesAdmin } from './CategoriesAdmin'
 import { RoleDefaultsAdmin } from './RoleDefaultsAdmin'
@@ -26,32 +27,39 @@ export function AdminView({ locale, onExit }: { locale: string; onExit: () => vo
 
   return (
     <div>
-      <div className="mb-6 flex items-center gap-3">
-        <IconButton onClick={onExit} aria-label="Zurück zum Dashboard">
-          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-        </IconButton>
-        <h1 className="flex items-center gap-2 text-2xl font-bold">
-          <span aria-hidden="true" className="inline-block h-7 w-1.5 rounded bg-primary" />
-          Administration
-        </h1>
-      </div>
-
-      <nav aria-label="Admin-Bereiche" className="mb-6 flex flex-wrap gap-1 border-b border-surface">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setSection(t.key)}
-            aria-current={section === t.key ? 'page' : undefined}
-            className={
-              section === t.key
-                ? '-mb-px border-b-2 border-primary px-3 py-2 text-sm font-medium text-text'
-                : 'px-3 py-2 text-sm text-text-muted hover:text-text'
-            }
+      <header style={{ marginBottom: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          <IconButton onClick={onExit} aria-label="Zurück zum Dashboard">
+            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+          </IconButton>
+          <h1
+            style={{
+              margin: 0,
+              fontFamily: '"Newsreader", Georgia, serif',
+              fontWeight: 500,
+              fontSize: 32,
+              letterSpacing: '-0.015em',
+              lineHeight: 1.1,
+              color: 'var(--text)',
+            }}
           >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+            Administration
+          </h1>
+        </div>
+
+        <nav aria-label="Admin-Bereiche" style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {TABS.map((t) => (
+            <PillButton
+              key={t.key}
+              active={section === t.key}
+              aria-current={section === t.key ? 'page' : undefined}
+              onClick={() => setSection(t.key)}
+            >
+              {t.label}
+            </PillButton>
+          ))}
+        </nav>
+      </header>
 
       {section === 'services' && <ServicesAdmin categories={categories} locale={locale} />}
       {section === 'categories' && <CategoriesAdmin categories={categories} locale={locale} />}

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { localized, type Category } from '@/lib/api'
 import { useAdminActions } from '@/lib/admin-hooks'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 export function CategoriesAdmin({ categories, locale }: { categories: Category[]; locale: string }) {
   const actions = useAdminActions()
@@ -27,7 +29,7 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Kategorien</h2>
+      <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Kategorien</h2>
       <ul className="flex flex-wrap gap-2">
         {categories.map((c) => (
           <li key={c.slug} className="rounded-md border border-surface px-2 py-1 text-sm">
@@ -39,27 +41,21 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
       <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
         <label className="text-sm">
           <span className="mb-1 block font-medium">Slug</span>
-          <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="z. B. forschung" className={input} />
+          <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="z. B. forschung" className="w-40" />
         </label>
         <label className="text-sm">
           <span className="mb-1 block font-medium">Label (de)</span>
-          <input value={de} onChange={(e) => setDe(e.target.value)} className={input} />
+          <Input value={de} onChange={(e) => setDe(e.target.value)} className="w-40" />
         </label>
         <label className="text-sm">
           <span className="mb-1 block font-medium">Label (en)</span>
-          <input value={en} onChange={(e) => setEn(e.target.value)} className={input} />
+          <Input value={en} onChange={(e) => setEn(e.target.value)} className="w-40" />
         </label>
-        <button
-          type="submit"
-          disabled={slug.trim() === '' || de.trim() === ''}
-          className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-white hover:bg-primary-hover disabled:opacity-50"
-        >
+        <Button type="submit" size="sm" disabled={slug.trim() === '' || de.trim() === ''}>
           Kategorie anlegen
-        </button>
+        </Button>
       </form>
       {error && <p role="alert" className="text-sm text-text-muted">{error}</p>}
     </div>
   )
 }
-
-const input = 'h-9 w-40 rounded-md border border-surface bg-surface px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]'

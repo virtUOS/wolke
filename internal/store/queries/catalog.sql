@@ -2,7 +2,7 @@
 select id, slug, label, sort from categories order by sort, slug;
 
 -- name: ListActiveServices :many
-select id, name, description, service_url, doc_url, icon
+select id, name, description, service_url, doc_url, icon, tag
 from services
 where is_active = true
 order by name;

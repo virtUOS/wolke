@@ -32,7 +32,7 @@ oidc:
 # read from the mockups and are still TBD against the UOS Corporate Design
 # manual (concept §8.1).
 branding:
-  product_name: "IT Service"
+  product_name: "wolke"
   org_name: "Universität Osnabrück"
   logo_light: /branding/logo-light.svg
   logo_dark: /branding/logo-dark.svg

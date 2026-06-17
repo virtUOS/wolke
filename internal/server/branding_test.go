@@ -26,8 +26,8 @@ func TestBrandingReturnsDefaultSkin(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if b.ProductName != "IT Service" {
-		t.Errorf("product_name = %q, want IT Service", b.ProductName)
+	if b.ProductName != "wolke" {
+		t.Errorf("product_name = %q, want wolke", b.ProductName)
 	}
 	if got := b.Theme.Light["primary"]; got != "#A6093D" {
 		t.Errorf("theme.light.primary = %q, want #A6093D", got)

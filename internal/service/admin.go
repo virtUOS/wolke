@@ -42,6 +42,7 @@ type Draft struct {
 	DocURL      string
 	Icon        string
 	Categories  []string // category slugs
+	Tag         string   // "" | "beta" | "wartung"
 }
 
 // AdminService is the admin read model (includes is_active / soft-deleted).
@@ -54,6 +55,7 @@ type AdminService struct {
 	Icon        string            `json:"icon"`
 	IsActive    bool              `json:"is_active"`
 	Categories  []string          `json:"categories"`
+	Tag         string            `json:"tag,omitempty"`
 }
 
 var validRoles = map[string]bool{"student": true, "teacher": true, "staff": true}
@@ -81,6 +83,9 @@ func validateServiceInput(in Draft) error {
 	}
 	if len(in.Categories) == 0 {
 		return &ValidationError{Field: "categories", Msg: "at least one category is required"}
+	}
+	if in.Tag != "" && in.Tag != "beta" && in.Tag != "wartung" {
+		return &ValidationError{Field: "tag", Msg: `must be "", "beta", or "wartung"`}
 	}
 	return nil
 }
@@ -129,6 +134,7 @@ func CreateService(ctx context.Context, db AdminDB, actor Actor, in Draft) (Admi
 			ServiceUrl:  pgText(in.ServiceURL),
 			DocUrl:      pgText(in.DocURL),
 			Icon:        in.Icon,
+			Tag:         pgText(in.Tag),
 		})
 		if err != nil {
 			return fmt.Errorf("create service: %w", err)
@@ -169,6 +175,7 @@ func UpdateService(ctx context.Context, db AdminDB, actor Actor, id pgtype.UUID,
 			ServiceUrl:  pgText(in.ServiceURL),
 			DocUrl:      pgText(in.DocURL),
 			Icon:        in.Icon,
+			Tag:         pgText(in.Tag),
 		})
 		if err != nil {
 			return fmt.Errorf("update service: %w", err)
@@ -330,6 +337,7 @@ func toAdminService(s store.Service, slugs []string) AdminService {
 		Icon:        s.Icon,
 		IsActive:    s.IsActive,
 		Categories:  slugs,
+		Tag:         textVal(s.Tag),
 	}
 }
 

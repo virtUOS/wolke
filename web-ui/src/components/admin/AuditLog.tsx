@@ -9,7 +9,7 @@ export function AuditLog() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Audit-Log</h2>
+      <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Audit-Log</h2>
       {audit.isLoading ? (
         <p className="text-sm text-text-muted" aria-busy="true">Lädt…</p>
       ) : entries.length === 0 ? (

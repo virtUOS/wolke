@@ -76,7 +76,7 @@ func (q *Queries) ListActiveServiceCategories(ctx context.Context) ([]ListActive
 }
 
 const listActiveServices = `-- name: ListActiveServices :many
-select id, name, description, service_url, doc_url, icon
+select id, name, description, service_url, doc_url, icon, tag
 from services
 where is_active = true
 order by name
@@ -89,6 +89,7 @@ type ListActiveServicesRow struct {
 	ServiceUrl  pgtype.Text `json:"service_url"`
 	DocUrl      pgtype.Text `json:"doc_url"`
 	Icon        string      `json:"icon"`
+	Tag         pgtype.Text `json:"tag"`
 }
 
 func (q *Queries) ListActiveServices(ctx context.Context) ([]ListActiveServicesRow, error) {
@@ -107,6 +108,7 @@ func (q *Queries) ListActiveServices(ctx context.Context) ([]ListActiveServicesR
 			&i.ServiceUrl,
 			&i.DocUrl,
 			&i.Icon,
+			&i.Tag,
 		); err != nil {
 			return nil, err
 		}

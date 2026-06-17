@@ -10,5 +10,8 @@
   "runtimeFontPrefixes": ["Inter"],
   "overrides": {
     "Dialog": { "cardMode": "single", "viewport": "560x380" }
+  },
+  "libOverrides": {
+    "emit.mjs": "Scope bundled-CSS token scan to :root/.dark/[data-theme] (Fallback A) to exclude Tailwind compiler internals (--tw-*); write _adherence.oxlintrc.json with pre-classified tokenKinds for the server-side design-system check"
   }
 }

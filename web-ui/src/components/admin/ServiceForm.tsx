@@ -33,6 +33,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
   const [docUrl, setDocUrl] = useState(initial?.doc_url ?? '')
   const [icon, setIcon] = useState(initial?.icon ?? 'app-window')
   const [cats, setCats] = useState<Set<string>>(new Set(initial?.categories ?? []))
+  const [tag, setTag] = useState<string>(initial?.tag ?? '')
 
   const preview: Service = useMemo(
     () => ({
@@ -44,8 +45,9 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
       icon,
       categories: [...cats],
       doc_only: serviceUrl.trim() === '',
+      tag: (tag as Service['tag']) || undefined,
     }),
-    [name, descDe, descEn, serviceUrl, docUrl, icon, cats],
+    [name, descDe, descEn, serviceUrl, docUrl, icon, cats, tag],
   )
 
   const errors: string[] = []
@@ -78,6 +80,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
       doc_url: docUrl.trim(),
       icon,
       categories: [...cats],
+      tag,
     })
   }
 
@@ -107,6 +110,18 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
               <label key={c.slug} className={cn('cursor-pointer rounded-md border px-2 py-1 text-sm', cats.has(c.slug) ? 'border-primary bg-primary text-white' : 'border-border text-text-muted')}>
                 <input type="checkbox" className="sr-only" checked={cats.has(c.slug)} onChange={() => toggleCat(c.slug)} />
                 {localized(c.label, locale)}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className="mb-1 text-sm font-medium">Status-Label</legend>
+          <div className="flex flex-wrap gap-2">
+            {(['', 'beta', 'wartung'] as const).map((value) => (
+              <label key={value} className={cn('cursor-pointer rounded-md border px-2 py-1 text-sm', tag === value ? 'border-primary bg-primary text-white' : 'border-border text-text-muted')}>
+                <input type="radio" name="tag" className="sr-only" value={value} checked={tag === value} onChange={() => setTag(value)} />
+                {value === '' ? 'Keins' : value === 'beta' ? 'Beta' : 'Wartung'}
               </label>
             ))}
           </div>

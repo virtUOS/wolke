@@ -21,13 +21,8 @@ export function AnnouncementsAdmin() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Ankündigungen</h2>
-        <button
-          onClick={() => { setEditing(null); setShowForm(true) }}
-          className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-white hover:bg-primary-hover"
-        >
-          Neue Ankündigung
-        </button>
+        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>Ankündigungen</h2>
+        <Button size="sm" onClick={() => { setEditing(null); setShowForm(true) }}>Neue Ankündigung</Button>
       </div>
 
       {showForm && (
@@ -52,7 +47,7 @@ export function AnnouncementsAdmin() {
             <Badge variant={severityVariant(a.severity)}>{a.severity}</Badge>
             <span className="min-w-0 flex-1 truncate">{a.title.de}</span>
             <span className="text-xs text-text-muted">{a.audience}{a.ends_at ? ` · bis ${a.ends_at.slice(0, 16).replace('T', ' ')}` : ''}</span>
-            <button onClick={() => { setEditing(a); setShowForm(true) }} className="text-primary hover:text-primary-hover">Bearbeiten</button>
+            <Button variant="ghost" size="sm" onClick={() => { setEditing(a); setShowForm(true) }}>Bearbeiten</Button>
           </ListItem>
         ))}
         {(list.data?.announcements ?? []).length === 0 && <ListItem className="text-text-muted">Keine Ankündigungen.</ListItem>}

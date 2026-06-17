@@ -20,7 +20,7 @@ function renderSection(overrides: Partial<React.ComponentProps<typeof FavoritesS
     favorites: [myShare],
     categories,
     locale: 'de',
-    view: 'list',
+    layout: 'grid',
     actions: { favoritedIDs: new Set(['s1']), onToggleFavorite: vi.fn(), onLaunch: vi.fn() },
     ...overrides,
   }
