@@ -41,4 +41,26 @@ describe('Popover', () => {
     await userEvent.click(screen.getByText('outside'))
     expect(screen.queryByRole('dialog')).toBeNull()
   })
+
+  it('moves focus into the panel on open and traps Tab within it', async () => {
+    render(
+      <div>
+        <button>outside</button>
+        <Popover label="Einstellungen" icon={<Settings aria-hidden="true" />}>
+          <button>first</button>
+          <button>last</button>
+        </Popover>
+      </div>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Einstellungen' }))
+    const first = screen.getByRole('button', { name: 'first' })
+    const last = screen.getByRole('button', { name: 'last' })
+    // Focus lands on the first focusable inside the panel, not the trigger.
+    expect(document.activeElement).toBe(first)
+    // Tab from the last control wraps back to the first (trap), never escaping
+    // to the "outside" button.
+    last.focus()
+    await userEvent.tab()
+    expect(document.activeElement).toBe(first)
+  })
 })

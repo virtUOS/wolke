@@ -20,6 +20,7 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
     const initial = mode.kind === 'edit' ? mode.service : undefined
     return (
       <ServiceForm
+        key={initial?.id ?? 'new'}
         categories={categories}
         locale={locale}
         initial={initial}
