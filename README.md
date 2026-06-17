@@ -125,6 +125,44 @@ Put Caddy (or nginx) in front on port 443. `TRUSTED_PROXIES` must cover the prox
 
 ---
 
+## Metrics & monitoring
+
+The app exposes Prometheus metrics at `GET /metrics` on its own listener (`:8080`), in the standard Prometheus text format. The endpoint is mounted only when the metrics collector is wired (the default for the server binary).
+
+### What's exposed
+
+All series are prefixed `wolke_` (never an institution name), and labels are **aggregate only — never a user identifier**:
+
+| Metric | Type | Labels | Meaning |
+|--------|------|--------|---------|
+| `wolke_http_request_duration_seconds` | histogram | `route`, `method`, `code` | Request latency. `route` is the matched chi pattern, not the raw path, so cardinality stays bounded |
+| `wolke_service_clicks_total` | counter | `service`, `role` | Launch clicks per service and role (the usage-by-role signal) |
+| `wolke_active_sessions` | gauge | — | Currently valid server-side sessions |
+| `wolke_catalog_services` | gauge | `state` (`active` / `inactive`) | Catalog size by state |
+| `wolke_announcements_active` | gauge | `severity` | In-window announcements by severity |
+
+The histogram and click counter update in-process per request; the three gauges are refreshed from the database every 30s by a background worker. Metrics live on a **private registry**, so the endpoint exposes only these series — no default Go/process collectors.
+
+### How it's scraped
+
+Prometheus scrapes the app **directly on the internal network** (e.g. `app:8080/metrics` inside the Compose/cluster network); Grafana visualises it (a starter dashboard lives in `deploy/grafana/`).
+
+### Protecting `/metrics`
+
+`/metrics` must never be publicly reachable — and protection is by **topology**, not the application:
+
+1. **Caddy 404s it at the edge.** The public vhost returns 404 for `/metrics` (see `Caddyfile`), so it is invisible from the internet.
+2. **The app port is internal-only.** `:8080` is not published to the host; only Caddy and Prometheus reach it, over the internal network.
+
+In this setup you do **not** need an application-level secret — protecting at the reverse proxy + network boundary is the intended model. So `METRICS_TOKEN` is **optional**:
+
+- **Unset (default):** `/metrics` serves with no auth. Correct when the scrape path stays inside a trusted network.
+- **Set:** the endpoint additionally requires `Authorization: Bearer <token>` (constant-time compared). Reach for this only when the scrape path crosses a boundary you don't fully control — a shared/multi-tenant network, or cross-host scraping without mTLS.
+
+> The load-bearing invariant is that the app's `:8080` isn't reachable by untrusted parties. The Caddy 404 only covers the public vhost — it does **not** protect a direct hit on the app port. So if you ever publish `:8080` to the host or a shared LAN, set `METRICS_TOKEN` (or put mTLS in front of the scrape).
+
+---
+
 ## HTTP API
 
 All admin endpoints require an authenticated session (login via OIDC) belonging to an admin user. Regular catalog reads are available to any authenticated user.

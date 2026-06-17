@@ -271,17 +271,17 @@ stateless). Move to Redis only when you run multiple instances (see §9).
 
 ## 7. Metrics — Prometheus
 
-Expose `/metrics` (scrape-protected: internal network or bearer/mTLS — do not expose publicly).
+Expose `/metrics` on the app's own listener. **Do not expose it publicly** — protection is by topology: Caddy 404s `/metrics` at the public edge, and the app port stays on the internal network where Prometheus scrapes it directly. `METRICS_TOKEN` adds an optional bearer check for scrape paths that cross a trust boundary; it is unset by default. See README → "Metrics & monitoring".
 
-Core series:
+Core series (prefix `wolke_`; aggregate labels only):
 ```
-uos_service_clicks_total{service="MyShare", role="student"}   # counter
-uos_active_sessions                                            # gauge
-uos_http_request_duration_seconds{route,method,code}          # histogram
-uos_catalog_services{state="active|inactive"}                 # gauge
-uos_announcements_active{severity}                             # gauge
+wolke_service_clicks_total{service="MyShare", role="student"}   # counter
+wolke_active_sessions                                           # gauge
+wolke_http_request_duration_seconds{route,method,code}          # histogram
+wolke_catalog_services{state="active|inactive"}                 # gauge
+wolke_announcements_active{severity}                            # gauge
 ```
-`uos_service_clicks_total` is the usage-by-role requirement. It is fed from the same click
+`wolke_service_clicks_total` is the usage-by-role requirement. It is fed from the same click
 ingestion that powers "frequently used", incremented in-process and reconciled against
 `usage_daily` so a restart doesn't lose history. Ship a Grafana dashboard JSON alongside
 (doc 04 §maintenance). **Exported labels are aggregate only — never a user identifier.**
