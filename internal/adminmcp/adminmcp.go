@@ -231,6 +231,7 @@ func draftPreview(d service.Draft, active bool) service.AdminService {
 		Icon:        d.Icon,
 		IsActive:    active,
 		Categories:  cats,
+		Tag:         d.Tag,
 	}
 }
 
