@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
+import { focusFirst, trapTab } from '@/lib/focus'
 import { IconButton } from './icon-button'
 
 // Popover — an icon-triggered floating panel (hand-rolled, no Radix). Used for
@@ -26,10 +27,14 @@ export function Popover({ label, icon, children, align = 'end', panelClassName }
   const [open, setOpen] = React.useState(false)
   const rootRef = React.useRef<HTMLDivElement>(null)
   const triggerRef = React.useRef<HTMLButtonElement>(null)
+  const panelRef = React.useRef<HTMLDivElement>(null)
   const panelId = React.useId()
 
   React.useEffect(() => {
     if (!open) return
+    // role="dialog" promises focus containment: move focus into the panel on
+    // open and trap Tab within it (Escape/outside-click still dismiss).
+    focusFirst(panelRef.current)
     function onPointerDown(e: MouseEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
@@ -37,7 +42,9 @@ export function Popover({ label, icon, children, align = 'end', panelClassName }
       if (e.key === 'Escape') {
         setOpen(false)
         triggerRef.current?.focus()
+        return
       }
+      trapTab(e, panelRef.current)
     }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -63,10 +70,12 @@ export function Popover({ label, icon, children, align = 'end', panelClassName }
       {open && (
         <div
           id={panelId}
+          ref={panelRef}
           role="dialog"
           aria-label={label}
+          tabIndex={-1}
           className={cn(
-            'absolute z-20 mt-1 rounded-md border border-border bg-bg p-3 text-sm shadow-lg',
+            'absolute z-20 mt-1 rounded-md border border-border bg-bg p-3 text-sm shadow-lg focus:outline-none',
             align === 'end' ? 'right-0' : 'left-0',
             panelClassName,
           )}

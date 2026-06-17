@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { IconButton } from '@/components/ui/icon-button'
 import { PillButton } from '@/components/ui/pill-button'
+import { focusFirst, trapTab } from '@/lib/focus'
 
 export type Tab = 'favoriten' | 'dienste'
 
@@ -63,19 +64,20 @@ export function TopBar({
         </div>
 
         {/* Tabs */}
+        {/* View switcher. These are nav controls, not an ARIA tablist (there's no
+            tabpanel/arrow-key model behind them), so they signal state with
+            aria-current — consistent with the admin nav. */}
         <nav aria-label="Hauptnavigation" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
           <PillButton
-            role="tab"
             active={tab === 'favoriten'}
-            aria-selected={tab === 'favoriten'}
+            aria-current={tab === 'favoriten' ? 'page' : undefined}
             onClick={() => onTab('favoriten')}
           >
             Favoriten
           </PillButton>
           <PillButton
-            role="tab"
             active={tab === 'dienste'}
-            aria-selected={tab === 'dienste'}
+            aria-current={tab === 'dienste' ? 'page' : undefined}
             onClick={() => onTab('dienste')}
           >
             Dienste
@@ -123,15 +125,20 @@ function AccountMenu({ initials, name, email, isAdmin, onAdmin, onLogout }: Acco
   const [confirmLogout, setConfirmLogout] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const panelId = useId()
 
   useEffect(() => {
     if (!open) return
+    // role="dialog" promises focus containment: move focus into the panel on
+    // open and trap Tab within it (Escape/outside-click still dismiss).
+    focusFirst(panelRef.current)
     function onPointerDown(e: MouseEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') { setOpen(false); triggerRef.current?.focus() }
+      if (e.key === 'Escape') { setOpen(false); triggerRef.current?.focus(); return }
+      trapTab(e, panelRef.current)
     }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -174,8 +181,10 @@ function AccountMenu({ initials, name, email, isAdmin, onAdmin, onLogout }: Acco
       {open && (
         <div
           id={panelId}
+          ref={panelRef}
           role="dialog"
           aria-label="Konto"
+          tabIndex={-1}
           style={{
             position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 20,
             width: 244,

@@ -63,10 +63,27 @@ export class ApiError extends Error {
   }
 }
 
+// errorFromResponse builds an ApiError, preferring the server's problem+json
+// `detail` (RFC-7807; see internal/server writeProblem) so validation messages
+// reach the UI instead of a bare status code. Falls back to the status line when
+// the body is missing or not JSON.
+async function errorFromResponse(res: Response, fallback: string): Promise<ApiError> {
+  try {
+    const data = await res.json()
+    const msg = data?.detail ?? data?.message ?? data?.error
+    if (typeof msg === 'string' && msg.trim() !== '') {
+      return new ApiError(res.status, msg)
+    }
+  } catch {
+    // Empty or non-JSON body — fall through to the generic message.
+  }
+  return new ApiError(res.status, fallback)
+}
+
 async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal, headers: { Accept: 'application/json' } })
   if (!res.ok) {
-    throw new ApiError(res.status, `GET ${url} → ${res.status}`)
+    throw await errorFromResponse(res, `GET ${url} → ${res.status}`)
   }
   return (await res.json()) as T
 }
@@ -78,7 +95,7 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<T> 
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   if (!res.ok) {
-    throw new ApiError(res.status, `${method} ${url} → ${res.status}`)
+    throw await errorFromResponse(res, `${method} ${url} → ${res.status}`)
   }
   return (res.status === 204 ? undefined : await res.json()) as T
 }

@@ -27,6 +27,7 @@ export function AnnouncementsAdmin() {
 
       {showForm && (
         <AnnouncementForm
+          key={editing?.id ?? 'new'}
           initial={editing}
           submitting={actions.createAnnouncement.isPending || actions.updateAnnouncement.isPending}
           onCancel={() => setShowForm(false)}
@@ -46,7 +47,7 @@ export function AnnouncementsAdmin() {
           <ListItem key={a.id}>
             <Badge variant={severityVariant(a.severity)}>{a.severity}</Badge>
             <span className="min-w-0 flex-1 truncate">{a.title.de}</span>
-            <span className="text-xs text-text-muted">{a.audience}{a.ends_at ? ` · bis ${a.ends_at.slice(0, 16).replace('T', ' ')}` : ''}</span>
+            <span className="text-xs text-text-muted">{a.audience}{a.ends_at ? ` · bis ${isoToLocalInput(a.ends_at).replace('T', ' ')}` : ''}</span>
             <Button variant="ghost" size="sm" onClick={() => { setEditing(a); setShowForm(true) }}>Bearbeiten</Button>
           </ListItem>
         ))}
@@ -64,6 +65,15 @@ function severityVariant(s: Severity): BadgeProps['variant'] {
   return 'info'
 }
 
+// A <input type="datetime-local"> works in local wall-clock, but the API stores
+// UTC ISO. Convert UTC→local here so the value shown matches what the user set,
+// and so an edit round-trips through new Date(value).toISOString() without
+// shifting by the browser's UTC offset on every save.
+function isoToLocalInput(iso: string): string {
+  const d = new Date(iso)
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+}
+
 function AnnouncementForm({
   initial,
   onSubmit,
@@ -79,7 +89,7 @@ function AnnouncementForm({
   const [bodyDe, setBodyDe] = useState(initial?.body.de ?? '')
   const [severity, setSeverity] = useState<Severity>(initial?.severity ?? 'info')
   const [audience, setAudience] = useState<Audience>(initial?.audience ?? 'all')
-  const [endsAt, setEndsAt] = useState(initial?.ends_at?.slice(0, 16) ?? '') // datetime-local
+  const [endsAt, setEndsAt] = useState(initial?.ends_at ? isoToLocalInput(initial.ends_at) : '') // datetime-local (local wall-clock)
   const [dismissible, setDismissible] = useState(initial?.dismissible ?? true)
 
   const valid = titleDe.trim() !== '' && bodyDe.trim() !== ''
@@ -90,8 +100,10 @@ function AnnouncementForm({
         e.preventDefault()
         if (!valid) return
         onSubmit({
-          title: { de: titleDe.trim() },
-          body: { de: bodyDe.trim() },
+          // Preserve any non-de locales (e.g. en) the announcement already has;
+          // the form only edits de but must not delete the rest (CLAUDE.md i18n).
+          title: { ...initial?.title, de: titleDe.trim() },
+          body: { ...initial?.body, de: bodyDe.trim() },
           severity,
           audience,
           ends_at: endsAt ? new Date(endsAt).toISOString() : null,
