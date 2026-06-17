@@ -36,6 +36,23 @@ func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
+// maxRequestBytes caps a request body to blunt memory-exhaustion: a single
+// client must not be able to stream an unbounded body into a JSON decoder. 1 MiB
+// is far above any legitimate catalog/announcement payload; an oversized body
+// surfaces through the handler's normal decode error (400).
+const maxRequestBytes = 1 << 20 // 1 MiB
+
+// limitRequestBody wraps the body in http.MaxBytesReader so reads stop at
+// maxRequestBytes regardless of how a downstream handler consumes it.
+func limitRequestBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBytes)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // recoverer turns a panic in any downstream handler into a 500 and a logged
 // error rather than a crashed process (CLAUDE.md: no panics escape handlers).
 func recoverer(log *slog.Logger) func(http.Handler) http.Handler {
