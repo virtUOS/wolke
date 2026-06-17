@@ -20,6 +20,7 @@ interface FieldProps {
     id?: string
     'aria-invalid'?: boolean
     'aria-describedby'?: string
+    'aria-required'?: boolean
   }>
 }
 
@@ -39,6 +40,7 @@ export function Field({ label, error, hint, required, className, children }: Fie
     id,
     'aria-invalid': error ? true : children.props['aria-invalid'],
     'aria-describedby': describedBy,
+    'aria-required': required ? true : children.props['aria-required'],
   })
 
   return (

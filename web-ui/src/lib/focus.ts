@@ -25,10 +25,16 @@ export function trapTab(e: KeyboardEvent, container: HTMLElement | null) {
   }
   const first = items[0]
   const last = items[items.length - 1]
-  if (e.shiftKey && document.activeElement === first) {
+  const active = document.activeElement as HTMLElement | null
+  // Focus sits on the container itself (the tabIndex=-1 fallback) or otherwise
+  // outside the trapped set — pull it back in rather than letting Tab escape.
+  if (!active || !items.includes(active)) {
+    e.preventDefault()
+    ;(e.shiftKey ? last : first).focus()
+  } else if (e.shiftKey && active === first) {
     e.preventDefault()
     last.focus()
-  } else if (!e.shiftKey && document.activeElement === last) {
+  } else if (!e.shiftKey && active === last) {
     e.preventDefault()
     first.focus()
   }

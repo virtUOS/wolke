@@ -4,13 +4,15 @@ import { focusFirst, trapTab } from '@/lib/focus'
 import { IconButton } from './icon-button'
 
 // Popover — an icon-triggered floating panel (hand-rolled, no Radix). Used for
-// the settings panel and other "click a control, get a small panel" cases. It is
-// a Popover, not a DropdownMenu: its panels hold form controls, so it carries
-// role="dialog" (a menu/menuitem pattern would be wrong here). Implements the
-// behaviours a Radix Popover gives — outside-click and Escape to dismiss, focus
-// returned to the trigger, aria-haspopup/expanded/controls wiring — so it can be
-// swapped to one later without changing callers. A true actions menu can layer a
-// menu role on this foundation when one is actually needed.
+// "click a control, get a small panel" cases whose panels hold form controls, so
+// it carries role="dialog" (a menu/menuitem pattern would be wrong here).
+//
+// It is a NON-MODAL, focus-managed disclosure: focus moves into the panel on
+// open and Tab is trapped within it (focus.ts), Escape returns focus to the
+// trigger, outside-click dismisses, and aria-haspopup/expanded/controls are
+// wired. It does NOT make the rest of the page inert (no aria-modal / inert) —
+// appropriate for a small settings panel, not a blocking modal; use Dialog for
+// content that must own the whole screen.
 interface PopoverProps {
   /** Accessible name for the icon trigger and the panel. */
   label: string

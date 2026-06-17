@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Settings, Star } from 'lucide-react'
 import { expectNoAxeViolations } from '@/test/axe'
@@ -133,15 +133,21 @@ describe('a11y (axe) — UI primitives', () => {
 })
 
 describe('a11y (axe) — prop-driven views', () => {
-  it('Greeting', async () => {
+  it('Greeting renders the salutation as the page h1', async () => {
     const { baseElement } = render(
       <Greeting firstName="Tim" locale="de" isMobile={false} favCount={3} maintenanceCount={2} onShowMaintenance={() => {}} />,
     )
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Tim')
     await a11y(baseElement)
   })
 
-  it('CatalogView (grid with a service)', async () => {
+  it('CatalogView (grid) — tile link name carries status + new-tab', async () => {
     const { baseElement } = render(<CatalogView services={[SERVICE]} categories={CATS} locale="de" layout="grid" />)
+    // The maintenance status and new-tab warning must be in the link's name, not
+    // conveyed by the badge colour alone.
+    const link = screen.getByRole('link', { name: /VPN/ })
+    expect(link).toHaveAccessibleName(/in Wartung/)
+    expect(link).toHaveAccessibleName(/neuem Tab/)
     await a11y(baseElement)
   })
 

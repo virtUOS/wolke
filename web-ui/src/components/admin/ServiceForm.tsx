@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { localized, type AdminService, type Category, type Service, type ServiceDraft, type ServiceTag } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { iconByName, iconNames } from '@/lib/icons'
@@ -28,6 +28,13 @@ const httpURL = (s: string) => /^https?:\/\/.+/.test(s)
 // server re-validates authoritatively; this gives immediate feedback.
 export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, submitting, error }: ServiceFormProps) {
   const s = t(locale)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const errId = useId()
+  // Move focus to the form heading when it opens, so a keyboard/SR user lands in
+  // the form (which replaces the list) instead of being left on a removed button.
+  useEffect(() => {
+    headingRef.current?.focus()
+  }, [])
   const [name, setName] = useState(initial?.name ?? '')
   const [descDe, setDescDe] = useState(initial?.description.de ?? '')
   const [descEn, setDescEn] = useState(initial?.description.en ?? '')
@@ -88,11 +95,18 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
 
   return (
     <form onSubmit={submit} className="grid gap-6 md:grid-cols-2">
+      <h3
+        ref={headingRef}
+        tabIndex={-1}
+        className="text-base font-semibold md:col-span-2 focus:outline-none"
+      >
+        {s.admin.serviceForm(!!initial)}
+      </h3>
       <div className="space-y-4">
-        <Field label={s.admin.fName}>
+        <Field label={s.admin.fName} required>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field label={s.admin.fDescDe}>
+        <Field label={s.admin.fDescDe} required>
           <Textarea value={descDe} onChange={(e) => setDescDe(e.target.value)} rows={2} />
         </Field>
         <Field label={s.admin.fDescEn}>
@@ -160,11 +174,14 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
         </div>
 
         {!valid && (
-          <ul className="rounded-md border border-border p-3 text-sm text-text-muted">
-            {errors.map((e) => (
-              <li key={e}>• {e}</li>
-            ))}
-          </ul>
+          <div role="alert" id={errId} className="rounded-md border border-danger p-3 text-sm text-danger">
+            <p className="font-medium">{s.admin.errorSummary}</p>
+            <ul className="mt-1 list-disc pl-5">
+              {errors.map((e) => (
+                <li key={e}>{e}</li>
+              ))}
+            </ul>
+          </div>
         )}
         {error && (
           <Alert variant="danger" role="alert">
@@ -173,7 +190,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
         )}
 
         <div className="flex gap-2">
-          <Button type="submit" disabled={!valid || submitting}>
+          <Button type="submit" disabled={!valid || submitting} aria-describedby={!valid ? errId : undefined}>
             {initial ? s.common.save : s.admin.create}
           </Button>
           <Button type="button" variant="outline" onClick={onCancel}>

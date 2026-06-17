@@ -141,6 +141,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     onToggleTheme: () => prefs.mutate({ theme: isDark ? 'light' : 'dark' }),
     onAdmin: () => setAdminOpen(true),
     isMobile,
+    focusKey: adminOpen ? 'admin' : 'dashboard',
   }
 
   if (adminOpen && me.is_admin) {
@@ -235,6 +236,13 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         </div>
       )}
 
+      {/* Polite live region: announces the result count to screen-reader users
+          when a search/filter/tab change alters what's shown (it stays silent on
+          first render). */}
+      <div aria-live="polite" className="sr-only">
+        {tr.dash.resultCount(tab === 'favoriten' ? filteredFavorites.length : diensteServices.length)}
+      </div>
+
       {/* Tab content */}
       {tab === 'favoriten' ? (
         <CatalogView
@@ -246,7 +254,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           emptyMessage={query ? tr.dash.searchEmpty(query) : tr.dash.favEmpty}
         />
       ) : catalog.isLoading ? (
-        <p style={{ fontSize: 14, color: 'var(--text-muted)' }} aria-busy="true">{tr.common.loading}</p>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)' }} role="status" aria-busy="true">{tr.common.loading}</p>
       ) : (
         <CatalogView
           services={diensteServices}

@@ -237,7 +237,7 @@ function AccountMenu({ locale, initials, name, email, isAdmin, onAdmin, onLogout
             type="button"
             style={itemStyle}
             className="hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-            onClick={() => setConfirmLogout(true)}
+            onClick={() => { setOpen(false); setConfirmLogout(true) }}
           >
             <LogOut className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
             <span style={{ flex: 1 }}>{s.topbar.logout}</span>
@@ -250,6 +250,7 @@ function AccountMenu({ locale, initials, name, email, isAdmin, onAdmin, onLogout
         onOpenChange={setConfirmLogout}
         title={s.topbar.logoutTitle}
         description={s.topbar.logoutDesc}
+        closeLabel={s.common.close}
         footer={
           <>
             <Button variant="outline" onClick={() => setConfirmLogout(false)}>{s.common.cancel}</Button>

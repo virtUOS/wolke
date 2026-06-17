@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Announcement, AnnouncementInput, Audience, Severity } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { useAdminActions, useAdminAnnouncements } from '@/lib/admin-hooks'
@@ -22,10 +22,18 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
   const [showForm, setShowForm] = useState(false)
   const [formError, setFormError] = useState<string | undefined>()
 
+  // Return focus to the heading when the form closes (else it's lost to <body>).
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const prevShow = useRef(showForm)
+  useEffect(() => {
+    if (prevShow.current && !showForm) headingRef.current?.focus()
+    prevShow.current = showForm
+  }, [showForm])
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.announcementsHeading}</h2>
+        <h2 ref={headingRef} tabIndex={-1} className="focus:outline-none" style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.announcementsHeading}</h2>
         <Button size="sm" onClick={() => { setEditing(null); setFormError(undefined); setShowForm(true) }}>{s.admin.newAnnouncement}</Button>
       </div>
 
@@ -99,6 +107,10 @@ function AnnouncementForm({
   error?: string
 }) {
   const s = t(locale)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    headingRef.current?.focus()
+  }, [])
   const [titleDe, setTitleDe] = useState(initial?.title.de ?? '')
   const [bodyDe, setBodyDe] = useState(initial?.body.de ?? '')
   const [severity, setSeverity] = useState<Severity>(initial?.severity ?? 'info')
@@ -126,10 +138,13 @@ function AnnouncementForm({
       }}
       className="space-y-3 rounded-md border border-border p-4"
     >
-      <Field label={s.admin.fTitleDe}>
+      <h3 ref={headingRef} tabIndex={-1} className="text-base font-semibold focus:outline-none">
+        {s.admin.announcementForm(!!initial)}
+      </h3>
+      <Field label={s.admin.fTitleDe} required>
         <Input value={titleDe} onChange={(e) => setTitleDe(e.target.value)} />
       </Field>
-      <Field label={s.admin.fTextDe}>
+      <Field label={s.admin.fTextDe} required>
         <Textarea value={bodyDe} onChange={(e) => setBodyDe(e.target.value)} rows={2} />
       </Field>
       <div className="flex flex-wrap gap-3">

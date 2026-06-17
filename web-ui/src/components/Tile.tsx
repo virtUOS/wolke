@@ -39,7 +39,9 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
   const primaryCategory = categories.find((c) => c.slug === service.categories[0])
   const categoryLabel = primaryCategory ? localized(primaryCategory.label, locale) : ''
   const description = localized(service.description, locale)
-  const accessibleLabel = s.tile.open(service.name, docsOnly)
+  // The link's accessible name carries everything a sighted user sees: the
+  // status badge (Beta/Wartung) and a new-tab warning, not just the name.
+  const accessibleLabel = s.tile.open(service.name, docsOnly) + s.tile.status(service.tag) + s.tile.newTab
 
   const starBtn = onToggleFavorite ? (
     <IconButton
@@ -111,7 +113,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
                 href={service.doc_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={s.tile.docs}
+                aria-label={s.tile.docs + s.tile.newTab}
                 onClick={(e) => e.stopPropagation()}
                 style={{ color: 'var(--text-muted)', display: 'inline-flex' }}
                 className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
@@ -216,6 +218,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
                 href={service.doc_url}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={s.tile.docs + s.tile.newTab}
                 onClick={(e) => e.stopPropagation()}
                 style={{
                   pointerEvents: 'auto',

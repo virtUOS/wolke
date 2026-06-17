@@ -21,10 +21,12 @@ interface DialogProps {
   children?: React.ReactNode
   /** Footer actions (buttons), right-aligned below the body. */
   footer?: React.ReactNode
+  /** Accessible name for the close (X) button; pass a localized string. */
+  closeLabel?: string
   className?: string
 }
 
-export function Dialog({ open, onOpenChange, title, description, children, footer, className }: DialogProps) {
+export function Dialog({ open, onOpenChange, title, description, children, footer, closeLabel, className }: DialogProps) {
   const contentRef = React.useRef<HTMLDivElement>(null)
   const titleId = React.useId()
   const descId = React.useId()
@@ -98,7 +100,7 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
               </p>
             )}
           </div>
-          <IconButton aria-label="Schließen" size="sm" onClick={() => onOpenChange(false)}>
+          <IconButton aria-label={closeLabel ?? 'Schließen'} size="sm" onClick={() => onOpenChange(false)}>
             <X className="h-4 w-4" aria-hidden="true" />
           </IconButton>
         </div>
