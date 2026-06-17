@@ -1,174 +1,251 @@
-# wolke — Planning Package
+# wolke
 
-> Working title. A personalized, authenticated portal that gets every member of the
-> university to the right IT service (or its documentation) in as few taps as possible.
-> Think *Homer*, but multi-tenant by role, branded, searchable, and admin-managed.
+A role-aware IT service launcher for universities. Staff, teachers, and students each land on a dashboard pre-arranged for their kind of work — they can search the full service catalog, pin favorites, and stay informed through announcements. Admins curate the catalog and default views through a form UI or an MCP server.
 
-This folder is the **product concept and development plan**, written to be handed to
-Claude Code as the source of truth. Read the docs in order; each builds on the last.
+Built as a Go modular monolith with an embedded React/TypeScript SPA, PostgreSQL, and generic OIDC authentication. Designed to be reused: all branding, OIDC claim mapping, and the product name are runtime config — no institution is hardcoded.
 
-## Documents
+---
 
-| File | What it covers |
-|------|----------------|
-| [`docs/01-product-concept.md`](docs/01-product-concept.md) | Vision, users, the core UX, every feature resolved into concrete behaviour, and the open decisions you still need to make. |
-| [`docs/02-technical-spec.md`](docs/02-technical-spec.md) | Recommended stack (and why), architecture, data model, REST API, auth, caching, metrics, and the admin MCP server. |
-| [`docs/03-design-system.md`](docs/03-design-system.md) | Design language, UOS color tokens, typography, the signature tile component, dark/light mode, and accessibility floor. |
-| [`docs/04-development-plan.md`](docs/04-development-plan.md) | Phased roadmap, how to drive each phase with Claude Code, testing strategy, deployment, and maintenance/ops. |
-| [`CLAUDE.md`](CLAUDE.md) | Standing instructions for Claude Code: conventions, guardrails, definition of done. Drop this at the repo root. |
+## Local development
 
-## TL;DR of the recommendation
-
-- **Backend:** Go modular monolith — `net/http` (chi router), PostgreSQL via `pgx`+`sqlc`,
-  generic OIDC via `coreos/go-oidc`, metrics via `prometheus/client_golang`. One binary.
-- **Frontend:** React + TypeScript + Vite + Tailwind + shadcn/ui + `lucide-react`,
-  built and **embedded into the Go binary** (`embed.FS`). One app image.
-- **Auth:** **provider-agnostic OIDC** (discovery-based; Keycloak/Authentik/Zitadel/Auth0/…) using
-  the **BFF pattern** — the Go server runs the code flow and issues an httpOnly session cookie; the
-  SPA never touches tokens. Role + admin come from a **configurable claim mapping**, not hardcoded.
-- **Reusable as open source:** OIDC, **branding (colors + logo + name)**, and locale are all runtime
-  config — a fork re-skins and re-points by editing files and restarting, no recompile.
-- **Admin:** a web form **and** a separate MCP server exposing `service.*` tools with a mandatory
-  **preview → confirm** step before any write.
-- **Deployment:** **Docker Compose behind a Caddy reverse proxy** (TLS at Caddy; app is proxy-aware).
-  Daily development runs locally **without Docker** for a fast loop.
-- **Scale:** 2–3k concurrent, read-heavy. A single instance with an in-process catalog cache
-  handles it. Redis only enters the picture if you run multiple instances.
-
-## Local development (no Docker)
-
-Login is always required, so a working setup needs the database **and** an IdP:
-the authenticated endpoints (`/api/me`, `/api/catalog`, …) only exist when OIDC is
-configured — otherwise the SPA can't load. `.env.example` points OIDC at the local
-mock from `make idp`. Requires Go 1.26, Node 24, and podman.
-
-One-time setup:
+The primary dev loop runs without Docker. You'll need **Go 1.26+**, **Node 24+**, and **Podman** (or Docker — just swap `podman` for `docker` in the Makefile).
 
 ```bash
-cp .env.example .env            # OIDC already points at the make idp mock
-make idp                        # mock IdP on :8455 (auto-issues a student+admin)
-make db && make migrate && make seed
+# 1. Copy the environment template and fill in any secrets
+cp .env.example .env
+
+# 2. Start a local Postgres 17 container
+make db
+
+# 3. Start the mock OIDC identity provider (needed for login)
+make idp
+
+# 4. Apply all migrations
+make migrate
+
+# 5. (Optional) seed the catalog with example services
+make seed
+
+# 6. Install frontend dependencies
 make web-install
 ```
 
-**Quickest way to see it running** — the embedded single-origin build:
+Then run the Go server and the Vite dev server in two separate terminals:
 
 ```bash
-make serve                      # builds the SPA into the binary, loads .env, runs it
-# open PUBLIC_URL (http://127.0.0.1:8080); you're auto-logged-in via the mock
+# Terminal A — Go API on :8080
+make run
+
+# Terminal B — Vite on :5173, proxying /api/* to :8080
+make web-dev
 ```
 
-**Active development (HMR)** — Go API + Vite, two terminals. Vite is pinned to
-`:5180`, so set `PUBLIC_URL=http://localhost:5180` in `.env` first (the login
-round-trip must return to the Vite origin, not `:8080`):
+Open **http://localhost:5173** in your browser. The mock IdP lets you log in with any username; set `is_admin: true` in `dev/mock-oidc-config.json` to test admin features.
+
+> **Note:** after any schema change (`migrations/` gets a new file), run `make migrate` before restarting the server.
+
+### Other useful targets
+
+```
+make test         Run Go tests with the race detector
+make lint         Run golangci-lint
+make web-check    Frontend typecheck + lint + tests
+make check        Run the full local gate (Go + frontend combined)
+make migrate-down Roll back the last migration
+make sqlc         Regenerate type-safe queries from SQL (after editing *.sql)
+make build        Build a single binary with the SPA embedded → bin/server
+make mcp          Build the admin MCP server → bin/mcp
+make clean        Remove build artifacts
+```
+
+---
+
+## Deployment (Docker Compose)
+
+The Dockerfile produces a three-stage build: Node builds the SPA, Go embeds it and builds a static binary, and the final image is a small distroless runtime.
+
+A minimal `docker-compose.yml`:
+
+```yaml
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: wolke
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: wolke
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  migrate:
+    build: .
+    entrypoint: ["/goose", "-dir", "/migrations", "postgres", "${DATABASE_URL}", "up"]
+    volumes:
+      - ./migrations:/migrations
+    depends_on: [db]
+    restart: on-failure
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://wolke:changeme@db:5432/wolke?sslmode=disable
+      PUBLIC_URL: https://wolke.example.edu
+      SESSION_SECRET: "replace-with-openssl-rand-base64-32"
+      OIDC_ISSUER_URL: https://your-idp.example.edu/realms/uni
+      OIDC_CLIENT_ID: wolke
+      OIDC_CLIENT_SECRET: "your-client-secret"
+      TRUSTED_PROXIES: "10.0.0.0/8"
+      CONFIG_FILE: /config.yaml
+      BRANDING_DIR: /branding
+    volumes:
+      - ./branding:/branding:ro
+      - ./config.yaml:/config.yaml:ro
+    depends_on: [migrate]
+
+volumes:
+  pgdata:
+```
+
+Put Caddy (or nginx) in front on port 443. `TRUSTED_PROXIES` should cover Caddy's network so `X-Forwarded-For` is trusted.
+
+**Branding and OIDC claim mapping** live in `config.yaml` (copy from `config.example.yaml`). This is the one file you edit to reskin for a different institution — colors, logo paths, product name, and which OIDC claim maps to which role.
+
+**Migrations run automatically** via the `migrate` service on every deploy. They are forward-only (goose); rolling back requires an explicit `make migrate-down` in dev.
+
+---
+
+## HTTP API
+
+All admin endpoints require an authenticated session (login via OIDC) belonging to an admin user. Regular catalog reads are available to any authenticated user.
+
+### Catalog (authenticated)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/me` | Current user profile and preferences |
+| `GET` | `/api/catalog` | All active services and categories |
+| `GET` | `/api/catalog/defaults` | Role-ordered default view for the current user |
+| `GET` | `/api/search?q=…` | Full-text search across the catalog |
+| `GET` | `/api/favorites` | Current user's favorited services |
+| `POST` | `/api/favorites/items` | Add a favorite `{ "service_id": "…" }` |
+| `DELETE` | `/api/favorites/items` | Remove a favorite `{ "service_id": "…" }` |
+| `GET` | `/api/announcements` | Active announcements for the current user |
+| `PATCH` | `/api/me/prefs` | Update preferences (theme, view mode, …) |
+| `POST` | `/api/events/click` | Record a service launch (fire-and-forget) |
+
+### Admin (admin users only)
+
+Writes happen immediately — no staging step. Every write is audit-logged with `actor_kind = "form"`.
+
+**Services**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/admin/services` | List all services including inactive |
+| `POST` | `/api/admin/services` | Create a service |
+| `PATCH` | `/api/admin/services/{id}` | Update a service |
+| `DELETE` | `/api/admin/services/{id}` | Soft-delete a service |
+
+Service body (create/update):
+
+```json
+{
+  "name": "VPN",
+  "description": {
+    "de": "Sicherer Zugang zum Hochschulnetz.",
+    "en": "Secure access to the university network."
+  },
+  "service_url": "https://vpn.example.edu",
+  "doc_url": "https://docs.example.edu/vpn",
+  "icon": "shield",
+  "categories": ["netzwerk"],
+  "tag": "wartung"
+}
+```
+
+`tag` is optional — `"beta"` shows a blue badge, `"wartung"` shows an amber badge on the tile. Omit or set to `""` for no badge.
+
+**Categories, announcements, role defaults**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/admin/categories` | Create a category |
+| `GET` | `/api/admin/announcements` | List all announcements |
+| `POST` | `/api/admin/announcements` | Create an announcement |
+| `PATCH` | `/api/admin/announcements/{id}` | Update an announcement |
+| `GET` | `/api/admin/role-defaults/{role}` | Get default service order for a role |
+| `PUT` | `/api/admin/role-defaults/{role}` | Replace default order `{ "service_ids": ["…"] }` |
+| `GET` | `/api/admin/audit` | Audit log (last 100 entries; `?limit=N` up to 500) |
+
+---
+
+## Admin MCP server
+
+The MCP server gives Claude (or any MCP client) access to the same admin operations as the HTTP API, with one important difference: **writes are staged**. A `propose_*` call validates the change and returns a preview — no data is written. Only `change.confirm` with the returned token actually commits. Tokens expire after 10 minutes and are single-use.
+
+Every confirmed write is audit-logged with `actor_kind = "mcp"`, distinct from form writes.
+
+### Setup
+
+The admin user must have logged into the web UI at least once so their record exists in the database.
 
 ```bash
-# in .env: PUBLIC_URL=http://localhost:5180
-make run                        # A: Go API on :8080 (loads .env)
-make web-dev                    # B: Vite SPA on http://localhost:5180 (proxies /api,/auth → :8080)
-# open http://localhost:5180
+make mcp   # builds bin/mcp
 ```
 
-Why: the browser hits Vite, which serves the SPA directly and bypasses the
-server's login gate, so the SPA redirects to `/auth/login` on a 401. The OIDC
-`redirect_uri` is built from `PUBLIC_URL`; pointing it at `:8080` would send the
-callback to a different origin than where the handshake cookie was set, and login
-would fail. `make serve` (single origin) sidesteps all of this.
+Set these environment variables when launching the binary:
 
-Useful targets (`make help` lists all):
-
-| Command | What it does |
-|---------|--------------|
-| `make check` | Full local gate: gofmt + vet + `go test -race`, then frontend typecheck/lint/test |
-| `make sqlc` | Regenerate type-safe queries after editing SQL |
-| `make migrate` / `make migrate-down` | Apply / roll back migrations |
-| `make build` | Build the single binary with the SPA **embedded** (prod-like) |
-| `make mcp` | Build the admin MCP server (`bin/mcp`) |
-
-### Admin MCP server
-
-A second binary (`cmd/mcp`) lets an admin manage the catalog from a chat client.
-It shares `internal/service`, so every write gets the same validation, soft-delete,
-and audit (`actor_kind=mcp`) as the form. Writes are **staged**: `service.propose_*`
-validates and returns a preview + `change_token` (no write); only `change.confirm`
-with a valid, unexpired, single-use token mutates (docs/02 §8).
-
-It runs over **stdio** and acts as one admin, named by `MCP_ADMIN_SUB` (the OIDC
-subject of a user who is `is_admin` and has logged in at least once); it refuses
-to start otherwise — never unauthenticated.
-
-```bash
-make mcp   # → bin/mcp
+```
+DATABASE_URL    postgres connection string (same as the app)
+MCP_ADMIN_SUB   OIDC subject of the admin user (find it in the audit log or DB)
+CONFIG_FILE     optional path to config.yaml
 ```
 
-Point a local MCP client at it (e.g. Claude Desktop / Claude Code `mcpServers`):
+For **Claude Desktop**, add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "wolke-admin": {
-      "command": "/abs/path/to/bin/mcp",
+      "command": "/path/to/bin/mcp",
       "env": {
-        "DATABASE_URL": "postgres://wolke:devpass@localhost:5432/wolke?sslmode=disable",
-        "MCP_ADMIN_SUB": "stud-1"
+        "DATABASE_URL": "postgres://wolke:…@localhost:5432/wolke?sslmode=disable",
+        "MCP_ADMIN_SUB": "the-admin-oidc-sub"
       }
     }
   }
 }
 ```
 
-**Add a service via chat:** ask the assistant to add it → it calls
-`service.propose_create` and shows the preview + `change_token` → you approve →
-it calls `change.confirm`. The service appears live and the write is in the audit
-log. Tools: `service.list/get`, `category.list`, `service.propose_create/update/delete`,
-`change.confirm/discard`. (A hosted authenticated HTTP/SSE transport is the open
-alternative in docs/02 §8; stdio is the local default.)
+### Available tools
 
-Integration tests that need Postgres read `DATABASE_URL` and **skip** when it is
-unset, so `go test ./...` is safe without a database; `make test` (after `make db
-&& make migrate`) runs them for real. The OIDC BFF integration test additionally
-needs a mock IdP — `make idp` starts one on :8455, then:
+**Reads** (no staging required):
 
-```bash
-OIDC_TEST_ISSUER=http://127.0.0.1:8455/default make test   # use 127.0.0.1, not localhost
-```
+| Tool | Description |
+|------|-------------|
+| `service.list` | List all services including inactive |
+| `service.get` | Get one service by ID |
+| `category.list` | List all categories |
 
-To run the app against the mock for manual login, set `OIDC_ISSUER_URL`,
-`OIDC_CLIENT_ID=wolke`, and a `SESSION_SECRET` in `.env` before `make run`.
+**Propose** (validates and stages — no write, returns a `change_token` and before/after preview):
 
-### End-to-end stack (Compose, for staging / pre-release)
+| Tool | Description |
+|------|-------------|
+| `propose_create` | Stage a new service |
+| `propose_update` | Stage an edit to an existing service |
+| `propose_delete` | Stage a soft-delete |
 
-`compose.yaml` runs the production-shaped stack — Caddy (TLS) → app → Postgres,
-plus a one-shot `goose` migrate step and an optional mock OIDC IdP. It is **not**
-the daily loop; use it to check the real embedded image behind the proxy.
+**Commit or discard:**
 
-```bash
-podman compose up -d --build        # build images + start postgres, migrate, app, caddy
-podman compose --profile idp up -d  # also start the mock OIDC IdP (Phase 1)
-```
+| Tool | Description |
+|------|-------------|
+| `change.confirm` | Execute the staged change (consumes the token) |
+| `change.discard` | Abandon the staged change |
 
-Caddy listens on 80/443 by default (production-correct). **Rootless podman can't
-bind ports < 1024** — override with high ports:
+---
 
-```bash
-CADDY_HTTP_PORT=8080 CADDY_HTTPS_PORT=8443 podman compose up -d --build
-# then: curl -k https://localhost:8443/
-```
+## License
 
-The app trusts `X-Forwarded-*` only from the Compose subnet and takes its public
-URL from `PUBLIC_URL`, so Secure cookies and (Phase 1) OIDC redirects are correct
-even though TLS terminates at Caddy. `/metrics` is blocked at the proxy.
-
-## How to start with Claude Code
-
-1. Put these docs in a fresh repo and copy `CLAUDE.md` to the root.
-2. Work **phase by phase** (see doc 04). Don't ask Claude Code to "build the whole thing."
-3. For each feature, point it at the relevant spec section and ask for **tests first**.
-4. Use **Claude Design** for the polish pass in Phase 5, after the structure is stable.
-
-## Decisions you still need to confirm
-
-These are listed in full at the end of `docs/01-product-concept.md`. The big ones (all now
-expressed as *config* so other institutions can adapt the hub): exact UOS brand hex values +
-logo assets for the default `branding.yaml`, the precise OIDC claim → role/admin mapping for the
-UOS IdP, whether documentation is truly always external, and the Compose/Caddy hosting specifics.
+Apache 2.0

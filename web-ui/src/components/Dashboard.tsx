@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Wrench, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Branding } from '@/lib/branding'
-import { api, localized, type Category, type Me, type Service } from '@/lib/api'
+import { api, localized, type Category, type Me, type Service, type ServiceTag } from '@/lib/api'
 import {
   useApplyTheme,
   useCatalog,
@@ -28,8 +29,13 @@ function useIsMobile(): boolean {
   return mobile
 }
 
-function getTimeGreeting(): string {
+function getTimeGreeting(locale: string): string {
   const h = new Date().getHours()
+  if (locale === 'en') {
+    if (h < 12) return 'Good morning'
+    if (h < 18) return 'Good afternoon'
+    return 'Good evening'
+  }
   if (h < 11) return 'Guten Morgen'
   if (h < 18) return 'Guten Tag'
   return 'Guten Abend'
@@ -49,9 +55,10 @@ function initials(name: string): string {
   return name.split(' ').map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
 }
 
-function filterServices(services: Service[], cats: string[], query: string): Service[] {
+function filterServices(services: Service[], cats: string[], query: string, tag: ServiceTag | null = null): Service[] {
   const q = query.trim().toLowerCase()
   return services.filter((s) => {
+    if (tag && s.tag !== tag) return false
     if (cats.length > 0 && !s.categories.some((c) => cats.includes(c))) return false
     if (q && !(
       s.name.toLowerCase().includes(q) ||
@@ -67,6 +74,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const [tab, setTab] = useState<Tab>('favoriten')
   const [query, setQuery] = useState('')
   const [cats, setCats] = useState<string[]>([]) // [] = Alle; slugs
+  const [tagFilter, setTagFilter] = useState<ServiceTag | null>(null) // quick-filter by status tag
   const [adminOpen, setAdminOpen] = useState(false)
   const isMobile = useIsMobile()
   const layout = isMobile ? 'list' : 'grid'
@@ -95,12 +103,27 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     },
   }
 
+  // Category chips and the status-tag quick-filter are distinct filter axes;
+  // selecting a category clears the tag filter so the result set stays legible.
   const toggleCat = (slug: string) => {
+    setTagFilter(null)
     if (slug === '') { setCats([]); return }
     setCats((prev) => (prev.includes(slug) ? prev.filter((c) => c !== slug) : [...prev, slug]))
   }
 
-  const diensteServices = filterServices(allServices, cats, query)
+  // Jump to the Dienste tab showing only services currently in maintenance.
+  const showMaintenance = () => {
+    setTab('dienste')
+    setCats([])
+    setQuery('')
+    setTagFilter('wartung')
+  }
+
+  const diensteServices = filterServices(allServices, cats, query, tagFilter)
+  const maintenanceCount = useMemo(
+    () => allServices.filter((s) => s.tag === 'wartung').length,
+    [allServices],
+  )
   const filteredFavorites = useMemo(
     () => filterServices(favoriteServices, [], query),
     [favoriteServices, query],
@@ -179,7 +202,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
               lineHeight: 1.05,
             }}
           >
-            {getTimeGreeting()}, {firstName}.
+            {getTimeGreeting(locale)}, {firstName}.
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
             <span
@@ -202,6 +225,30 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
                 <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>
                   {favCount} {favCount === 1 ? 'Favorit' : 'Favoriten'}
                 </span>
+              </>
+            )}
+            {maintenanceCount > 0 && (
+              <>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 4, height: 4, borderRadius: 999,
+                    background: 'var(--text-muted)', opacity: 0.5, flexShrink: 0,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={showMaintenance}
+                  className="rounded hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    fontSize: 14, color: 'var(--text-muted)', cursor: 'pointer',
+                    background: 'none', border: 'none', padding: 0,
+                  }}
+                >
+                  <Wrench className="h-[14px] w-[14px]" aria-hidden="true" />
+                  {maintenanceCount} {maintenanceCount === 1 ? 'Dienst' : 'Dienste'} in Wartung
+                </button>
               </>
             )}
           </div>
@@ -228,7 +275,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           <h2
             style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em', flexShrink: 0 }}
           >
-            {tab === 'favoriten' ? 'Favoriten' : cats.length === 0 ? 'Alle Dienste' : cats.length === 1
+            {tab === 'favoriten' ? 'Favoriten' : tagFilter === 'wartung' ? 'In Wartung' : cats.length === 0 ? 'Alle Dienste' : cats.length === 1
               ? (allCategories.find((c) => c.slug === cats[0]) ? localized(allCategories.find((c) => c.slug === cats[0])!.label, locale) : cats[0])
               : `${cats.length} Kategorien`}
           </h2>
@@ -251,12 +298,24 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: isMobile ? 16 : 20 }}
           >
             <PillButton
-              active={cats.length === 0}
-              aria-pressed={cats.length === 0}
+              active={cats.length === 0 && !tagFilter}
+              aria-pressed={cats.length === 0 && !tagFilter}
               onClick={() => toggleCat('')}
             >
               Alle
             </PillButton>
+            {tagFilter === 'wartung' && (
+              <PillButton
+                active
+                aria-pressed
+                onClick={() => setTagFilter(null)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Wrench className="h-[13px] w-[13px]" aria-hidden="true" />
+                In Wartung
+                <X className="h-[13px] w-[13px]" aria-hidden="true" />
+              </PillButton>
+            )}
             {allCategories.map((c) => (
               <PillButton
                 key={c.slug}
