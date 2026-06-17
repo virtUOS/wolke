@@ -127,7 +127,8 @@ Caddy, take `PUBLIC_URL` from config for OIDC redirects and `Secure` cookies.
   into images; mount `branding/` and config as Compose volumes so a re-skin/re-point is a restart.
 - **Scale:** single app instance is sufficient for the stated load. If HA is required, run 2+ app
   replicas behind Caddy and add Redis for shared sessions + cache invalidation (tech spec §9).
-- **Migrations** run on deploy (goose), forward-only, reviewed.
+- **Migrations** are forward-only (goose), reviewed, and embedded in the app, which applies any
+  pending ones on startup (advisory-locked so replicas don't race; `AUTO_MIGRATE=false` to opt out).
 - **Rollout:** stand up a staging Compose stack pointed at a staging IdP realm; pilot with a small
   admin group; then GA. Because branding/OIDC are config, another institution deploys the same
   images with their own `branding.yaml` + claim mapping.
