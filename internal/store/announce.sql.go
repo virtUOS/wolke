@@ -154,6 +154,48 @@ func (q *Queries) ListActiveAnnouncements(ctx context.Context, role string) ([]A
 	return items, nil
 }
 
+const listAllActiveAnnouncements = `-- name: ListAllActiveAnnouncements :many
+select id, title, body, severity, audience, starts_at, ends_at, dismissible, created_by, created_at
+from announcements
+where (starts_at is null or starts_at <= now())
+  and (ends_at is null or ends_at > now())
+order by case severity when 'critical' then 0 when 'warning' then 1 else 2 end, created_at desc
+`
+
+// Active = within its time window, across ALL audiences. For the public,
+// identity-less catalog MCP server, which has no user role to filter on and
+// must not hide a maintenance notice addressed to a specific role.
+func (q *Queries) ListAllActiveAnnouncements(ctx context.Context) ([]Announcement, error) {
+	rows, err := q.db.Query(ctx, listAllActiveAnnouncements)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Announcement{}
+	for rows.Next() {
+		var i Announcement
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Body,
+			&i.Severity,
+			&i.Audience,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.Dismissible,
+			&i.CreatedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateAnnouncement = `-- name: UpdateAnnouncement :one
 update announcements
 set title       = $1,

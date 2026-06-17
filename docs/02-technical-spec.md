@@ -318,9 +318,15 @@ unauthenticated. The exact transport (stdio for a local Claude Desktop/Code clie
 authenticated HTTP/SSE transport for a hosted internal tool) is the **open decision in
 concept §8.10**; design the tool layer transport-agnostic so either works.
 
-> v2 idea, designed-for-not-built: a *separate read-only* MCP server that answers end-user
-> questions about services ("which tool do I use for collaborative writing?"). It would expose
-> only `service.list/get/search` and never writes — keep that boundary clean.
+**Public catalog MCP server (`/cmd/catalog-mcp`).** A separate read-only server that answers
+end-user questions about services ("which tool do I use for collaborative writing?", "what's in
+maintenance?"). It requires no identity — the data is the public catalog every member already
+sees — and has no write path at all (its `/internal/readmcp` package never imports the admin use
+cases, so least privilege is a compile-time guarantee). It reads through the same catalog
+snapshot cache as `/api/catalog`, so it never returns soft-deleted services. Tools: `service.list`
+(with `category`/`status` filters), `service.get`, `service.search`, `service.list_in_maintenance`,
+`category.list`, and `announcements.list` (active announcements across all audiences). Harden a
+deployment further by pointing its `DATABASE_URL` at a `SELECT`-only Postgres role.
 
 ## 9. Caching & scale (2–3k concurrent peak)
 

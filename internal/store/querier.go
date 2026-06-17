@@ -48,6 +48,9 @@ type Querier interface {
 	// Active = within its time window and addressed to the user's role (or all),
 	// most-severe first (docs/01 §4.7).
 	ListActiveAnnouncements(ctx context.Context, role string) ([]Announcement, error)
+	// Active = within its time window, across ALL audiences. For the public,
+	// identity-less catalog MCP server.
+	ListAllActiveAnnouncements(ctx context.Context) ([]Announcement, error)
 	// (service_id, category slug) pairs for active services, to assemble the
 	// many-to-many in Go when building the catalog snapshot.
 	ListActiveServiceCategories(ctx context.Context) ([]ListActiveServiceCategoriesRow, error)
