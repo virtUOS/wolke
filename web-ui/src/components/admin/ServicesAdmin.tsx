@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { type AdminService, type Category } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { useAdminActions, useAdminServices } from '@/lib/admin-hooks'
@@ -17,6 +17,15 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
   const [mode, setMode] = useState<Mode>({ kind: 'list' })
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | undefined>()
+
+  // When the form closes back to the list, return focus to the list heading so
+  // it isn't lost to <body>.
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const prevKind = useRef(mode.kind)
+  useEffect(() => {
+    if (prevKind.current !== 'list' && mode.kind === 'list') headingRef.current?.focus()
+    prevKind.current = mode.kind
+  }, [mode.kind])
 
   if (mode.kind !== 'list') {
     const initial = mode.kind === 'edit' ? mode.service : undefined
@@ -51,7 +60,7 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.servicesHeading}</h2>
+        <h2 ref={headingRef} tabIndex={-1} className="focus:outline-none" style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.servicesHeading}</h2>
         <Button size="sm" onClick={() => setMode({ kind: 'new' })}>{s.admin.newService}</Button>
       </div>
 
@@ -83,6 +92,7 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
         onOpenChange={(o) => !o && setConfirmDelete(null)}
         title={s.admin.deleteServiceTitle}
         description={s.admin.deleteServiceDesc(pendingDelete?.name ?? '')}
+        closeLabel={s.common.close}
         footer={
           <>
             <Button variant="outline" onClick={() => setConfirmDelete(null)}>

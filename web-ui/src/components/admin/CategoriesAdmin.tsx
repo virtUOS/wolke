@@ -55,12 +55,13 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
             onChange={(e) => setSlug(e.target.value)}
             placeholder={s.admin.slugPlaceholder}
             className="w-40"
+            aria-required
             aria-invalid={slug.trim() !== '' && !slugValid}
           />
         </label>
         <label className="text-sm">
           <span className="mb-1 block font-medium">{s.admin.labelDe}</span>
-          <Input value={de} onChange={(e) => setDe(e.target.value)} className="w-40" />
+          <Input value={de} onChange={(e) => setDe(e.target.value)} className="w-40" aria-required />
         </label>
         <label className="text-sm">
           <span className="mb-1 block font-medium">{s.admin.labelEn}</span>

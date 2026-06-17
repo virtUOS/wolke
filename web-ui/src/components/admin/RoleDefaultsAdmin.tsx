@@ -66,13 +66,13 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
         {ordered.map((id, i) => (
           <li key={id} className="flex items-center gap-2 rounded-md border border-surface px-2 py-1 text-sm">
             <span className="flex-1">{i + 1}. {name(id)}</span>
-            <button type="button" aria-label={s.admin.moveUp} disabled={i === 0} onClick={() => move(i, -1)} className="rounded p-1 text-text-muted hover:bg-surface disabled:opacity-30">
+            <button type="button" aria-label={`${s.admin.moveUp} – ${name(id)}`} disabled={i === 0} onClick={() => move(i, -1)} className="rounded p-1 text-text-muted hover:bg-surface disabled:opacity-30">
               <ChevronUp className="h-4 w-4" />
             </button>
-            <button type="button" aria-label={s.admin.moveDown} disabled={i === ordered.length - 1} onClick={() => move(i, 1)} className="rounded p-1 text-text-muted hover:bg-surface disabled:opacity-30">
+            <button type="button" aria-label={`${s.admin.moveDown} – ${name(id)}`} disabled={i === ordered.length - 1} onClick={() => move(i, 1)} className="rounded p-1 text-text-muted hover:bg-surface disabled:opacity-30">
               <ChevronDown className="h-4 w-4" />
             </button>
-            <button type="button" aria-label={s.admin.remove} onClick={() => remove(id)} className="rounded p-1 text-text-muted hover:text-primary">
+            <button type="button" aria-label={`${s.admin.remove} – ${name(id)}`} onClick={() => remove(id)} className="rounded p-1 text-text-muted hover:text-primary">
               <X className="h-4 w-4" />
             </button>
           </li>

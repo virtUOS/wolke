@@ -16,24 +16,35 @@ export function AnnouncementBanner({ announcements, locale }: { announcements: A
   const visible = announcements.filter((a) => !dismissed.has(a.id))
   if (visible.length === 0) return null
 
+  const renderAlert = (a: Announcement) => (
+    <Alert
+      key={a.id}
+      variant={severityVariant(a.severity)}
+      icon={severityIcon(a.severity)}
+      title={localized(a.title, locale)}
+      dismissLabel={s.announce.dismiss}
+      onDismiss={
+        a.dismissible && a.severity !== 'critical' ? () => setDismissed((d) => new Set(d).add(a.id)) : undefined
+      }
+    >
+      {localized(a.body, locale)}
+    </Alert>
+  )
+
+  // Critical notices interrupt (assertive); everything else is announced
+  // politely. Severity sort already places critical first, so the visual order
+  // is unchanged.
+  const critical = visible.filter((a) => a.severity === 'critical')
+  const rest = visible.filter((a) => a.severity !== 'critical')
+
   return (
-    <div role="region" aria-label={s.announce.region} aria-live="polite" className="space-y-2">
-      {visible.map((a) => (
-        <Alert
-          key={a.id}
-          variant={severityVariant(a.severity)}
-          icon={severityIcon(a.severity)}
-          title={localized(a.title, locale)}
-          dismissLabel={s.announce.dismiss}
-          onDismiss={
-            a.dismissible && a.severity !== 'critical'
-              ? () => setDismissed((d) => new Set(d).add(a.id))
-              : undefined
-          }
-        >
-          {localized(a.body, locale)}
-        </Alert>
-      ))}
+    <div role="region" aria-label={s.announce.region} className="space-y-2">
+      <div aria-live="assertive" className="space-y-2">
+        {critical.map(renderAlert)}
+      </div>
+      <div aria-live="polite" className="space-y-2">
+        {rest.map(renderAlert)}
+      </div>
     </div>
   )
 }

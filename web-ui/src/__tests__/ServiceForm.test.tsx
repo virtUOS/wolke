@@ -23,7 +23,7 @@ describe('ServiceForm', () => {
 
   it('reflects the name in the live tile preview', async () => {
     const { user } = setup()
-    await user.type(screen.getByLabelText('Name'), 'MyShare')
+    await user.type(screen.getByLabelText(/^Name/), 'MyShare')
     expect(screen.getByText('Vorschau')).toBeInTheDocument()
     // The preview tile shows the typed name as a launch link.
     expect(screen.getByRole('link', { name: /MyShare/ })).toBeInTheDocument()
@@ -31,8 +31,8 @@ describe('ServiceForm', () => {
 
   it('submits a complete draft', async () => {
     const { onSubmit, user } = setup()
-    await user.type(screen.getByLabelText('Name'), 'MyShare')
-    await user.type(screen.getByLabelText('Beschreibung (Deutsch)'), 'Netzspeicher.')
+    await user.type(screen.getByLabelText(/^Name/), 'MyShare')
+    await user.type(screen.getByLabelText(/^Beschreibung \(Deutsch\)/), 'Netzspeicher.')
     await user.type(screen.getByLabelText(/Service-URL/), 'https://myshare.example.edu')
     await user.click(screen.getByText('Netz & Daten'))
     await user.click(screen.getByRole('button', { name: 'Anlegen' }))
@@ -46,8 +46,8 @@ describe('ServiceForm', () => {
 
   it('rejects a non-http URL', async () => {
     const { user } = setup()
-    await user.type(screen.getByLabelText('Name'), 'X')
-    await user.type(screen.getByLabelText('Beschreibung (Deutsch)'), 'Y')
+    await user.type(screen.getByLabelText(/^Name/), 'X')
+    await user.type(screen.getByLabelText(/^Beschreibung \(Deutsch\)/), 'Y')
     await user.click(screen.getByText('Netz & Daten'))
     await user.type(screen.getByLabelText(/Service-URL/), 'ftp://nope')
     expect(screen.getByRole('button', { name: 'Anlegen' })).toBeDisabled()

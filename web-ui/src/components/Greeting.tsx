@@ -15,9 +15,12 @@ interface GreetingProps {
 export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCount, onShowMaintenance }: GreetingProps) {
   const s = t(locale)
   return (
-    <header style={{ marginBottom: isMobile ? 18 : 28 }}>
-      <div
+    // Plain <div>, not <header>: this sits inside <main>, and the salutation is
+    // the page's <h1> — a sectioning <header> here would add landmark noise.
+    <div style={{ marginBottom: isMobile ? 18 : 28 }}>
+      <h1
         style={{
+          margin: 0,
           fontFamily: '"Newsreader", Georgia, serif',
           fontWeight: 500,
           fontSize: isMobile ? 27 : 36,
@@ -27,7 +30,7 @@ export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCou
         }}
       >
         {s.greeting.salutation()}, {firstName}.
-      </div>
+      </h1>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
         <span
           style={{
@@ -64,7 +67,7 @@ export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCou
           </>
         )}
       </div>
-    </header>
+    </div>
   )
 }
 

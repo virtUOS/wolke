@@ -19,6 +19,8 @@ const de = {
     loading: 'Lädt…',
     edit: 'Bearbeiten',
     delete: 'Löschen',
+    close: 'Schließen',
+    skipToContent: 'Zum Inhalt springen',
   },
   topbar: {
     mainNav: 'Hauptnavigation',
@@ -58,9 +60,15 @@ const de = {
     filterCategories: 'Kategorien filtern',
     favEmpty: 'Noch keine Favoriten — markiere Dienste mit dem Stern.',
     searchEmpty: (q: string) => `Keine Dienste für „${q}" gefunden.`,
+    resultCount: (n: number) => `${n} ${n === 1 ? 'Dienst' : 'Dienste'}`,
   },
   tile: {
     open: (name: string, docsOnly: boolean) => (docsOnly ? `${name} – Dokumentation öffnen` : `${name} öffnen`),
+    // Status + new-tab suffixes folded into the link's accessible name so a
+    // screen-reader user hears what a sighted user sees (the badge) and is warned
+    // about the new tab. Empty when there's no status.
+    status: (tag: string | undefined): string => (tag === 'wartung' ? ' (in Wartung)' : tag === 'beta' ? ' (Beta)' : ''),
+    newTab: ' (öffnet in neuem Tab)',
     addFav: (name: string) => `${name} zu Favoriten hinzufügen`,
     removeFav: (name: string) => `${name} aus Favoriten entfernen`,
     beta: 'Beta',
@@ -85,6 +93,9 @@ const de = {
     tabAudit: 'Audit',
     servicesHeading: 'Dienste',
     newService: 'Neuer Dienst',
+    serviceForm: (editing: boolean): string => (editing ? 'Dienst bearbeiten' : 'Neuen Dienst anlegen'),
+    announcementForm: (editing: boolean): string => (editing ? 'Ankündigung bearbeiten' : 'Neue Ankündigung'),
+    errorSummary: 'Bitte korrigieren:',
     inactive: 'inaktiv',
     noServices: 'Keine Dienste.',
     deleteServiceTitle: 'Dienst löschen?',
@@ -151,6 +162,8 @@ const en: Strings = {
     loading: 'Loading…',
     edit: 'Edit',
     delete: 'Delete',
+    close: 'Close',
+    skipToContent: 'Skip to content',
   },
   topbar: {
     mainNav: 'Main navigation',
@@ -190,9 +203,12 @@ const en: Strings = {
     filterCategories: 'Filter by category',
     favEmpty: 'No favorites yet — mark services with the star.',
     searchEmpty: (q: string) => `No services found for “${q}”.`,
+    resultCount: (n: number) => `${n} ${n === 1 ? 'service' : 'services'}`,
   },
   tile: {
     open: (name: string, docsOnly: boolean) => (docsOnly ? `${name} – open documentation` : `Open ${name}`),
+    status: (tag: string | undefined) => (tag === 'wartung' ? ' (in maintenance)' : tag === 'beta' ? ' (Beta)' : ''),
+    newTab: ' (opens in new tab)',
     addFav: (name: string) => `Add ${name} to favorites`,
     removeFav: (name: string) => `Remove ${name} from favorites`,
     beta: 'Beta',
@@ -217,6 +233,9 @@ const en: Strings = {
     tabAudit: 'Audit',
     servicesHeading: 'Services',
     newService: 'New service',
+    serviceForm: (editing: boolean) => (editing ? 'Edit service' : 'Create a service'),
+    announcementForm: (editing: boolean) => (editing ? 'Edit announcement' : 'New announcement'),
+    errorSummary: 'Please fix:',
     inactive: 'inactive',
     noServices: 'No services.',
     deleteServiceTitle: 'Delete service?',
