@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 // the type level so an unnamed icon button can't compile. Pass a lucide icon as
 // the child (marked aria-hidden). Visible focus ring satisfies docs/03 §8.
 const iconButtonVariants = cva(
-  'inline-flex items-center justify-center rounded-md text-text-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center rounded-md text-text-muted transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       // ghost tints its own background on hover; plain only shifts the icon

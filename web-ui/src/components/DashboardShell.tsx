@@ -79,7 +79,7 @@ export function DashboardShell({
       {/* Skip link: first focusable element, visible only when focused. */}
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:rounded-md focus:border focus:border-border focus:bg-bg focus:px-3 focus:py-2 focus:text-sm focus:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:rounded-md focus:border focus:border-border focus:bg-bg focus:px-3 focus:py-2 focus:text-sm focus:shadow-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
       >
         {s.common.skipToContent}
       </a>
@@ -100,7 +100,7 @@ export function DashboardShell({
         id="main"
         ref={mainRef}
         tabIndex={-1}
-        className="focus:outline-none"
+        className="focus:outline-hidden"
         style={{
           maxWidth: 1180,
           margin: '0 auto',

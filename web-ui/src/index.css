@@ -1,6 +1,35 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* Class-based dark mode (the SPA toggles `.dark` on <html>; v4 defaults to the
+   prefers-color-scheme media query, so we restore the v3 behavior). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Map utilities to the runtime branding CSS variables. `inline` makes e.g.
+   `bg-primary` emit `var(--primary)` directly, so GET /api/branding can re-skin
+   the app at runtime without a rebuild (docs/03 §2; golden rule #8) — exactly as
+   the v3 `colors: { primary: 'var(--primary)' }` config did. The variable values
+   themselves are defined below in :root/.dark and overridden by the payload. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-info: var(--info);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+
+  /* Corner scale tied to tokens (values match Tailwind's md/lg, so existing
+     rounded-md/lg usage is unchanged). */
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+}
 
 /* Fallback token values for first paint, before GET /api/branding resolves and
    applyBrandingTokens() injects the active skin. Variable NAMES are stable
