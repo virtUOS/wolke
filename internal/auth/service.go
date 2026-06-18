@@ -136,6 +136,11 @@ func (s *Service) Logout(w http.ResponseWriter, r *http.Request) {
 	if s.auth.endSessionEP != "" {
 		u, _ := url.Parse(s.auth.endSessionEP)
 		q := u.Query()
+		// RP-Initiated Logout: an IdP only honors post_logout_redirect_uri when
+		// the client is identified. We don't retain the ID token, so pass
+		// client_id (the spec-sanctioned alternative to id_token_hint) — without
+		// it Keycloak rejects the request with "Missing parameter: id_token_hint".
+		q.Set("client_id", s.cfg.OIDC.ClientID)
 		q.Set("post_logout_redirect_uri", s.cfg.PublicURL)
 		u.RawQuery = q.Encode()
 		dest = u.String()
