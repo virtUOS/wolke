@@ -21,7 +21,7 @@ export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCou
       <h1
         style={{
           margin: 0,
-          fontFamily: '"Newsreader", Georgia, serif',
+          fontFamily: '"Newsreader Variable", Georgia, serif',
           fontWeight: 500,
           fontSize: isMobile ? 27 : 36,
           letterSpacing: '-0.015em',

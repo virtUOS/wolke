@@ -37,7 +37,7 @@ export function AdminView({ locale, onExit }: { locale: string; onExit: () => vo
           <h1
             style={{
               margin: 0,
-              fontFamily: '"Newsreader", Georgia, serif',
+              fontFamily: '"Newsreader Variable", Georgia, serif',
               fontWeight: 500,
               fontSize: 32,
               letterSpacing: '-0.015em',
