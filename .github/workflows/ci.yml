@@ -16,7 +16,7 @@ jobs:
       run:
         working-directory: web-ui
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -33,13 +33,13 @@ jobs:
             pct=$(node -p "require('./coverage/coverage-summary.json').total.lines.pct")
             echo "### Frontend coverage: ${pct}% lines" >> "$GITHUB_STEP_SUMMARY"
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: frontend-coverage
           path: web-ui/coverage
           retention-days: 7
       - run: npm run build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: spa-dist
           path: web-ui/dist
@@ -72,13 +72,13 @@ jobs:
       # IPv4: mock-oauth2-server crashes on IPv6 peers.
       OIDC_TEST_ISSUER: http://127.0.0.1:8455/default
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.26"
           cache: true
       - name: Download SPA build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: spa-dist
           path: dist-artifact
@@ -107,7 +107,7 @@ jobs:
           total=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}')
           echo "### Backend coverage: ${total} statements" >> "$GITHUB_STEP_SUMMARY"
           go tool cover -html=coverage.out -o coverage.html
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: backend-coverage
           path: |
