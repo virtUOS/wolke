@@ -78,6 +78,33 @@ func TestCSRFGuard(t *testing.T) {
 	}
 }
 
+// TestCSRFGuardPublicURL covers the proxy-chain case: the request reaches the
+// app as plain http with some internal host, but the browser's Origin is the
+// real external https origin. Matching against PUBLIC_URL must allow it even
+// though the forwarded-derived origin doesn't match.
+func TestCSRFGuardPublicURL(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.PublicURL = "https://wolke.example.edu"
+	h := newTestRouter(t, &cfg, Deps{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/events/click", nil)
+	req.Header.Set("Origin", "https://wolke.example.edu") // matches PUBLIC_URL, not the test host
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code == http.StatusForbidden {
+		t.Errorf("status = 403, want it allowed (Origin matches PUBLIC_URL)")
+	}
+
+	// A genuinely foreign origin is still blocked.
+	req = httptest.NewRequest(http.MethodPost, "/api/events/click", nil)
+	req.Header.Set("Origin", "https://evil.example.edu")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 for a foreign origin", rec.Code)
+	}
+}
+
 func TestKeyedLimiter(t *testing.T) {
 	k := newKeyedLimiter(2) // burst 2
 	if !k.allow("a") {

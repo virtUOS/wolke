@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -44,23 +45,46 @@ func securityHeaders(next http.Handler) http.Handler {
 // with the SameSite=Lax session cookie this defends against CSRF: browsers send
 // Origin on unsafe methods, so a mismatched origin is blocked. A missing Origin
 // (non-browser clients like curl/tests) is allowed.
-func csrfGuard(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet, http.MethodHead, http.MethodOptions:
-			next.ServeHTTP(w, r)
-			return
-		}
-		origin := r.Header.Get("Origin")
-		if origin != "" {
-			fwd := ForwardedFromContext(r.Context())
-			if origin != fwd.Scheme+"://"+fwd.Host {
-				writeProblem(w, http.StatusForbidden, "csrf", "Cross-origin request rejected.")
+//
+// An Origin is accepted when it matches either the configured canonical origin
+// (derived from PUBLIC_URL) or the origin reconstructed from trusted-proxy
+// headers. The PUBLIC_URL match is what makes this robust behind proxy chains
+// the app can't fully see (e.g. an external TLS-terminating load balancer in
+// front of Caddy): the canonical origin is configured, not header-derived, so
+// CSRF no longer depends on every hop forwarding X-Forwarded-Proto correctly.
+func csrfGuard(publicOrigin string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet, http.MethodHead, http.MethodOptions:
+				next.ServeHTTP(w, r)
 				return
 			}
-		}
-		next.ServeHTTP(w, r)
-	})
+			origin := r.Header.Get("Origin")
+			if origin != "" {
+				fwd := ForwardedFromContext(r.Context())
+				if origin != publicOrigin && origin != fwd.Scheme+"://"+fwd.Host {
+					writeProblem(w, http.StatusForbidden, "csrf", "Cross-origin request rejected.")
+					return
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// originOf reduces a URL (e.g. PUBLIC_URL) to its scheme://host origin, dropping
+// any path/query. Returns "" if rawURL is empty or unparseable, which makes
+// csrfGuard fall back to the forwarded-derived origin only.
+func originOf(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }
 
 // keyedLimiter rate-limits per session token (or client IP), to blunt abuse of
