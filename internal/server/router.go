@@ -63,7 +63,7 @@ func New(cfg *config.Config, deps Deps) (http.Handler, error) {
 		r.Use(metricsMiddleware(deps.Metrics))
 	}
 	r.Use(securityHeaders)
-	r.Use(csrfGuard)
+	r.Use(csrfGuard(originOf(cfg.PublicURL)))
 	// Rate-limit state-changing methods globally; catalog reads stay unthrottled.
 	r.Use(writeRateLimit(newKeyedLimiter(writeRatePerMinute)))
 
