@@ -8,6 +8,20 @@ function initials(name: string): string {
   return name.split(' ').map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
 }
 
+// Single sign-out must be a top-level navigation, not fetch(): /auth/logout 302s
+// to the IdP's end-session endpoint, and only a real navigation carries the IdP's
+// cookies so it can terminate the SSO session. A background fetch follows that
+// cross-origin redirect with same-origin credentials, leaving the IdP session
+// alive — so we'd be silently logged straight back in. A POST form keeps the
+// route POST-only (CSRF-safe) while navigating the top frame through the redirect.
+function logout() {
+  const form = document.createElement('form')
+  form.method = 'POST'
+  form.action = '/auth/logout'
+  document.body.appendChild(form)
+  form.submit()
+}
+
 interface DashboardShellProps {
   branding: Branding
   me: Me
@@ -80,7 +94,7 @@ export function DashboardShell({
         userEmail={me.email}
         isAdmin={me.is_admin}
         onAdmin={onAdmin}
-        onLogout={() => void fetch('/auth/logout', { method: 'POST' }).finally(() => window.location.assign('/'))}
+        onLogout={logout}
       />
       <main
         id="main"
