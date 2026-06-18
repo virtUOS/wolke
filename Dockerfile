@@ -8,7 +8,7 @@
 # across rebuilds.
 
 # --- Stage 1: build the React SPA ---
-FROM docker.io/library/node:24-alpine AS web
+FROM docker.io/library/node:26-alpine AS web
 WORKDIR /web
 COPY web-ui/package.json web-ui/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
