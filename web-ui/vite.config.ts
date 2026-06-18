@@ -22,7 +22,14 @@ export default defineConfig({
       '/auth': 'http://localhost:8080',
     },
   },
-  build: { outDir: 'dist' },
+  build: {
+    outDir: 'dist',
+    // Never inline fonts as data: URIs. The strict CSP (default-src 'self', no
+    // font-src) rejects data: fonts; emitting them as files keeps every font
+    // same-origin so the CSP stays untouched. Other assets keep the default
+    // size-based inlining (return undefined).
+    assetsInlineLimit: (filePath) => (filePath.endsWith('.woff2') ? false : undefined),
+  },
   test: {
     environment: 'jsdom',
     globals: true,

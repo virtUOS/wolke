@@ -3,6 +3,11 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { ApiError } from './lib/api'
+// Self-hosted fonts (bundled by Vite) — no external requests to Google, so the
+// strict CSP holds and there's no GDPR/privacy concern. Variable-weight files;
+// Newsreader's optical-size axis backs `font-optical-sizing: auto`.
+import '@fontsource-variable/hanken-grotesk/wght.css'
+import '@fontsource-variable/newsreader/opsz.css'
 import './index.css'
 
 // TanStack Query is the convention for all server state (CLAUDE.md). Don't retry
