@@ -179,7 +179,7 @@ function AccountMenu({ locale, initials, name, email, isAdmin, onAdmin, onLogout
           color: 'var(--text)', fontSize: 11, fontWeight: 700, letterSpacing: '.02em',
           cursor: 'pointer', padding: 0,
         }}
-        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-1"
+        className="focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-1"
       >
         {initials}
       </button>
@@ -224,7 +224,7 @@ function AccountMenu({ locale, initials, name, email, isAdmin, onAdmin, onLogout
             <button
               type="button"
               style={itemStyle}
-              className="hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+              className="hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
               onClick={() => { setOpen(false); onAdmin() }}
             >
               <Shield className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
@@ -236,7 +236,7 @@ function AccountMenu({ locale, initials, name, email, isAdmin, onAdmin, onLogout
           <button
             type="button"
             style={itemStyle}
-            className="hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+            className="hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
             onClick={() => { setOpen(false); setConfirmLogout(true) }}
           >
             <LogOut className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />

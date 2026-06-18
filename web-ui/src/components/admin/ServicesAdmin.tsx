@@ -60,7 +60,7 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 ref={headingRef} tabIndex={-1} className="focus:outline-none" style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.servicesHeading}</h2>
+        <h2 ref={headingRef} tabIndex={-1} className="focus:outline-hidden" style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.servicesHeading}</h2>
         <Button size="sm" onClick={() => setMode({ kind: 'new' })}>{s.admin.newService}</Button>
       </div>
 

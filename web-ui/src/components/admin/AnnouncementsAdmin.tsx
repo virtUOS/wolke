@@ -33,7 +33,7 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 ref={headingRef} tabIndex={-1} className="focus:outline-none" style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.announcementsHeading}</h2>
+        <h2 ref={headingRef} tabIndex={-1} className="focus:outline-hidden" style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.announcementsHeading}</h2>
         <Button size="sm" onClick={() => { setEditing(null); setFormError(undefined); setShowForm(true) }}>{s.admin.newAnnouncement}</Button>
       </div>
 
@@ -138,7 +138,7 @@ function AnnouncementForm({
       }}
       className="space-y-3 rounded-md border border-border p-4"
     >
-      <h3 ref={headingRef} tabIndex={-1} className="text-base font-semibold focus:outline-none">
+      <h3 ref={headingRef} tabIndex={-1} className="text-base font-semibold focus:outline-hidden">
         {s.admin.announcementForm(!!initial)}
       </h3>
       <Field label={s.admin.fTitleDe} required>

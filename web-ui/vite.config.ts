@@ -1,12 +1,13 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
 // The dev server proxies API/branding/auth to the Go server on :8080, so the
 // no-Docker local loop is `go run ./cmd/server` + `npm run dev` (docs/04 §4).
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },
