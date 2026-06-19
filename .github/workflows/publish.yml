@@ -43,8 +43,11 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          # Build everywhere (validates the image on PRs); push only on trusted
-          # events — main, tags, and manual dispatch — never on pull_request.
+          # Always push, including on pull requests. (Without this, push defaults
+          # to false and the image is built but never published — pulls then get a
+          # stale image.) Note: PRs from forks lack packages:write and will fail
+          # this step; that's fine for an internal repo.
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
