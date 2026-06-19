@@ -2,8 +2,6 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { ArrowRight, Moon, Shield, Sun, LogOut } from 'lucide-react'
 import type { Branding } from '@/lib/branding'
 import { t } from '@/lib/i18n'
-import { Button } from '@/components/ui/button'
-import { Dialog } from '@/components/ui/dialog'
 import { IconButton } from '@/components/ui/icon-button'
 import { PillButton } from '@/components/ui/pill-button'
 import { focusFirst, trapTab } from '@/lib/focus'
@@ -128,7 +126,6 @@ interface AccountMenuProps {
 function AccountMenu({ locale, initials, name, email, isAdmin, onAdmin, onLogout }: AccountMenuProps) {
   const s = t(locale)
   const [open, setOpen] = useState(false)
-  const [confirmLogout, setConfirmLogout] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -237,31 +234,13 @@ function AccountMenu({ locale, initials, name, email, isAdmin, onAdmin, onLogout
             type="button"
             style={itemStyle}
             className="hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-            onClick={() => { setOpen(false); setConfirmLogout(true) }}
+            onClick={() => { setOpen(false); onLogout() }}
           >
             <LogOut className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
             <span style={{ flex: 1 }}>{s.topbar.logout}</span>
           </button>
         </div>
       )}
-
-      <Dialog
-        open={confirmLogout}
-        onOpenChange={setConfirmLogout}
-        title={s.topbar.logoutTitle}
-        description={s.topbar.logoutDesc}
-        closeLabel={s.common.close}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setConfirmLogout(false)}>{s.common.cancel}</Button>
-            <Button onClick={() => { setConfirmLogout(false); onLogout() }}>{s.topbar.logout}</Button>
-          </>
-        }
-      >
-        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: 'var(--text)', textWrap: 'pretty' } as React.CSSProperties}>
-          {s.topbar.logoutBody}
-        </p>
-      </Dialog>
     </div>
   )
 }
