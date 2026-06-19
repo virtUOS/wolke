@@ -139,17 +139,30 @@ func TestCacheCollapsesConcurrentReloads(t *testing.T) {
 	})
 
 	const n = 8
+	ready := make(chan struct{}, n)
 	var wg sync.WaitGroup
 	wg.Add(n)
 	for range n {
 		go func() {
 			defer wg.Done()
+			ready <- struct{}{} // about to call Get
 			if _, err := c.Get(context.Background()); err != nil {
 				t.Errorf("concurrent Get: %v", err)
 			}
 		}()
 	}
-	<-entered // a loader is in flight; the rest join it
+	// Barrier: every goroutine is running and about to call Get, and one is in
+	// flight inside the loader (parked on release). The other n-1 then join that
+	// in-flight singleflight call. Without waiting for all goroutines to arrive,
+	// the loader could finish and the singleflight key be removed before the
+	// slower goroutines call Get (flaky under -race/coverage) — a second call.
+	for range n {
+		<-ready
+	}
+	<-entered
+	// The joiners can't complete Get until release, so they can only be parked
+	// inside singleflight.Do; give them a moment to get there before releasing.
+	time.Sleep(50 * time.Millisecond)
 	close(release)
 	wg.Wait()
 
