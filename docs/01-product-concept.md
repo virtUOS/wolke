@@ -121,9 +121,10 @@ Every entry has: a short description, an optional **service URL**, and a **docum
 Documentation is always external and out of scope to host or render.
 
 ### 5.4 Usage tracking (powers both "frequently used" and metrics)
-A click on a tile's launch zone fires a lightweight tracked event: `{service_id, user_role,
-timestamp}`. The user's own counts feed "frequently used"; aggregate counts by service and role
-feed the Prometheus metrics (doc 02 §7). No third-party analytics; data stays in Postgres.
+A click on a tile fires a lightweight tracked event: `{service_id, user_role, target,
+timestamp}`, where `target` is the launch link or the secondary documentation link. The user's
+own launch counts feed "frequently used"; aggregate counts by service, role, and target feed the
+Prometheus metrics (doc 02 §7). No third-party analytics; data stays in Postgres.
 
 > **Privacy note:** per-user counts are needed for "frequently used" but the *exported* metrics
 > are aggregate-only (per service, per role) — never per identifiable user. State this in the

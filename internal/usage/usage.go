@@ -19,15 +19,26 @@ const (
 	FrequentLimit  = 8
 )
 
+// Click targets recorded with each event: which link the user followed.
+const (
+	TargetService       = "service"       // the launch link (a service tile or a doc-only tile)
+	TargetDocumentation = "documentation" // the secondary "Doku" link on a service
+)
+
 // Store is the persistence the usage path needs.
 type Store interface {
 	RecordClick(ctx context.Context, arg store.RecordClickParams) error
 	FrequentServiceIDs(ctx context.Context, arg store.FrequentServiceIDsParams) ([]pgtype.UUID, error)
 }
 
-// Record appends a launch-click event for the user/service/role.
-func Record(ctx context.Context, db Store, userID, serviceID pgtype.UUID, role string) error {
-	if err := db.RecordClick(ctx, store.RecordClickParams{UserID: userID, ServiceID: serviceID, UserRole: role}); err != nil {
+// Record appends a click event for the user/service/role. target is the link
+// followed (TargetService or TargetDocumentation); an empty value defaults to a
+// launch so older callers stay correct.
+func Record(ctx context.Context, db Store, userID, serviceID pgtype.UUID, role, target string) error {
+	if target == "" {
+		target = TargetService
+	}
+	if err := db.RecordClick(ctx, store.RecordClickParams{UserID: userID, ServiceID: serviceID, UserRole: role, Target: target}); err != nil {
 		return fmt.Errorf("record click: %w", err)
 	}
 	return nil
