@@ -77,7 +77,7 @@ export function Popover({ label, icon, children, align = 'end', panelClassName }
           aria-label={label}
           tabIndex={-1}
           className={cn(
-            'absolute z-20 mt-1 rounded-md border border-border bg-bg p-3 text-sm shadow-lg focus:outline-none',
+            'absolute z-20 mt-1 rounded-md border border-border bg-bg p-3 text-sm shadow-lg focus:outline-hidden',
             align === 'end' ? 'right-0' : 'left-0',
             panelClassName,
           )}

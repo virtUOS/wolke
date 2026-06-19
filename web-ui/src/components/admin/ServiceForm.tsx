@@ -98,7 +98,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
       <h3
         ref={headingRef}
         tabIndex={-1}
-        className="text-base font-semibold md:col-span-2 focus:outline-none"
+        className="text-base font-semibold md:col-span-2 focus:outline-hidden"
       >
         {s.admin.serviceForm(!!initial)}
       </h3>

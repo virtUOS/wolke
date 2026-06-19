@@ -193,7 +193,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           placeholder={tr.dash.searchPlaceholder}
           aria-label={tr.dash.searchLabel}
           style={{ width: isMobile ? '100%' : 260 }}
-          className="h-9 rounded-md border border-border bg-surface px-3 text-sm text-text placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+          className="h-9 rounded-md border border-border bg-surface px-3 text-sm text-text placeholder:text-text-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
         />
       </div>
 

@@ -17,7 +17,7 @@ describe('Card', () => {
     )
     const el = screen.getByTestId('c')
     expect(el.className).toContain('p-4')
-    expect(el.className).toContain('shadow-sm')
+    expect(el.className).toContain('shadow-xs')
   })
 
   it('adds a hover-elevation transition when interactive', () => {

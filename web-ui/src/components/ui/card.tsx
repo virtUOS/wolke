@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 const cardVariants = cva('rounded-lg border border-border bg-bg', {
   variants: {
     padding: { none: '', sm: 'p-3', md: 'p-4' },
-    elevation: { none: '', sm: 'shadow-sm', md: 'shadow-md', lg: 'shadow-lg' },
+    elevation: { none: '', sm: 'shadow-xs', md: 'shadow-md', lg: 'shadow-lg' },
     // A hover elevation cue for cards that act as a single launch target. The
     // motion respects prefers-reduced-motion via the global rule (docs/03 §8).
     interactive: { true: 'transition-shadow hover:shadow-md', false: '' },
