@@ -43,7 +43,7 @@ func (q *Queries) AddServiceCategory(ctx context.Context, arg AddServiceCategory
 }
 
 const adminListServices = `-- name: AdminListServices :many
-select id, name, description, service_url, doc_url, icon, is_active, tag, created_at, updated_at from services order by name
+select id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag from services order by name
 `
 
 // Full catalog including soft-deleted (inactive) services.
@@ -64,9 +64,9 @@ func (q *Queries) AdminListServices(ctx context.Context) ([]Service, error) {
 			&i.DocUrl,
 			&i.Icon,
 			&i.IsActive,
-			&i.Tag,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Tag,
 		); err != nil {
 			return nil, err
 		}
@@ -103,7 +103,7 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 const createService = `-- name: CreateService :one
 insert into services (name, description, service_url, doc_url, icon, tag)
 values ($1, $2, $3, $4, $5, $6)
-returning id, name, description, service_url, doc_url, icon, is_active, tag, created_at, updated_at
+returning id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag
 `
 
 type CreateServiceParams struct {
@@ -133,9 +133,9 @@ func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (S
 		&i.DocUrl,
 		&i.Icon,
 		&i.IsActive,
-		&i.Tag,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Tag,
 	)
 	return i, err
 }
@@ -175,7 +175,7 @@ func (q *Queries) GetCategoryBySlug(ctx context.Context, slug string) (Category,
 }
 
 const getServiceByID = `-- name: GetServiceByID :one
-select id, name, description, service_url, doc_url, icon, is_active, tag, created_at, updated_at from services where id = $1
+select id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag from services where id = $1
 `
 
 func (q *Queries) GetServiceByID(ctx context.Context, id pgtype.UUID) (Service, error) {
@@ -189,9 +189,9 @@ func (q *Queries) GetServiceByID(ctx context.Context, id pgtype.UUID) (Service, 
 		&i.DocUrl,
 		&i.Icon,
 		&i.IsActive,
-		&i.Tag,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Tag,
 	)
 	return i, err
 }
@@ -221,18 +221,34 @@ func (q *Queries) InsertAudit(ctx context.Context, arg InsertAuditParams) error 
 }
 
 const listAudit = `-- name: ListAudit :many
-select id, actor_id, actor_kind, action, target_id, diff, created_at from audit_log order by created_at desc limit $1
+select a.id, a.actor_id, a.actor_kind, a.action, a.target_id, a.diff, a.created_at, u.display_name as actor_name
+from audit_log a
+left join users u on u.id = a.actor_id
+order by a.created_at desc limit $1
 `
 
-func (q *Queries) ListAudit(ctx context.Context, lim int32) ([]AuditLog, error) {
+type ListAuditRow struct {
+	ID        int64              `json:"id"`
+	ActorID   pgtype.UUID        `json:"actor_id"`
+	ActorKind string             `json:"actor_kind"`
+	Action    string             `json:"action"`
+	TargetID  pgtype.UUID        `json:"target_id"`
+	Diff      []byte             `json:"diff"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ActorName pgtype.Text        `json:"actor_name"`
+}
+
+// LEFT JOIN so rows whose actor_id is null (MCP/system, or no user) still list;
+// actor_name resolves the acting user for the admin audit view.
+func (q *Queries) ListAudit(ctx context.Context, lim int32) ([]ListAuditRow, error) {
 	rows, err := q.db.Query(ctx, listAudit, lim)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []AuditLog{}
+	items := []ListAuditRow{}
 	for rows.Next() {
-		var i AuditLog
+		var i ListAuditRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ActorID,
@@ -241,6 +257,7 @@ func (q *Queries) ListAudit(ctx context.Context, lim int32) ([]AuditLog, error) 
 			&i.TargetID,
 			&i.Diff,
 			&i.CreatedAt,
+			&i.ActorName,
 		); err != nil {
 			return nil, err
 		}
@@ -302,7 +319,7 @@ set name        = $1,
     tag         = $6,
     updated_at  = now()
 where id = $7
-returning id, name, description, service_url, doc_url, icon, is_active, tag, created_at, updated_at
+returning id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag
 `
 
 type UpdateServiceParams struct {
@@ -334,9 +351,9 @@ func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) (S
 		&i.DocUrl,
 		&i.Icon,
 		&i.IsActive,
-		&i.Tag,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Tag,
 	)
 	return i, err
 }

@@ -196,6 +196,7 @@ export interface AnnouncementInput {
 export interface AuditEntry {
   id: number
   actor_id: string
+  actor_name?: string // resolved display name; absent for null/MCP actors
   actor_kind: string
   action: string
   target_id?: string
