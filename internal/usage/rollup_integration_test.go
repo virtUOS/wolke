@@ -41,7 +41,7 @@ func TestRollupAndPurge(t *testing.T) {
 
 	// Two clicks today (unique role label so we can assert our own rows).
 	for i := 0; i < 2; i++ {
-		if err := db.RecordClick(ctx, store.RecordClickParams{UserID: u.ID, ServiceID: sid, UserRole: "rollup-role"}); err != nil {
+		if err := db.RecordClick(ctx, store.RecordClickParams{UserID: u.ID, ServiceID: sid, UserRole: "rollup-role", Target: TargetService}); err != nil {
 			t.Fatalf("record: %v", err)
 		}
 	}

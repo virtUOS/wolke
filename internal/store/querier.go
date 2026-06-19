@@ -34,7 +34,8 @@ type Querier interface {
 	DeleteServiceCategories(ctx context.Context, serviceID pgtype.UUID) error
 	DeleteSession(ctx context.Context, id string) error
 	// The user's most-clicked active services within a rolling window, most-used
-	// first (powers "frequently used" — docs/01 §4.5).
+	// first (powers "frequently used" — docs/01 §4.5). Launches only (target =
+	// 'service'); a documentation-link click shouldn't promote a service here.
 	FrequentServiceIDs(ctx context.Context, arg FrequentServiceIDsParams) ([]pgtype.UUID, error)
 	GetAnnouncementByID(ctx context.Context, id pgtype.UUID) (Announcement, error)
 	GetCategoryBySlug(ctx context.Context, slug string) (Category, error)
@@ -69,9 +70,10 @@ type Querier interface {
 	MarkFavoritesSeeded(ctx context.Context, userID pgtype.UUID) error
 	NextFavoriteSort(ctx context.Context, userID pgtype.UUID) (int32, error)
 	PurgeOldClicks(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
-	// A lightweight launch-click event (docs/01 §5.4). user_role is denormalized so
-	// aggregate metrics (Phase 4) need no join. NULLs on user/service delete keep
-	// history intact when a user or service is removed.
+	// A lightweight click event (docs/01 §5.4). user_role is denormalized so
+	// aggregate metrics (Phase 4) need no join. target distinguishes a launch
+	// ('service') from a documentation-link click ('documentation'). NULLs on
+	// user/service delete keep history intact when a user or service is removed.
 	RecordClick(ctx context.Context, arg RecordClickParams) error
 	RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) (int64, error)
 	// Recompute usage_daily from the raw events still present (the retention

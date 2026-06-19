@@ -82,8 +82,8 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const actions: TileActions = {
     favoritedIDs,
     onToggleFavorite: (s) => (favoritedIDs.has(s.id) ? fav.remove.mutate(s.id) : fav.add.mutate(s.id)),
-    onLaunch: (s) => {
-      api.recordClick(s.id)
+    onLaunch: (s, target) => {
+      api.recordClick(s.id, target)
       qc.invalidateQueries({ queryKey: ['favorites'] })
     },
   }
