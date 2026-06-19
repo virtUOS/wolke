@@ -32,11 +32,6 @@ const de = {
     account: 'Konto',
     administration: 'Administration',
     logout: 'Abmelden',
-    logoutTitle: 'Abmelden?',
-    logoutDesc: 'Single Sign-out für Ihre Uni-Sitzung.',
-    logoutBody:
-      'Sie werden gleichzeitig bei allen verbundenen Uni-Diensten — Stud.IP, Webmail, VPN, ' +
-      'Cloud-Speicher und weiteren — abgemeldet. Offene Sitzungen werden beendet.',
   },
   greeting: {
     salutation: (): string => {
@@ -176,11 +171,6 @@ const en: Strings = {
     account: 'Account',
     administration: 'Administration',
     logout: 'Sign out',
-    logoutTitle: 'Sign out?',
-    logoutDesc: 'Single sign-out for your university session.',
-    logoutBody:
-      'You will be signed out of all connected university services at once — Stud.IP, webmail, VPN, ' +
-      'cloud storage and others. Open sessions will be ended.',
   },
   greeting: {
     salutation: () => {
