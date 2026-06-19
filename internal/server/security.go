@@ -24,7 +24,11 @@ const (
 // HSTS is sent only when the effective request is HTTPS (behind Caddy).
 const contentSecurityPolicy = "default-src 'self'; base-uri 'self'; object-src 'none'; " +
 	"frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
-	"script-src 'self'; connect-src 'self'; form-action 'self'"
+	"script-src 'self'; connect-src 'self'; form-action 'self'; " +
+	// PWA: the service worker and web app manifest are same-origin. Both already
+	// fall back to 'self' via default-src, but state them so a future default-src
+	// tightening can't silently break install/offline.
+	"worker-src 'self'; manifest-src 'self'"
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

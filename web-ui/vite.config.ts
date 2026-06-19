@@ -2,12 +2,44 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { VitePWA } from 'vite-plugin-pwa'
 import path from 'node:path'
 
 // The dev server proxies API/branding/auth to the Go server on :8080, so the
 // no-Docker local loop is `go run ./cmd/server` + `npm run dev` (docs/04 §4).
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    VitePWA({
+      // Auto-update: a new deploy's SW activates and the page reloads on the next
+      // controllerchange (the user opted for silent updates).
+      registerType: 'autoUpdate',
+      // We register manually in main.tsx via virtual:pwa-register — an *inline*
+      // registration script would violate the strict CSP (script-src 'self').
+      injectRegister: null,
+      // The manifest is served dynamically by the Go backend from runtime branding
+      // (/manifest.webmanifest), so the SPA build must not emit/inject its own.
+      manifest: false,
+      workbox: {
+        // Precache the static shell only (hashed assets, fonts, icons, the shell).
+        globPatterns: ['**/*.{js,css,html,woff2,svg,png,ico}'],
+        navigateFallback: '/index.html',
+        // Never let the SW answer these from the shell — they're server-driven
+        // (OIDC redirects), per-user, or sensitive. They must hit the network.
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/auth\//,
+          /^\/branding\//,
+          /^\/metrics$/,
+          /^\/manifest\.webmanifest$/,
+          /^\/sw\.js$/,
+        ],
+        cleanupOutdatedCaches: true,
+      },
+      devOptions: { enabled: false },
+    }),
+  ],
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },

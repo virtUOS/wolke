@@ -5,6 +5,13 @@
     <link rel="icon" type="image/svg+xml" href="/branding/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>wolke</title>
+    <!-- PWA: the manifest is served by the backend from runtime branding; icons
+         live in the (overridable) branding dir. theme-color is a sensible default
+         and is updated at runtime to the active brand primary (see branding.ts). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/branding/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#A6093D" />
   </head>
   <body>
     <div id="root"></div>

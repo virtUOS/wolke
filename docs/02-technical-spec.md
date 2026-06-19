@@ -400,6 +400,23 @@ Because the SPA reads tokens from `/api/branding` at runtime (rather than hardco
 time), a fork re-skins by editing one file and swapping logo assets — no recompile. The doc 03
 palette ships as the bundled default. Keep the variable **names** stable; only values change.
 
+### 11.1 PWA (installable web app)
+
+The app is an installable PWA. Like the rest of branding, this stays white-label:
+
+- **Manifest** is served at `GET /manifest.webmanifest`, built from the same `branding` config
+  (`name`/`short_name` ← `product_name`, `theme_color`/`background_color` ← the theme), so a fork's
+  install name and colors follow its `branding.yaml` — no rebuild.
+- **Icons** live in the branding dir (`/branding/icon-192.png`, `icon-512.png`,
+  `icon-maskable-512.png`, `apple-touch-icon.png`) and are overridden by mounting replacements,
+  exactly like the logo. Defaults ship with the bundled placeholder mark.
+- **Service worker** (Workbox via `vite-plugin-pwa`) precaches only the static shell and
+  auto-updates. It is deliberately **auth-safe**: `/api`, `/auth`, `/branding`, and `/metrics` are
+  never cached and never answered from the shell (a `navigateFallback` denylist), so per-user/
+  role-aware data can't leak on a shared device and the OIDC redirect flow is untouched. The app
+  needs a connection to do anything beyond the shell, so there is no offline catalog — just an
+  installable, standalone window. `sw.js` is served `Cache-Control: no-cache` so deploys land.
+
 **Other config (env):** `DATABASE_URL`, `PUBLIC_URL`, `SESSION_SECRET`, `OIDC_*` (issuer, client
 id/secret, scopes) + the claim-mapping file from §6, `METRICS_TOKEN`, `LOG_LEVEL`. Ship a
 `.env.example` and a documented `config.example.yaml` so a new adopter is running in minutes.

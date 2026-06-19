@@ -48,6 +48,11 @@ func SPAHandler(fsys fs.FS) (http.Handler, error) {
 		}
 		if f, err := fsys.Open(upath); err == nil {
 			_ = f.Close()
+			// The service worker must be revalidated every load so a new deploy is
+			// picked up promptly; hashed assets under assets/ stay immutably cached.
+			if upath == "sw.js" {
+				w.Header().Set("Cache-Control", "no-cache")
+			}
 			fileServer.ServeHTTP(w, r)
 			return
 		}
