@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 // visual active state; the caller sets the semantics (aria-current="page" for a
 // nav tab, aria-pressed for a toggle) by spreading the matching ARIA prop.
 const pillButtonVariants = cva(
-  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]',
+  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]',
   {
     variants: {
       active: {

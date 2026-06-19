@@ -54,7 +54,7 @@ export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCou
             <button
               type="button"
               onClick={onShowMaintenance}
-              className="rounded hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+              className="rounded hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 fontSize: 14, color: 'var(--text-muted)', cursor: 'pointer',

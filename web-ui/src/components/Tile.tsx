@@ -116,7 +116,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
                 aria-label={s.tile.docsLink + s.tile.newTab}
                 onClick={(e) => e.stopPropagation()}
                 style={{ color: 'var(--text-muted)', display: 'inline-flex' }}
-                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
+                className="focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
               >
                 <FileText className="h-4 w-4" aria-hidden="true" />
               </a>
@@ -226,7 +226,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
                   fontSize: 12.5, fontWeight: 600,
                   color: 'var(--text-muted)', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
-                className="hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
+                className="hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
               >
                 <FileText className="h-[14px] w-[14px]" aria-hidden="true" />
                 {s.tile.docsLink}
