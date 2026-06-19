@@ -48,14 +48,17 @@ type Querier interface {
 	// Active = within its time window and addressed to the user's role (or all),
 	// most-severe first (docs/01 §4.7).
 	ListActiveAnnouncements(ctx context.Context, role string) ([]Announcement, error)
-	// Active = within its time window, across ALL audiences. For the public,
-	// identity-less catalog MCP server.
-	ListAllActiveAnnouncements(ctx context.Context) ([]Announcement, error)
 	// (service_id, category slug) pairs for active services, to assemble the
 	// many-to-many in Go when building the catalog snapshot.
 	ListActiveServiceCategories(ctx context.Context) ([]ListActiveServiceCategoriesRow, error)
 	ListActiveServices(ctx context.Context) ([]ListActiveServicesRow, error)
-	ListAudit(ctx context.Context, lim int32) ([]AuditLog, error)
+	// Active = within its time window, across ALL audiences. For the public,
+	// identity-less catalog MCP server, which has no user role to filter on and
+	// must not hide a maintenance notice addressed to a specific role.
+	ListAllActiveAnnouncements(ctx context.Context) ([]Announcement, error)
+	// LEFT JOIN so rows whose actor_id is null (MCP/system, or no user) still list;
+	// actor_name resolves the acting user for the admin audit view.
+	ListAudit(ctx context.Context, lim int32) ([]ListAuditRow, error)
 	ListCategories(ctx context.Context) ([]Category, error)
 	// Favorites ordered alphabetically by service name.
 	ListFavoritesAlpha(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)

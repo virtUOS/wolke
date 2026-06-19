@@ -22,6 +22,7 @@ export function AuditLog({ locale }: { locale: string }) {
             <ListItem key={e.id} className="flex-wrap gap-2">
               <span className="font-mono text-xs text-text-muted">{e.created_at.slice(0, 19).replace('T', ' ')}</span>
               <Badge>{e.actor_kind}</Badge>
+              {e.actor_name && <span className="text-text-muted">{e.actor_name}</span>}
               <span className="font-medium">{e.action}</span>
               {e.target_id && <span className="font-mono text-xs text-text-muted">{e.target_id.slice(0, 8)}</span>}
             </ListItem>
