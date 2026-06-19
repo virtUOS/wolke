@@ -67,9 +67,9 @@ type Service struct {
 	DocUrl      pgtype.Text        `json:"doc_url"`
 	Icon        string             `json:"icon"`
 	IsActive    bool               `json:"is_active"`
-	Tag         pgtype.Text        `json:"tag"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	Tag         pgtype.Text        `json:"tag"`
 }
 
 type ServiceCategory struct {

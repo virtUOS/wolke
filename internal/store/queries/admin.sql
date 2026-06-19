@@ -57,4 +57,9 @@ insert into audit_log (actor_id, actor_kind, action, target_id, diff)
 values (@actor_id, @actor_kind, @action, @target_id, @diff);
 
 -- name: ListAudit :many
-select * from audit_log order by created_at desc limit @lim;
+-- LEFT JOIN so rows whose actor_id is null (MCP/system, or no user) still list;
+-- actor_name resolves the acting user for the admin audit view.
+select a.*, u.display_name as actor_name
+from audit_log a
+left join users u on u.id = a.actor_id
+order by a.created_at desc limit @lim;

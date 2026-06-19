@@ -23,7 +23,7 @@ type AdminDeps struct {
 
 // AuditStore reads the audit log.
 type AuditStore interface {
-	ListAudit(ctx context.Context, lim int32) ([]store.AuditLog, error)
+	ListAudit(ctx context.Context, lim int32) ([]store.ListAuditRow, error)
 }
 
 // requireAdmin gates admin routes; assumes loadSession ran. Non-admins get 403.
@@ -204,6 +204,7 @@ func adminCreateCategory(d AdminDeps) http.HandlerFunc {
 type auditEntry struct {
 	ID        int64           `json:"id"`
 	ActorID   string          `json:"actor_id"`
+	ActorName string          `json:"actor_name,omitempty"` // resolved display name; empty for null/MCP actors
 	ActorKind string          `json:"actor_kind"`
 	Action    string          `json:"action"`
 	TargetID  string          `json:"target_id,omitempty"`
@@ -229,6 +230,7 @@ func adminListAudit(d AdminDeps) http.HandlerFunc {
 			out = append(out, auditEntry{
 				ID:        a.ID,
 				ActorID:   uuidString(a.ActorID),
+				ActorName: a.ActorName.String, // "" when null (pgtype.Text), dropped by omitempty
 				ActorKind: a.ActorKind,
 				Action:    a.Action,
 				TargetID:  uuidString(a.TargetID),
