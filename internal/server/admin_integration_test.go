@@ -97,4 +97,8 @@ func TestAdminAPIFlow(t *testing.T) {
 	if !strings.Contains(got, "service.create") || !strings.Contains(got, "service.delete") {
 		t.Errorf("audit missing expected actions: %s", got)
 	}
+	// The acting user's display name is resolved and surfaced (actor_id → users).
+	if !strings.Contains(got, `"actor_name":"Admin"`) {
+		t.Errorf("audit missing actor_name for the acting user: %s", got)
+	}
 }
