@@ -9,6 +9,12 @@ import { ApiError } from './lib/api'
 import '@fontsource-variable/hanken-grotesk/wght.css'
 import '@fontsource-variable/newsreader/opsz.css'
 import './index.css'
+import { registerSW } from 'virtual:pwa-register'
+
+// Register the service worker (PWA install + shell precache). autoUpdate +
+// immediate: a new deploy's worker takes over and reloads on the next nav.
+// Bundled here (not an inline script) so it satisfies script-src 'self'.
+registerSW({ immediate: true })
 
 // TanStack Query is the convention for all server state (CLAUDE.md). Don't retry
 // 4xx responses (a 401 means "log in", not "try again") — only retry transient

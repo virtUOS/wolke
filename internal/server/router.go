@@ -71,6 +71,7 @@ func New(cfg *config.Config, deps Deps) (http.Handler, error) {
 	r.Get("/healthz", healthz)
 	r.Get("/readyz", readyz(deps.Ready))
 	r.Get("/api/branding", branding(cfg.Branding))
+	r.Get("/manifest.webmanifest", manifest(cfg.Branding))
 	mountBranding(r, cfg.BrandingDir)
 	// Ops: token-gated, never exposed publicly (Caddy also 404s it — docs/02 §7).
 	if deps.Metrics != nil {

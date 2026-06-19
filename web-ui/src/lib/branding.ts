@@ -32,7 +32,8 @@ function tokensToCSS(tokens: ThemeTokens): string {
 }
 
 // applyBrandingTokens injects (or replaces) a <style> element defining the light
-// tokens on :root and the dark tokens on .dark, then sets the document title.
+// tokens on :root and the dark tokens on .dark, then sets the document title and
+// the PWA theme-color to the active brand primary.
 export function applyBrandingTokens(b: Branding): void {
   const css = `:root { ${tokensToCSS(b.theme.light)} } .dark { ${tokensToCSS(b.theme.dark)} }`
   let el = document.getElementById('branding-tokens')
@@ -43,6 +44,11 @@ export function applyBrandingTokens(b: Branding): void {
   }
   el.textContent = css
   document.title = b.product_name
+  // Keep the PWA/browser-UI theme-color white-label: track the brand primary.
+  const themeColor = b.theme.light?.primary
+  if (themeColor) {
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor)
+  }
 }
 
 // applySystemTheme picks light/dark from the OS preference for first paint. An
