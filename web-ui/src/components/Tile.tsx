@@ -1,5 +1,5 @@
 import { FileText, Star } from 'lucide-react'
-import { localized, type Category, type Service } from '@/lib/api'
+import { localized, type Category, type ClickTarget, type Service } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { iconByName } from '@/lib/icons'
 import { cn } from '@/lib/utils'
@@ -11,7 +11,7 @@ import { IconButton } from '@/components/ui/icon-button'
 export interface TileActions {
   favoritedIDs: Set<string>
   onToggleFavorite: (s: Service) => void
-  onLaunch: (s: Service) => void
+  onLaunch: (s: Service, target?: ClickTarget) => void
 }
 
 interface TileProps {
@@ -21,8 +21,9 @@ interface TileProps {
   /** When provided, the favorite star is shown. */
   favorited?: boolean
   onToggleFavorite?: (service: Service) => void
-  /** Fired when the main launch link is activated. */
-  onLaunch?: (service: Service) => void
+  /** Fired when a tile link is activated; target distinguishes the launch link
+   *  from the secondary documentation link. */
+  onLaunch?: (service: Service, target?: ClickTarget) => void
   /** Desktop = grid (default); mobile = list. */
   layout?: 'grid' | 'list'
 }
@@ -114,7 +115,10 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={s.tile.docsLink + s.tile.newTab}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onLaunch?.(service, 'documentation')
+                }}
                 style={{ color: 'var(--text-muted)', display: 'inline-flex' }}
                 className="focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
               >
@@ -219,7 +223,10 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={s.tile.docsLink + s.tile.newTab}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onLaunch?.(service, 'documentation')
+                }}
                 style={{
                   pointerEvents: 'auto',
                   display: 'inline-flex', alignItems: 'center', gap: 6,

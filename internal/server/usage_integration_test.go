@@ -64,6 +64,19 @@ func TestClickThenFrequent(t *testing.T) {
 		t.Fatalf("record click = %d, want 204", rec.Code)
 	}
 
+	// Documentation-link clicks are recorded but must NOT promote a service in
+	// "frequently used" (launch-driven). 5× doc clicks on `other` shouldn't
+	// overtake `top`'s 3 launches.
+	for i := 0; i < 5; i++ {
+		if rec := post("/api/events/click", `{"service_id":"`+other+`","target":"documentation"}`); rec.Code != http.StatusNoContent {
+			t.Fatalf("record doc click = %d, want 204", rec.Code)
+		}
+	}
+	// An unknown target is rejected (it would otherwise become a metric label).
+	if rec := post("/api/events/click", `{"service_id":"`+top+`","target":"bogus"}`); rec.Code != http.StatusBadRequest {
+		t.Fatalf("bogus target = %d, want 400", rec.Code)
+	}
+
 	r := httptest.NewRequest(http.MethodGet, "/api/usage/frequent", nil)
 	r = r.WithContext(context.WithValue(r.Context(), userCtxKey{}, user))
 	rec := httptest.NewRecorder()

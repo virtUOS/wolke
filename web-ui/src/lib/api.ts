@@ -5,6 +5,10 @@ export type Localized = Record<string, string>
 
 export type ServiceTag = 'beta' | 'wartung'
 
+// Which link a click followed, recorded for per-service metrics: the launch
+// link (service or doc-only tile) vs the secondary documentation link.
+export type ClickTarget = 'service' | 'documentation'
+
 export interface Service {
   id: string
   name: string
@@ -119,9 +123,9 @@ export const api = {
 
   // usage
   frequent: (signal?: AbortSignal) => getJSON<{ services: Service[] }>('/api/usage/frequent', signal),
-  recordClick: (serviceID: string) => {
+  recordClick: (serviceID: string, target: ClickTarget = 'service') => {
     // Fire-and-forget; a failed event must never disrupt the launch.
-    void send('POST', '/api/events/click', { service_id: serviceID }).catch(() => {})
+    void send('POST', '/api/events/click', { service_id: serviceID, target }).catch(() => {})
   },
 
   // announcements (user-facing)

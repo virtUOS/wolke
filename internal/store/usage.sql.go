@@ -16,6 +16,7 @@ select ce.service_id
 from click_events ce
 join services s on s.id = ce.service_id
 where ce.user_id = $1 and ce.clicked_at >= $2 and s.is_active = true
+  and ce.target = 'service'
 group by ce.service_id
 order by count(*) desc, max(ce.clicked_at) desc
 limit $3
@@ -28,7 +29,8 @@ type FrequentServiceIDsParams struct {
 }
 
 // The user's most-clicked active services within a rolling window, most-used
-// first (powers "frequently used" — docs/01 §4.5).
+// first (powers "frequently used" — docs/01 §4.5). Launches only (target =
+// 'service'); a documentation-link click shouldn't promote a service here.
 func (q *Queries) FrequentServiceIDs(ctx context.Context, arg FrequentServiceIDsParams) ([]pgtype.UUID, error) {
 	rows, err := q.db.Query(ctx, frequentServiceIDs, arg.UserID, arg.Since, arg.Lim)
 	if err != nil {
@@ -62,31 +64,38 @@ func (q *Queries) PurgeOldClicks(ctx context.Context, cutoff pgtype.Timestamptz)
 }
 
 const recordClick = `-- name: RecordClick :exec
-insert into click_events (user_id, service_id, user_role)
-values ($1, $2, $3)
+insert into click_events (user_id, service_id, user_role, target)
+values ($1, $2, $3, $4)
 `
 
 type RecordClickParams struct {
 	UserID    pgtype.UUID `json:"user_id"`
 	ServiceID pgtype.UUID `json:"service_id"`
 	UserRole  string      `json:"user_role"`
+	Target    string      `json:"target"`
 }
 
-// A lightweight launch-click event (docs/01 §5.4). user_role is denormalized so
-// aggregate metrics (Phase 4) need no join. NULLs on user/service delete keep
-// history intact when a user or service is removed.
+// A lightweight click event (docs/01 §5.4). user_role is denormalized so
+// aggregate metrics (Phase 4) need no join. target distinguishes a launch
+// ('service') from a documentation-link click ('documentation'). NULLs on
+// user/service delete keep history intact when a user or service is removed.
 func (q *Queries) RecordClick(ctx context.Context, arg RecordClickParams) error {
-	_, err := q.db.Exec(ctx, recordClick, arg.UserID, arg.ServiceID, arg.UserRole)
+	_, err := q.db.Exec(ctx, recordClick,
+		arg.UserID,
+		arg.ServiceID,
+		arg.UserRole,
+		arg.Target,
+	)
 	return err
 }
 
 const rollupClicks = `-- name: RollupClicks :exec
-insert into usage_daily (day, service_id, user_role, clicks)
-select date(clicked_at), service_id, user_role, count(*)
+insert into usage_daily (day, service_id, user_role, target, clicks)
+select date(clicked_at), service_id, user_role, target, count(*)
 from click_events
 where service_id is not null
-group by date(clicked_at), service_id, user_role
-on conflict (day, service_id, user_role) do update set clicks = excluded.clicks
+group by date(clicked_at), service_id, user_role, target
+on conflict (day, service_id, user_role, target) do update set clicks = excluded.clicks
 `
 
 // Recompute usage_daily from the raw events still present (the retention

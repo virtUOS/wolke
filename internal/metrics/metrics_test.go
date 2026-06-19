@@ -45,12 +45,14 @@ func TestMetricsUngatedWhenNoToken(t *testing.T) {
 
 func TestMetricsExposeSeries(t *testing.T) {
 	m := New()
-	m.IncClick("MyShare", "student")
+	m.IncClick("MyShare", "student", "service")
+	m.IncClick("MyShare", "student", "documentation")
 	m.ObserveRequest("/api/catalog", "GET", 200, 0.01)
 
 	_, body := scrape(t, m.Handler(""), "")
 	for _, want := range []string{
-		`wolke_service_clicks_total{role="student",service="MyShare"}`,
+		`wolke_service_clicks_total{role="student",service="MyShare",target="service"} 1`,
+		`wolke_service_clicks_total{role="student",service="MyShare",target="documentation"} 1`,
 		"wolke_http_request_duration_seconds",
 		"wolke_active_sessions",
 	} {

@@ -163,6 +163,7 @@ create table click_events (
   user_id     uuid references users(id) on delete set null,
   service_id  uuid references services(id) on delete set null,
   user_role   text not null,
+  target      text not null default 'service',  -- 'service' (launch) | 'documentation'
   clicked_at  timestamptz not null default now()
 );
 -- Rollup for fast "frequently used" + cheap metric reads.
@@ -170,8 +171,9 @@ create table usage_daily (
   day         date not null,
   service_id  uuid not null,
   user_role   text not null,
+  target      text not null default 'service',
   clicks      bigint not null default 0,
-  primary key (day, service_id, user_role)
+  primary key (day, service_id, user_role, target)
 );
 
 create table announcements (
@@ -275,7 +277,7 @@ Expose `/metrics` on the app's own listener. **Do not expose it publicly** — p
 
 Core series (prefix `wolke_`; aggregate labels only):
 ```
-wolke_service_clicks_total{service="MyShare", role="student"}   # counter
+wolke_service_clicks_total{service="MyShare", role="student", target="service|documentation"}  # counter
 wolke_active_sessions                                           # gauge
 wolke_http_request_duration_seconds{route,method,code}          # histogram
 wolke_catalog_services{state="active|inactive"}                 # gauge

@@ -20,7 +20,7 @@ import (
 type Metrics struct {
 	reg *prometheus.Registry
 
-	ClicksTotal     *prometheus.CounterVec   // service, role
+	ClicksTotal     *prometheus.CounterVec   // service, role, target
 	RequestDuration *prometheus.HistogramVec // route, method, code
 
 	activeSessions      prometheus.Gauge
@@ -34,8 +34,8 @@ func New() *Metrics {
 		reg: prometheus.NewRegistry(),
 		ClicksTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "wolke_service_clicks_total",
-			Help: "Launch clicks per service and role.",
-		}, []string{"service", "role"}),
+			Help: "Clicks per service, role, and target (service launch | documentation link).",
+		}, []string{"service", "role", "target"}),
 		RequestDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "wolke_http_request_duration_seconds",
 			Help:    "HTTP request duration by route, method, and status code.",
@@ -63,9 +63,10 @@ func (m *Metrics) ObserveRequest(route, method string, code int, seconds float64
 	m.RequestDuration.WithLabelValues(route, method, strconv.Itoa(code)).Observe(seconds)
 }
 
-// IncClick increments the per-service/role click counter.
-func (m *Metrics) IncClick(service, role string) {
-	m.ClicksTotal.WithLabelValues(service, role).Inc()
+// IncClick increments the per-service/role/target click counter. target is the
+// link followed (usage.TargetService | usage.TargetDocumentation).
+func (m *Metrics) IncClick(service, role, target string) {
+	m.ClicksTotal.WithLabelValues(service, role, target).Inc()
 }
 
 // GaugeSource provides the DB counts the periodic refresh reads (satisfied by
