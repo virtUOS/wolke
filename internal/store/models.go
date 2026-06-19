@@ -44,6 +44,7 @@ type ClickEvent struct {
 	ServiceID pgtype.UUID        `json:"service_id"`
 	UserRole  string             `json:"user_role"`
 	ClickedAt pgtype.Timestamptz `json:"clicked_at"`
+	Target    string             `json:"target"`
 }
 
 type Favorite struct {
@@ -90,6 +91,7 @@ type UsageDaily struct {
 	ServiceID pgtype.UUID `json:"service_id"`
 	UserRole  string      `json:"user_role"`
 	Clicks    int64       `json:"clicks"`
+	Target    string      `json:"target"`
 }
 
 type User struct {

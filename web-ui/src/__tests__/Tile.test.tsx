@@ -73,6 +73,14 @@ describe('Tile', () => {
     expect(onLaunch).toHaveBeenCalledWith(service)
   })
 
+  it('fires onLaunch with the documentation target when the Doku link is activated', async () => {
+    const user = userEvent.setup()
+    const onLaunch = vi.fn()
+    render(<Tile service={service} categories={categories} locale="de" onLaunch={onLaunch} />)
+    await user.click(screen.getByRole('link', { name: /Doku/ }))
+    expect(onLaunch).toHaveBeenCalledWith(service, 'documentation')
+  })
+
   it('has no axe violations with all controls', async () => {
     const { container } = render(
       <Tile service={service} categories={categories} locale="de" onToggleFavorite={() => {}} onLaunch={() => {}} />,
