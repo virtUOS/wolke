@@ -33,6 +33,9 @@ export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCou
       >
         {s.greeting.salutation()}, {firstName}.
       </h1>
+      {/* Meta row (date + favorites/maintenance shortcuts) is desktop-only; the
+          mobile layout is kept minimal — just the salutation. */}
+      {!isMobile && (
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
         <span
           style={{
@@ -77,6 +80,7 @@ export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCou
           </>
         )}
       </div>
+      )}
     </div>
   )
 }

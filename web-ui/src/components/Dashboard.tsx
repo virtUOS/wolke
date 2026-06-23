@@ -177,37 +177,55 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         </div>
       )}
 
-      {/* Section head: heading + search */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: isMobile ? 'column' : 'row',
-          alignItems: isMobile ? 'stretch' : 'center',
-          justifyContent: 'space-between',
-          gap: isMobile ? 12 : 20,
-          marginBottom: isMobile ? 16 : 18,
-        }}
-      >
-        <h2
-          style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em', flexShrink: 0 }}
+      {/* Section head. Mobile is intentionally minimal — just the search box on
+          the Dienste tab (no heading, no category chips); discovery relies on
+          search. Desktop keeps the heading + search and the category filters. */}
+      {isMobile ? (
+        tab === 'dienste' && (
+          <div style={{ marginBottom: 16 }}>
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => onSearch(e.target.value)}
+              placeholder={tr.dash.searchPlaceholder}
+              aria-label={tr.dash.searchLabel}
+              style={{ width: '100%' }}
+              className="h-9 rounded-md border border-border bg-surface px-3 text-sm text-text placeholder:text-text-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+            />
+          </div>
+        )
+      ) : (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 20,
+            marginBottom: 18,
+          }}
         >
-          {heading}
-        </h2>
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => onSearch(e.target.value)}
-          placeholder={tr.dash.searchPlaceholder}
-          aria-label={tr.dash.searchLabel}
-          style={{ width: isMobile ? '100%' : 260 }}
-          className="h-9 rounded-md border border-border bg-surface px-3 text-sm text-text placeholder:text-text-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-        />
-      </div>
+          <h2
+            style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em', flexShrink: 0 }}
+          >
+            {heading}
+          </h2>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder={tr.dash.searchPlaceholder}
+            aria-label={tr.dash.searchLabel}
+            style={{ width: 260 }}
+            className="h-9 rounded-md border border-border bg-surface px-3 text-sm text-text placeholder:text-text-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+          />
+        </div>
+      )}
 
-      {/* Single-select filters (Dienste tab; hidden while searching, since a
-          search is global and deactivates filters). "In Wartung" is always
-          shown so maintenance is reachable as a normal facet. */}
-      {tab === 'dienste' && !searching && (
+      {/* Single-select filters: desktop only (mobile relies on search). Hidden
+          while searching, since a search is global and deactivates filters.
+          "In Wartung" is always shown so maintenance is reachable as a facet. */}
+      {!isMobile && tab === 'dienste' && !searching && (
         <div
           role="group"
           aria-label={tr.dash.filterCategories}
