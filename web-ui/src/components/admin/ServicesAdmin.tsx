@@ -73,7 +73,6 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
               <span className="min-w-0 flex-1">
                 <span className="font-medium">{svc.name}</span>
                 {!svc.is_active && <Badge className="ml-2">{s.admin.inactive}</Badge>}
-                <span className="ml-2 text-xs text-text-muted">{svc.categories.join(', ')}</span>
               </span>
               <span className="flex items-center gap-2">
                 <Button variant="outline" size="sm" className="border-border" onClick={() => setMode({ kind: 'edit', service: svc })}>{s.common.edit}</Button>
