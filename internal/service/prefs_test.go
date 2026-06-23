@@ -23,7 +23,7 @@ func (f *fakePrefs) UpdateUserPrefs(_ context.Context, arg store.UpdateUserPrefs
 
 func TestUpdatePrefsValid(t *testing.T) {
 	f := &fakePrefs{}
-	u, err := UpdatePrefs(context.Background(), f, pgtype.UUID{}, Prefs{Theme: "dark", ViewMode: "table", FavoritesOrder: "alpha", FavoritesSeparateTab: true})
+	u, err := UpdatePrefs(context.Background(), f, pgtype.UUID{}, Prefs{Theme: "dark", ViewMode: "table", Locale: "en", FavoritesOrder: "alpha", FavoritesSeparateTab: true})
 	if err != nil {
 		t.Fatalf("UpdatePrefs: %v", err)
 	}
@@ -44,9 +44,10 @@ func TestUpdatePrefsRejectsInvalid(t *testing.T) {
 		prefs Prefs
 		field string
 	}{
-		{"bad theme", Prefs{Theme: "neon", ViewMode: "list", FavoritesOrder: "usage"}, "theme"},
-		{"bad view_mode", Prefs{Theme: "dark", ViewMode: "grid", FavoritesOrder: "usage"}, "view_mode"},
-		{"bad favorites_order", Prefs{Theme: "dark", ViewMode: "list", FavoritesOrder: "random"}, "favorites_order"},
+		{"bad theme", Prefs{Theme: "neon", ViewMode: "list", Locale: "auto", FavoritesOrder: "usage"}, "theme"},
+		{"bad view_mode", Prefs{Theme: "dark", ViewMode: "grid", Locale: "auto", FavoritesOrder: "usage"}, "view_mode"},
+		{"bad locale", Prefs{Theme: "dark", ViewMode: "list", Locale: "fr", FavoritesOrder: "usage"}, "locale"},
+		{"bad favorites_order", Prefs{Theme: "dark", ViewMode: "list", Locale: "auto", FavoritesOrder: "random"}, "favorites_order"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

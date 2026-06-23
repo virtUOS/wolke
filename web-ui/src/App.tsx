@@ -3,11 +3,16 @@ import { Dashboard } from '@/components/Dashboard'
 import { useMe } from '@/lib/hooks'
 import { ApiError } from '@/lib/api'
 import { applyBrandingTokens, applySystemTheme, fetchBranding, type Branding } from '@/lib/branding'
+import { resolveLocale, t } from '@/lib/i18n'
 
 export default function App() {
   const [branding, setBranding] = useState<Branding | null>(null)
   const [failed, setFailed] = useState(false)
   const me = useMe()
+  // The app shell (loading/error states) renders before branding or the user's
+  // locale pref are known, so it picks the language from the browser, falling
+  // back to branding.default_locale once that has loaded.
+  const s = t(resolveLocale(branding?.default_locale))
 
   // No session → bounce to the BFF login (docs/01 §6: login is always required).
   // In the embedded build the server redirects before the SPA loads; in the Vite
@@ -26,6 +31,9 @@ export default function App() {
     fetchBranding(ctrl.signal)
       .then((b) => {
         applyBrandingTokens(b)
+        // Keep <html lang> in sync with the resolved UI locale so screen readers
+        // and the browser announce the right language (index.html ships lang="de").
+        document.documentElement.lang = resolveLocale(b.default_locale)
         setBranding(b)
       })
       .catch((err) => {
@@ -40,7 +48,7 @@ export default function App() {
   if (unauthenticated) {
     return (
       <div aria-busy="true" className="p-6 text-sm">
-        Anmeldung…
+        {s.shell.signingIn}
       </div>
     )
   }
@@ -50,18 +58,15 @@ export default function App() {
   if (failed || me.isError) {
     return (
       <div role="alert" className="p-6 text-sm">
-        <p>Die Anwendung konnte nicht geladen werden.</p>
-        <p className="mt-2 text-text-muted">
-          Falls der Server ohne OIDC läuft, sind die angemeldeten Endpunkte nicht verfügbar. Siehe README → „Local
-          development“.
-        </p>
+        <p>{s.shell.loadError}</p>
+        <p className="mt-2 text-text-muted">{s.shell.loadErrorHint}</p>
       </div>
     )
   }
   if (!branding || me.isLoading || !me.data) {
     return (
       <div aria-busy="true" className="p-6 text-sm">
-        Lädt…
+        {s.common.loading}
       </div>
     )
   }

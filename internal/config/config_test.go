@@ -41,6 +41,9 @@ func TestDefaultsWhenNoFileNoEnv(t *testing.T) {
 	if got := cfg.Branding.Theme.Light["primary"]; got != "#A6093D" {
 		t.Errorf("light primary = %q, want default brand red", got)
 	}
+	if cfg.Branding.ImprintURL == "" || cfg.Branding.PrivacyURL == "" {
+		t.Error("default branding should carry imprint/privacy footer links")
+	}
 }
 
 func TestFileOverridesDefaults(t *testing.T) {

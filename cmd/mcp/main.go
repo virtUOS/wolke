@@ -73,11 +73,11 @@ type empty struct{}
 
 type serviceFields struct {
 	Name          string   `json:"name"`
-	DescriptionDe string   `json:"description_de"`
-	DescriptionEn string   `json:"description_en,omitempty"`
-	ServiceURL    string   `json:"service_url,omitempty"` // omit one of service_url/doc_url is OK
+	DescriptionDe string   `json:"description_de"`        // required (German)
+	DescriptionEn string   `json:"description_en"`        // required (English)
+	ServiceURL    string   `json:"service_url,omitempty"` // one of service_url/doc_url may be omitted
 	DocURL        string   `json:"doc_url,omitempty"`
-	Icon          string   `json:"icon"`
+	Icon          string   `json:"icon"` // kebab-case lucide icon name, e.g. "graduation-cap"
 	Categories    []string `json:"categories"`
 }
 
@@ -132,13 +132,13 @@ func registerTools(s *mcp.Server, mgr *adminmcp.Manager) {
 			return nil, categoriesOut{Categories: cats}, err
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "service.propose_create", Description: "Validate a new service and return a preview + change_token. Does NOT write."},
+	mcp.AddTool(s, &mcp.Tool{Name: "service.propose_create", Description: "Validate a new service and return a preview + change_token. Does NOT write. Requires both description_de and description_en, a kebab-case lucide icon name, and at least one category."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in serviceFields) (*mcp.CallToolResult, adminmcp.Preview, error) {
 			p, err := mgr.ProposeCreate(ctx, in.draft())
 			return nil, p, err
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "service.propose_update", Description: "Validate an edit to an existing service and return a before/after preview + change_token. Does NOT write."},
+	mcp.AddTool(s, &mcp.Tool{Name: "service.propose_update", Description: "Validate an edit to an existing service and return a before/after preview + change_token. Does NOT write. Requires both description_de and description_en, a kebab-case lucide icon name, and at least one category."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in updateInput) (*mcp.CallToolResult, adminmcp.Preview, error) {
 			p, err := mgr.ProposeUpdate(ctx, in.ID, in.draft())
 			return nil, p, err

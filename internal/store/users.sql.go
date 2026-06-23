@@ -12,7 +12,7 @@ import (
 )
 
 const getUserByID = `-- name: GetUserByID :one
-select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded from users where id = $1
+select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale from users where id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -32,12 +32,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 		&i.FavoritesOrder,
 		&i.FavoritesSeparateTab,
 		&i.FavoritesSeeded,
+		&i.Locale,
 	)
 	return i, err
 }
 
 const getUserBySub = `-- name: GetUserBySub :one
-select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded from users where oidc_sub = $1
+select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale from users where oidc_sub = $1
 `
 
 func (q *Queries) GetUserBySub(ctx context.Context, oidcSub string) (User, error) {
@@ -57,6 +58,7 @@ func (q *Queries) GetUserBySub(ctx context.Context, oidcSub string) (User, error
 		&i.FavoritesOrder,
 		&i.FavoritesSeparateTab,
 		&i.FavoritesSeeded,
+		&i.Locale,
 	)
 	return i, err
 }
@@ -65,15 +67,17 @@ const updateUserPrefs = `-- name: UpdateUserPrefs :one
 update users
 set view_mode              = $1,
     theme                  = $2,
-    favorites_order        = $3,
-    favorites_separate_tab = $4
-where id = $5
-returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded
+    locale                 = $3,
+    favorites_order        = $4,
+    favorites_separate_tab = $5
+where id = $6
+returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale
 `
 
 type UpdateUserPrefsParams struct {
 	ViewMode             string      `json:"view_mode"`
 	Theme                string      `json:"theme"`
+	Locale               string      `json:"locale"`
 	FavoritesOrder       string      `json:"favorites_order"`
 	FavoritesSeparateTab bool        `json:"favorites_separate_tab"`
 	ID                   pgtype.UUID `json:"id"`
@@ -84,6 +88,7 @@ func (q *Queries) UpdateUserPrefs(ctx context.Context, arg UpdateUserPrefsParams
 	row := q.db.QueryRow(ctx, updateUserPrefs,
 		arg.ViewMode,
 		arg.Theme,
+		arg.Locale,
 		arg.FavoritesOrder,
 		arg.FavoritesSeparateTab,
 		arg.ID,
@@ -103,6 +108,7 @@ func (q *Queries) UpdateUserPrefs(ctx context.Context, arg UpdateUserPrefsParams
 		&i.FavoritesOrder,
 		&i.FavoritesSeparateTab,
 		&i.FavoritesSeeded,
+		&i.Locale,
 	)
 	return i, err
 }
@@ -116,7 +122,7 @@ set display_name = excluded.display_name,
     primary_role = excluded.primary_role,
     is_admin     = excluded.is_admin,
     last_seen_at = now()
-returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded
+returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale
 `
 
 type UpsertUserParams struct {
@@ -153,6 +159,7 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		&i.FavoritesOrder,
 		&i.FavoritesSeparateTab,
 		&i.FavoritesSeeded,
+		&i.Locale,
 	)
 	return i, err
 }

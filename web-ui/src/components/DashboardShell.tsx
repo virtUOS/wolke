@@ -1,7 +1,7 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import type { Me } from '@/lib/api'
 import type { Branding } from '@/lib/branding'
-import { t } from '@/lib/i18n'
+import { t, type Lang } from '@/lib/i18n'
 import { TopBar, type Tab } from './TopBar'
 
 function initials(name: string): string {
@@ -25,10 +25,13 @@ function logout() {
 interface DashboardShellProps {
   branding: Branding
   me: Me
+  /** The active locale, resolved once in Dashboard and threaded down. */
+  locale: Lang
   tab: Tab
   onTab: (t: Tab) => void
   isDark: boolean
   onToggleTheme: () => void
+  onSetLocale: (locale: Me['locale']) => void
   onAdmin: () => void
   isMobile: boolean
   /** Identifies the current view; when it changes, focus moves to <main> so a
@@ -43,16 +46,18 @@ interface DashboardShellProps {
 export function DashboardShell({
   branding,
   me,
+  locale,
   tab,
   onTab,
   isDark,
   onToggleTheme,
+  onSetLocale,
   onAdmin,
   isMobile,
   focusKey,
   children,
 }: DashboardShellProps) {
-  const s = t(branding.default_locale || 'de')
+  const s = t(locale)
   const mainRef = useRef<HTMLElement>(null)
   const prevKey = useRef(focusKey)
 
@@ -66,8 +71,12 @@ export function DashboardShell({
     }
   }, [focusKey])
 
+  // Flex column so the footer is pushed to the bottom of the viewport when the
+  // content is short (sticky-footer pattern); <main> takes the slack.
   const canvasStyle: CSSProperties = {
     minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
     background: isDark
       ? 'color-mix(in srgb, var(--accent) 7%, var(--bg))'
       : 'color-mix(in srgb, var(--accent) 5%, var(--bg))',
@@ -85,10 +94,13 @@ export function DashboardShell({
       </a>
       <TopBar
         branding={branding}
+        locale={locale}
+        currentLocalePref={me.locale}
         tab={tab}
         onTab={onTab}
         isDark={isDark}
         onToggleTheme={onToggleTheme}
+        onSetLocale={onSetLocale}
         userInitials={initials(me.display_name)}
         userName={me.display_name}
         userEmail={me.email}
@@ -102,13 +114,56 @@ export function DashboardShell({
         tabIndex={-1}
         className="focus:outline-hidden"
         style={{
+          flexGrow: 1,
+          width: '100%',
           maxWidth: 1180,
           margin: '0 auto',
+          boxSizing: 'border-box',
           padding: isMobile ? '20px 16px 32px' : '28px 24px 40px',
         }}
       >
         {children}
       </main>
+      {(branding.imprint_url || branding.privacy_url) && (
+        <footer
+          aria-label={s.footer.legal}
+          style={{
+            maxWidth: 1180,
+            margin: '0 auto',
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: isMobile ? '0 16px 24px' : '0 24px 32px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex', flexWrap: 'wrap', gap: 20,
+              borderTop: '1px solid var(--border)', paddingTop: 16,
+            }}
+          >
+            {branding.imprint_url && (
+              <a
+                href={branding.imprint_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded text-sm text-text-muted no-underline transition-colors hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+              >
+                {s.footer.imprint}
+              </a>
+            )}
+            {branding.privacy_url && (
+              <a
+                href={branding.privacy_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded text-sm text-text-muted no-underline transition-colors hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+              >
+                {s.footer.privacy}
+              </a>
+            )}
+          </div>
+        </footer>
+      )}
     </div>
   )
 }

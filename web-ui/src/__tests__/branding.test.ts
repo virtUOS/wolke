@@ -7,6 +7,8 @@ const branding: Branding = {
   logo_dark: '/branding/logo-dark.svg',
   favicon: '/branding/favicon.svg',
   default_locale: 'de',
+  imprint_url: 'https://example.edu/impressum',
+  privacy_url: 'https://example.edu/datenschutz',
   theme: {
     light: { primary: '#A6093D', primary_hover: '#8A0732' },
     dark: { primary: '#C2355C' },

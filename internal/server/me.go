@@ -19,6 +19,7 @@ type meResponse struct {
 	IsAdmin              bool   `json:"is_admin"`
 	ViewMode             string `json:"view_mode"`
 	Theme                string `json:"theme"`
+	Locale               string `json:"locale"`
 	FavoritesOrder       string `json:"favorites_order"`
 	FavoritesSeparateTab bool   `json:"favorites_separate_tab"`
 }
@@ -42,6 +43,7 @@ func toMeResponse(u store.User) meResponse {
 		IsAdmin:              u.IsAdmin,
 		ViewMode:             u.ViewMode,
 		Theme:                u.Theme,
+		Locale:               u.Locale,
 		FavoritesOrder:       u.FavoritesOrder,
 		FavoritesSeparateTab: u.FavoritesSeparateTab,
 	}

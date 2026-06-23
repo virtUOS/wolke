@@ -41,6 +41,8 @@ type Deps struct {
 	Favorites service.FavoritesStore
 	Usage     usage.Store
 	Announce  announce.Store
+	// AnnounceDismiss backs the per-user dismiss write (a user route, not admin).
+	AnnounceDismiss service.DismissStore
 	// Admin enables the admin write API + audit read (mounted behind requireAdmin).
 	Admin *AdminDeps
 }
@@ -130,6 +132,9 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 		if deps.Announce != nil {
 			pr.With(requireUserJSON).Get("/api/announcements", userAnnouncements(deps.Announce))
 		}
+		if deps.AnnounceDismiss != nil {
+			pr.With(requireUserJSON).Post("/api/announcements/{id}/dismiss", dismissAnnouncement(deps.AnnounceDismiss))
+		}
 		if deps.Catalog != nil {
 			pr.With(requireUserJSON).Get("/api/catalog", catalogList(deps.Catalog))
 			pr.With(requireUserJSON).Get("/api/catalog/defaults", catalogDefaults(deps.Catalog, deps.Defaults))
@@ -149,6 +154,7 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 				ar.Get("/announcements", adminListAnnouncements(ad))
 				ar.Post("/announcements", adminCreateAnnouncement(ad))
 				ar.Patch("/announcements/{id}", adminUpdateAnnouncement(ad))
+				ar.Delete("/announcements/{id}", adminDeleteAnnouncement(ad))
 				ar.Get("/audit", adminListAudit(ad))
 			})
 		}

@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { ArrowRight, Moon, Shield, Sun, LogOut } from 'lucide-react'
+import { ArrowRight, Languages, Moon, Shield, Sun, LogOut } from 'lucide-react'
 import type { Branding } from '@/lib/branding'
-import { t } from '@/lib/i18n'
+import { t, type Lang } from '@/lib/i18n'
+import type { Me } from '@/lib/api'
 import { IconButton } from '@/components/ui/icon-button'
 import { PillButton } from '@/components/ui/pill-button'
 import { focusFirst, trapTab } from '@/lib/focus'
@@ -10,10 +11,15 @@ export type Tab = 'favoriten' | 'dienste'
 
 interface TopBarProps {
   branding: Branding
+  /** The active locale used to render chrome (resolved upstream). */
+  locale: Lang
+  /** The user's raw preference ('auto' | 'de' | 'en'), for the switcher's state. */
+  currentLocalePref: Me['locale']
   tab: Tab
   onTab: (t: Tab) => void
   isDark: boolean
   onToggleTheme: () => void
+  onSetLocale: (locale: Me['locale']) => void
   userInitials: string
   userName: string
   userEmail?: string
@@ -26,10 +32,13 @@ interface TopBarProps {
 // theme toggle + avatar-triggered account menu.
 export function TopBar({
   branding,
+  locale,
+  currentLocalePref,
   tab,
   onTab,
   isDark,
   onToggleTheme,
+  onSetLocale,
   userInitials,
   userName,
   userEmail,
@@ -37,7 +46,6 @@ export function TopBar({
   onAdmin,
   onLogout,
 }: TopBarProps) {
-  const locale = branding.default_locale || 'de'
   const s = t(locale)
   return (
     <header
@@ -98,6 +106,8 @@ export function TopBar({
           </IconButton>
           <AccountMenu
             locale={locale}
+            currentLocalePref={currentLocalePref}
+            onSetLocale={onSetLocale}
             initials={userInitials}
             name={userName}
             email={userEmail}
@@ -114,7 +124,9 @@ export function TopBar({
 // ── Account menu ────────────────────────────────────────────────────────────
 
 interface AccountMenuProps {
-  locale: string
+  locale: Lang
+  currentLocalePref: Me['locale']
+  onSetLocale: (locale: Me['locale']) => void
   initials: string
   name: string
   email?: string
@@ -123,7 +135,7 @@ interface AccountMenuProps {
   onLogout: () => void
 }
 
-function AccountMenu({ locale, initials, name, email, isAdmin, onAdmin, onLogout }: AccountMenuProps) {
+function AccountMenu({ locale, currentLocalePref, onSetLocale, initials, name, email, isAdmin, onAdmin, onLogout }: AccountMenuProps) {
   const s = t(locale)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -216,6 +228,46 @@ function AccountMenu({ locale, initials, name, email, isAdmin, onAdmin, onLogout
           </div>
 
           <div style={{ height: 1, background: 'var(--border)', margin: '0 0 4px' }} aria-hidden="true" />
+
+          {/* Language switcher: persists as a user pref (locale: auto | de | en).
+              'auto' defers to the browser; de/en pin the language. */}
+          <div style={{ ...itemStyle, cursor: 'default', alignItems: 'flex-start', flexDirection: 'column', gap: 6 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: 'var(--text-muted)', fontSize: 12 }}>
+              <Languages className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {s.topbar.language}
+            </span>
+            <div role="group" aria-label={s.topbar.language} style={{ display: 'flex', gap: 4, width: '100%' }}>
+              {(
+                [
+                  ['auto', s.topbar.langAuto],
+                  ['de', s.topbar.langDe],
+                  ['en', s.topbar.langEn],
+                ] as const
+              ).map(([value, label]) => {
+                const active = currentLocalePref === value
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => onSetLocale(value)}
+                    style={{
+                      flex: 1, padding: '5px 6px', fontSize: 12.5, lineHeight: 1.2,
+                      borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                      border: '1px solid var(--border)',
+                      background: active ? 'color-mix(in srgb, var(--accent) 38%, var(--surface))' : 'transparent',
+                      color: 'var(--text)', fontWeight: active ? 600 : 400,
+                    }}
+                    className="hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} aria-hidden="true" />
 
           {isAdmin && (
             <button

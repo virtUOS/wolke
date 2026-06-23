@@ -28,14 +28,15 @@ type Announcement struct {
 
 // Store is the read surface the announce package needs.
 type Store interface {
-	ListActiveAnnouncements(ctx context.Context, role string) ([]store.Announcement, error)
+	ListActiveAnnouncements(ctx context.Context, arg store.ListActiveAnnouncementsParams) ([]store.Announcement, error)
 	ListAllActiveAnnouncements(ctx context.Context) ([]store.Announcement, error)
 	AdminListAnnouncements(ctx context.Context, lim int32) ([]store.Announcement, error)
 }
 
-// ListActive returns announcements currently in-window and addressed to the role.
-func ListActive(ctx context.Context, db Store, role string) ([]Announcement, error) {
-	rows, err := db.ListActiveAnnouncements(ctx, role)
+// ListActive returns announcements currently in-window, addressed to the role,
+// and not already dismissed by the user.
+func ListActive(ctx context.Context, db Store, role string, userID pgtype.UUID) ([]Announcement, error) {
+	rows, err := db.ListActiveAnnouncements(ctx, store.ListActiveAnnouncementsParams{Role: role, UserID: userID})
 	if err != nil {
 		return nil, fmt.Errorf("list active announcements: %w", err)
 	}

@@ -13,6 +13,8 @@ export interface Branding {
   logo_dark: string
   favicon: string
   default_locale: string
+  imprint_url: string
+  privacy_url: string
   theme: {
     light: ThemeTokens
     dark: ThemeTokens

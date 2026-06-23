@@ -8,7 +8,7 @@ import (
 func validInput() Draft {
 	return Draft{
 		Name:        "MyShare",
-		Description: map[string]string{"de": "Netzspeicher."},
+		Description: map[string]string{"de": "Netzspeicher.", "en": "Network storage."},
 		ServiceURL:  "https://myshare.example.edu",
 		Icon:        "hard-drive",
 		Categories:  []string{"data"},
@@ -24,7 +24,8 @@ func TestValidateDraft(t *testing.T) {
 		{"valid", func(*Draft) {}, ""},
 		{"empty name", func(in *Draft) { in.Name = "  " }, "name"},
 		{"missing de description", func(in *Draft) { in.Description = map[string]string{"en": "x"} }, "description"},
-		{"bad icon", func(in *Draft) { in.Icon = "not-a-lucide-icon" }, "icon"},
+		{"missing en description", func(in *Draft) { in.Description = map[string]string{"de": "x"} }, "description"},
+		{"bad icon", func(in *Draft) { in.Icon = "Bad Icon!" }, "icon"},
 		{"no urls", func(in *Draft) { in.ServiceURL = ""; in.DocURL = "" }, "service_url"},
 		{"bad service url", func(in *Draft) { in.ServiceURL = "javascript:alert(1)" }, "service_url"},
 		{"bad doc url", func(in *Draft) { in.DocURL = "ftp://x" }, "doc_url"},

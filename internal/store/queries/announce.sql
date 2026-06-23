@@ -18,15 +18,31 @@ returning *;
 -- name: GetAnnouncementByID :one
 select * from announcements where id = @id;
 
+-- name: DeleteAnnouncement :execrows
+delete from announcements where id = @id;
+
+-- name: CountAnnouncements :one
+select count(*) from announcements;
+
+-- name: DismissAnnouncement :exec
+-- Record a per-user dismissal. Idempotent: dismissing twice is a no-op.
+insert into announcement_dismissals (user_id, announcement_id)
+values (@user_id, @announcement_id)
+on conflict (user_id, announcement_id) do nothing;
+
 -- name: ListActiveAnnouncements :many
--- Active = within its time window and addressed to the user's role (or all),
--- most-severe first (docs/01 §4.7).
-select *
-from announcements
-where (starts_at is null or starts_at <= now())
-  and (ends_at is null or ends_at > now())
-  and (audience = 'all' or audience = @role)
-order by case severity when 'critical' then 0 when 'warning' then 1 else 2 end, created_at desc;
+-- Active = within its time window, addressed to the user's role (or all), and
+-- not already dismissed by the user, most-severe first (docs/01 §4.7).
+select a.*
+from announcements a
+where (a.starts_at is null or a.starts_at <= now())
+  and (a.ends_at is null or a.ends_at > now())
+  and (a.audience = 'all' or a.audience = @role)
+  and not exists (
+    select 1 from announcement_dismissals d
+    where d.announcement_id = a.id and d.user_id = @user_id
+  )
+order by case a.severity when 'critical' then 0 when 'warning' then 1 else 2 end, a.created_at desc;
 
 -- name: ListAllActiveAnnouncements :many
 -- Active = within its time window, across ALL audiences. For the public,

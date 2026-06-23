@@ -1,7 +1,7 @@
 import { FileText, Star } from 'lucide-react'
 import { localized, type Category, type ClickTarget, type Service } from '@/lib/api'
 import { t } from '@/lib/i18n'
-import { iconByName } from '@/lib/icons'
+import { ServiceIcon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { IconButton } from '@/components/ui/icon-button'
@@ -34,7 +34,6 @@ interface TileProps {
 // always visible — no expand/collapse in the Editorial direction.
 export function Tile({ service, locale, categories, favorited, onToggleFavorite, onLaunch, layout = 'grid' }: TileProps) {
   const s = t(locale)
-  const Icon = iconByName(service.icon)
   const launchHref = service.service_url || service.doc_url || '#'
   const docsOnly = service.doc_only
   const primaryCategory = categories.find((c) => c.slug === service.categories[0])
@@ -91,7 +90,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
               color: 'var(--text)',
             }}
           >
-            <Icon className="h-5 w-5" />
+            <ServiceIcon name={service.icon} className="h-5 w-5" aria-hidden="true" />
           </div>
 
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -119,8 +118,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
                   e.stopPropagation()
                   onLaunch?.(service, 'documentation')
                 }}
-                style={{ color: 'var(--text-muted)', display: 'inline-flex' }}
-                className="focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
+                className="inline-flex items-center justify-center rounded-md border border-border bg-surface-2 p-1.5 text-text-muted transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
               >
                 <FileText className="h-4 w-4" aria-hidden="true" />
               </a>
@@ -179,7 +177,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
               color: 'var(--text)',
             }}
           >
-            <Icon className="h-[22px] w-[22px]" />
+            <ServiceIcon name={service.icon} className="h-[22px] w-[22px]" aria-hidden="true" />
           </div>
           <div style={{ pointerEvents: 'auto', flexShrink: 0 }}>{starBtn}</div>
         </div>
@@ -214,31 +212,24 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           >
             {categoryLabel}
           </span>
-          {docsOnly ? (
-            <FileText className="h-[15px] w-[15px] shrink-0 text-text-muted" aria-hidden="true" />
-          ) : (
-            service.doc_url && (
-              <a
-                href={service.doc_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={s.tile.docsLink + s.tile.newTab}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onLaunch?.(service, 'documentation')
-                }}
-                style={{
-                  pointerEvents: 'auto',
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  fontSize: 12.5, fontWeight: 600,
-                  color: 'var(--text-muted)', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-                className="hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
-              >
-                <FileText className="h-[14px] w-[14px]" aria-hidden="true" />
-                {s.tile.docsLink}
-              </a>
-            )
+          {/* Docs-only tiles already open the documentation via the main link, so
+              the secondary docs chip is redundant and omitted. */}
+          {!docsOnly && service.doc_url && (
+            <a
+              href={service.doc_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={s.tile.docsLink + s.tile.newTab}
+              onClick={(e) => {
+                e.stopPropagation()
+                onLaunch?.(service, 'documentation')
+              }}
+              style={{ pointerEvents: 'auto' }}
+              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface-2 px-2 py-1 text-xs font-semibold text-text-muted no-underline transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+            >
+              <FileText className="h-[14px] w-[14px]" aria-hidden="true" />
+              {s.tile.docsLink}
+            </a>
           )}
         </div>
       </div>

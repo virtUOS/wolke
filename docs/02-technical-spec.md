@@ -111,6 +111,8 @@ create table users (
   is_admin      boolean not null default false,   -- derived from group claim at login
   view_mode     text not null default 'auto' check (view_mode in ('list','table','auto')),
   theme         text not null default 'system'   check (theme in ('light','dark','system')),
+  locale        text not null default 'auto'     check (locale in ('auto','de','en')),  -- 'auto' = detect from browser, else pinned
+
   created_at    timestamptz not null default now(),
   last_seen_at  timestamptz not null default now()
 );
@@ -176,6 +178,8 @@ create table usage_daily (
   primary key (day, service_id, user_role, target)
 );
 
+-- The announcement is a singleton: at most one row may exist (enforced by a
+-- one-row unique index, `((true))`). Admins create/edit/remove "the" announcement.
 create table announcements (
   id          uuid primary key default gen_random_uuid(),
   title       jsonb not null,
@@ -187,6 +191,15 @@ create table announcements (
   dismissible boolean not null default true,
   created_by  uuid references users(id),
   created_at  timestamptz not null default now()
+);
+
+-- Per-user dismissals: a closed banner stays gone across reloads/devices. Keyed
+-- by announcement id, so a re-created announcement (new id) re-shows. Cascades.
+create table announcement_dismissals (
+  user_id         uuid not null references users(id) on delete cascade,
+  announcement_id uuid not null references announcements(id) on delete cascade,
+  dismissed_at    timestamptz not null default now(),
+  primary key (user_id, announcement_id)
 );
 
 -- Every write via form OR MCP lands here.
@@ -360,8 +373,11 @@ balancer only when an HA requirement (not raw load) forces it.
   HSTS, `SameSite` cookies, CSRF protection on state-changing requests (double-submit token
   or `SameSite=Strict` + custom header check).
 - **Rate limiting:** modest per-session limit on writes and search.
-- **i18n:** server stores localized fields as JSONB (`{de,en}`); SPA uses a lightweight i18n lib.
-  Ship `de`, keep `en` wired.
+- **i18n:** server stores localized fields as JSONB (`{de,en}`) and returns *both* languages; the
+  SPA picks the active one client-side. Ship `de`, keep `en` wired. The active UI language is
+  `users.locale`: `auto` (default) detects it from the browser's `Accept-Language` order, falling
+  back to `branding.default_locale`; `de`/`en` pin it. Users switch via the account menu and the
+  choice persists server-side (no `Accept-Language` negotiation on the API — content is bilingual).
 - **Behind a reverse proxy:** the app runs behind Caddy (TLS terminated at the proxy). It must
   read the client protocol/host from `X-Forwarded-Proto`/`X-Forwarded-Host` (trusting them **only**
   from the proxy), and take its own public URL from config (`PUBLIC_URL`) — used to build the OIDC
@@ -388,6 +404,8 @@ branding:
   logo_light: /branding/logo-light.svg     # mounted asset paths
   logo_dark:  /branding/logo-dark.svg
   favicon:    /branding/favicon.svg
+  imprint_url: "https://www.uni-osnabrueck.de/impressum/"   # legal footer links
+  privacy_url: "https://www.uni-osnabrueck.de/datenschutz/" # (empty hides the link)
   theme:
     light: { primary: "#A6093D", primary_hover: "#8A0732", accent: "#F2C879",
              surface: "#F4F4F5", text: "#18181B" }
@@ -439,7 +457,7 @@ GET    /api/catalog/defaults       → role-ordered default view for the current
 GET    /api/search?q=              → grouped search results
 
 # personalization
-PATCH  /api/me/prefs               → theme, view_mode
+PATCH  /api/me/prefs               → theme, view_mode, locale
 GET    /api/favorites              → the user's favorited services
 POST   /api/favorites/items        → add a service to favorites {service_id}
 DELETE /api/favorites/items        → remove a service from favorites {service_id}
@@ -449,7 +467,8 @@ GET    /api/usage/frequent         → the user's frequently-used services
 POST   /api/events/click           → record a launch click {service_id}
 
 # announcements
-GET    /api/announcements          → active, scoped to the user's role
+GET    /api/announcements          → active, scoped to the user's role, minus the user's dismissals
+POST   /api/announcements/:id/dismiss → dismiss for the current user (persists; not for critical)
 
 # admin 🔒
 GET    /api/admin/services         → full catalog incl. inactive
@@ -458,8 +477,9 @@ PATCH  /api/admin/services/:id     🔒 edit
 DELETE /api/admin/services/:id     🔒 soft delete
 PUT    /api/admin/role-defaults/:role 🔒 set the ordered default view
 POST   /api/admin/categories       🔒 manage categories
-POST   /api/admin/announcements    🔒 create
+POST   /api/admin/announcements    🔒 create (rejected if one already exists — singleton)
 PATCH  /api/admin/announcements/:id 🔒 edit/expire
+DELETE /api/admin/announcements/:id 🔒 remove (hard delete; dismissals cascade)
 GET    /api/admin/audit            🔒 read audit log
 
 # ops (scrape-protected, not public)

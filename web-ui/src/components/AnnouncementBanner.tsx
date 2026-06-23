@@ -1,19 +1,21 @@
-import { useState } from 'react'
 import { AlertTriangle, Info, OctagonAlert } from 'lucide-react'
 import { localized, type Announcement, type Severity } from '@/lib/api'
 import { t } from '@/lib/i18n'
+import { useDismissAnnouncement } from '@/lib/hooks'
 import { Alert } from '@/components/ui/alert'
 import type { alertVariants } from '@/components/ui/alert'
 import type { VariantProps } from 'class-variance-authority'
 
 // Role-scoped announcement banners (docs/01 §4.7, docs/03 §8): severity-colored,
 // stacked, dismissible except critical, announced via an aria-live region. Each
-// banner is an Alert primitive; this component owns the live region and which
-// announcements are visible.
+// banner is an Alert primitive; this component owns the live region. Dismissals
+// persist server-side (per user), so a closed banner stays gone across reloads.
 export function AnnouncementBanner({ announcements, locale }: { announcements: Announcement[]; locale: string }) {
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const s = t(locale)
-  const visible = announcements.filter((a) => !dismissed.has(a.id))
+  const dismiss = useDismissAnnouncement()
+  // The server already excludes dismissed announcements; the optimistic mutation
+  // drops them from the cache immediately, so render the list as-is.
+  const visible = announcements
   if (visible.length === 0) return null
 
   const renderAlert = (a: Announcement) => (
@@ -23,9 +25,7 @@ export function AnnouncementBanner({ announcements, locale }: { announcements: A
       icon={severityIcon(a.severity)}
       title={localized(a.title, locale)}
       dismissLabel={s.announce.dismiss}
-      onDismiss={
-        a.dismissible && a.severity !== 'critical' ? () => setDismissed((d) => new Set(d).add(a.id)) : undefined
-      }
+      onDismiss={a.dismissible && a.severity !== 'critical' ? () => dismiss.mutate(a.id) : undefined}
     >
       {localized(a.body, locale)}
     </Alert>

@@ -16,12 +16,30 @@ import (
 func userAnnouncements(db announce.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
-		list, err := announce.ListActive(r.Context(), db, user.PrimaryRole)
+		list, err := announce.ListActive(r.Context(), db, user.PrimaryRole, user.ID)
 		if err != nil {
 			writeProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcements.")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"announcements": list})
+	}
+}
+
+// dismissAnnouncement records a per-user dismissal (POST /api/announcements/{id}/dismiss)
+// so the banner stays gone across reloads (docs/01 §4.7).
+func dismissAnnouncement(db service.DismissStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, _ := userFromContext(r.Context())
+		id, ok := parseUUID(chi.URLParam(r, "id"))
+		if !ok {
+			writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid announcement id.")
+			return
+		}
+		if err := service.DismissAnnouncement(r.Context(), db, user.ID, id); err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
@@ -126,5 +144,20 @@ func adminUpdateAnnouncement(d AdminDeps) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, announce.View(a))
+	}
+}
+
+func adminDeleteAnnouncement(d AdminDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := parseUUID(chi.URLParam(r, "id"))
+		if !ok {
+			writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid announcement id.")
+			return
+		}
+		if err := service.DeleteAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), id); err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}
 }

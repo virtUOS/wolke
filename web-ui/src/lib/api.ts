@@ -40,6 +40,7 @@ export interface Me {
   is_admin: boolean
   view_mode: 'list' | 'table' | 'auto'
   theme: 'light' | 'dark' | 'system'
+  locale: 'auto' | 'de' | 'en'
   favorites_order: 'usage' | 'alpha'
   favorites_separate_tab: boolean
 }
@@ -113,7 +114,7 @@ export const api = {
   defaults: (signal?: AbortSignal) => getJSON<DefaultsView>('/api/catalog/defaults', signal),
   search: (q: string, signal?: AbortSignal) =>
     getJSON<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`, signal),
-  updatePrefs: (patch: Partial<Pick<Me, 'theme' | 'view_mode' | 'favorites_order' | 'favorites_separate_tab'>>) =>
+  updatePrefs: (patch: Partial<Pick<Me, 'theme' | 'view_mode' | 'locale' | 'favorites_order' | 'favorites_separate_tab'>>) =>
     send<Me>('PATCH', '/api/me/prefs', patch),
 
   // favorites — a flat per-user set (no lists; docs/01 §4.4)
@@ -130,6 +131,7 @@ export const api = {
 
   // announcements (user-facing)
   announcements: (signal?: AbortSignal) => getJSON<{ announcements: Announcement[] }>('/api/announcements', signal),
+  dismissAnnouncement: (id: string) => send<void>('POST', `/api/announcements/${id}/dismiss`),
 
   // admin
   adminServices: (signal?: AbortSignal) => getJSON<{ services: AdminService[] }>('/api/admin/services', signal),
@@ -147,6 +149,7 @@ export const api = {
   createAnnouncement: (a: AnnouncementInput) => send<Announcement>('POST', '/api/admin/announcements', a),
   updateAnnouncement: (id: string, a: AnnouncementInput) =>
     send<Announcement>('PATCH', `/api/admin/announcements/${id}`, a),
+  deleteAnnouncement: (id: string) => send<void>('DELETE', `/api/admin/announcements/${id}`),
   audit: (signal?: AbortSignal) => getJSON<{ entries: AuditEntry[] }>('/api/admin/audit', signal),
 }
 
@@ -213,4 +216,15 @@ export interface AuditEntry {
 export function localized(m: Localized | undefined, locale: string): string {
   if (!m) return ''
   return m[locale] ?? m.de ?? m.en ?? Object.values(m)[0] ?? ''
+}
+
+// localizedInput builds a Localized value from a de/en form pair: de (required)
+// plus en only when filled (an empty field clears the translation rather than
+// persisting ""). Any other locales already present on `existing` are preserved.
+export function localizedInput(existing: Localized | undefined, de: string, en: string): Localized {
+  const m: Localized = { ...existing, de: de.trim() }
+  const trimmed = en.trim()
+  if (trimmed) m.en = trimmed
+  else delete m.en
+  return m
 }

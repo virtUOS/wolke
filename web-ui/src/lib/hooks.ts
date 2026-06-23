@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, type Catalog, type Me, type Service } from './api'
+import { api, type Announcement, type Catalog, type Me, type Service } from './api'
 
 type FavoritesData = { services: Service[] }
+type AnnouncementsData = { announcements: Announcement[] }
 
 export function useMe() {
   return useQuery({ queryKey: ['me'], queryFn: ({ signal }) => api.me(signal) })
@@ -38,6 +39,30 @@ export function usePrefsMutation() {
 
 export function useFavorites() {
   return useQuery({ queryKey: ['favorites'], queryFn: ({ signal }) => api.favorites(signal) })
+}
+
+// useDismissAnnouncement persists a dismissal so the banner stays gone across
+// reloads. It removes the announcement from the cache optimistically, rolls back
+// on error, and reconciles with the server (which now filters it out) on settle.
+export function useDismissAnnouncement() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.dismissAnnouncement(id),
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ['announcements'] })
+      const prev = qc.getQueryData<AnnouncementsData>(['announcements'])
+      if (prev) {
+        qc.setQueryData<AnnouncementsData>(['announcements'], {
+          announcements: prev.announcements.filter((a) => a.id !== id),
+        })
+      }
+      return { prev }
+    },
+    onError: (_e, _id, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['announcements'], ctx.prev)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['announcements'] }),
+  })
 }
 
 // useFavoriteActions bundles add/remove with optimistic updates so the star
