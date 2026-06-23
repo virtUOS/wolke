@@ -48,7 +48,7 @@ func TestProposeNeverWritesConfirmDoes(t *testing.T) {
 	}
 
 	draft := service.Draft{
-		Name: "MCP Test Svc", Description: map[string]string{"de": "Test."},
+		Name: "MCP Test Svc", Description: map[string]string{"de": "Test.", "en": "Test."},
 		ServiceURL: "https://mcp.example.edu", Icon: "server", Categories: []string{"data"},
 	}
 
@@ -91,7 +91,7 @@ func TestProposeNeverWritesConfirmDoes(t *testing.T) {
 
 	// An expired token is rejected and writes nothing.
 	exp, _ := mgr.ProposeCreate(ctx, service.Draft{
-		Name: "MCP Test Expired", Description: map[string]string{"de": "x"},
+		Name: "MCP Test Expired", Description: map[string]string{"de": "x", "en": "x"},
 		DocURL: "https://docs.example.edu/x", Icon: "server", Categories: []string{"data"},
 	})
 	mgr.now = func() time.Time { return time.Now().Add(2 * TokenTTL) }
@@ -106,7 +106,7 @@ func TestProposeNeverWritesConfirmDoes(t *testing.T) {
 
 	// Discard removes a staged change so it can't be confirmed.
 	disc, err := mgr.ProposeCreate(ctx, service.Draft{
-		Name: "MCP Test Discard", Description: map[string]string{"de": "x"},
+		Name: "MCP Test Discard", Description: map[string]string{"de": "x", "en": "x"},
 		DocURL: "https://docs.example.edu/d", Icon: "server", Categories: []string{"data"},
 	})
 	if err != nil {

@@ -19,6 +19,7 @@ type Querier interface {
 	AdminListServices(ctx context.Context) ([]Service, error)
 	CountActiveAnnouncementsBySeverity(ctx context.Context) ([]CountActiveAnnouncementsBySeverityRow, error)
 	CountActiveSessions(ctx context.Context) (int64, error)
+	CountAnnouncements(ctx context.Context) (int64, error)
 	// A trivial query used in Phase 0 to prove the sqlc -> pgx pipeline end-to-end.
 	// Real catalog queries arrive in Phase 1.
 	CountCategories(ctx context.Context) (int64, error)
@@ -29,10 +30,13 @@ type Querier interface {
 	// id is sha256(token); the raw token lives only in the cookie, so a DB read
 	// never yields a usable session credential.
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
+	DeleteAnnouncement(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteRoleDefaults(ctx context.Context, role string) error
 	DeleteServiceCategories(ctx context.Context, serviceID pgtype.UUID) error
 	DeleteSession(ctx context.Context, id string) error
+	// Record a per-user dismissal. Idempotent: dismissing twice is a no-op.
+	DismissAnnouncement(ctx context.Context, arg DismissAnnouncementParams) error
 	// The user's most-clicked active services within a rolling window, most-used
 	// first (powers "frequently used" — docs/01 §4.5). Launches only (target =
 	// 'service'); a documentation-link click shouldn't promote a service here.
@@ -46,9 +50,9 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserBySub(ctx context.Context, oidcSub string) (User, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
-	// Active = within its time window and addressed to the user's role (or all),
-	// most-severe first (docs/01 §4.7).
-	ListActiveAnnouncements(ctx context.Context, role string) ([]Announcement, error)
+	// Active = within its time window, addressed to the user's role (or all), and
+	// not already dismissed by the user, most-severe first (docs/01 §4.7).
+	ListActiveAnnouncements(ctx context.Context, arg ListActiveAnnouncementsParams) ([]Announcement, error)
 	// (service_id, category slug) pairs for active services, to assemble the
 	// many-to-many in Go when building the catalog snapshot.
 	ListActiveServiceCategories(ctx context.Context) ([]ListActiveServiceCategoriesRow, error)

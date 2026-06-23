@@ -20,6 +20,7 @@ func updatePrefs(db service.PrefsStore) http.HandlerFunc {
 		var body struct {
 			Theme                *string `json:"theme"`
 			ViewMode             *string `json:"view_mode"`
+			Locale               *string `json:"locale"`
 			FavoritesOrder       *string `json:"favorites_order"`
 			FavoritesSeparateTab *bool   `json:"favorites_separate_tab"`
 		}
@@ -31,6 +32,7 @@ func updatePrefs(db service.PrefsStore) http.HandlerFunc {
 		p := service.Prefs{
 			Theme:                user.Theme,
 			ViewMode:             user.ViewMode,
+			Locale:               user.Locale,
 			FavoritesOrder:       user.FavoritesOrder,
 			FavoritesSeparateTab: user.FavoritesSeparateTab,
 		}
@@ -39,6 +41,9 @@ func updatePrefs(db service.PrefsStore) http.HandlerFunc {
 		}
 		if body.ViewMode != nil {
 			p.ViewMode = *body.ViewMode
+		}
+		if body.Locale != nil {
+			p.Locale = *body.Locale
 		}
 		if body.FavoritesOrder != nil {
 			p.FavoritesOrder = *body.FavoritesOrder

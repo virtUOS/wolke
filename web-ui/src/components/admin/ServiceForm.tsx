@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { localized, type AdminService, type Category, type Service, type ServiceDraft, type ServiceTag } from '@/lib/api'
 import { t } from '@/lib/i18n'
-import { iconByName, iconNames } from '@/lib/icons'
+import { curatedIconNames } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -41,8 +41,31 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
   const [serviceUrl, setServiceUrl] = useState(initial?.service_url ?? '')
   const [docUrl, setDocUrl] = useState(initial?.doc_url ?? '')
   const [icon, setIcon] = useState(initial?.icon ?? 'app-window')
+  const [iconQuery, setIconQuery] = useState('')
   const [cats, setCats] = useState<Set<string>>(new Set(initial?.categories ?? []))
   const [tag, setTag] = useState<ServiceTag | ''>(initial?.tag ?? '')
+
+  // The full lucide set loads as ONE lazy chunk only here (admin picker), so
+  // searching every icon costs a single request, not one per glyph. Normal users
+  // never load it. Until it's ready the picker shows a loading hint.
+  const [iconSet, setIconSet] = useState<typeof import('@/lib/icon-set') | null>(null)
+  useEffect(() => {
+    let alive = true
+    void import('@/lib/icon-set').then((m) => alive && setIconSet(m))
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // Empty search shows a curated starter set (always including the current
+  // selection); a query filters every icon name, capped for DOM performance
+  // (not request count — all glyphs are already in the loaded chunk).
+  const iconResults = useMemo(() => {
+    const q = iconQuery.trim().toLowerCase()
+    if (!q) return curatedIconNames.includes(icon) ? curatedIconNames : [icon, ...curatedIconNames]
+    if (!iconSet) return []
+    return iconSet.allIconNames.filter((n) => n.includes(q)).slice(0, 80)
+  }, [iconQuery, icon, iconSet])
 
   const preview: Service = useMemo(
     () => ({
@@ -62,6 +85,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
   const errors: string[] = []
   if (name.trim() === '') errors.push(s.admin.errNameMissing)
   if (descDe.trim() === '') errors.push(s.admin.errDescMissing)
+  if (descEn.trim() === '') errors.push(s.admin.errDescEnMissing)
   if (serviceUrl === '' && docUrl === '') errors.push(s.admin.errUrlRequired)
   if (serviceUrl !== '' && !httpURL(serviceUrl)) errors.push(s.admin.errServiceUrl)
   if (docUrl !== '' && !httpURL(docUrl)) errors.push(s.admin.errDocUrl)
@@ -109,7 +133,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
         <Field label={s.admin.fDescDe} required>
           <Textarea value={descDe} onChange={(e) => setDescDe(e.target.value)} rows={2} />
         </Field>
-        <Field label={s.admin.fDescEn}>
+        <Field label={s.admin.fDescEn} required>
           <Textarea value={descEn} onChange={(e) => setDescEn(e.target.value)} rows={2} />
         </Field>
         <Field label={s.admin.fServiceUrl}>
@@ -145,22 +169,40 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
 
         <fieldset>
           <legend className="mb-1 text-sm font-medium">{s.admin.fIcon}</legend>
+          <Input
+            type="search"
+            value={iconQuery}
+            onChange={(e) => setIconQuery(e.target.value)}
+            placeholder={s.admin.iconSearch}
+            aria-label={s.admin.iconSearch}
+            className="mb-2"
+          />
           <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto rounded-md border border-border p-2">
-            {iconNames.map((n) => {
-              const Ico = iconByName(n)
-              return (
-                <IconButton
-                  key={n}
-                  aria-label={n}
-                  aria-pressed={icon === n}
-                  title={n}
-                  onClick={() => setIcon(n)}
-                  className={cn(icon === n && 'bg-primary text-white hover:bg-primary hover:text-white')}
-                >
-                  <Ico className="h-5 w-5" aria-hidden="true" />
-                </IconButton>
-              )
-            })}
+            {!iconSet ? (
+              <p className="px-1 py-2 text-sm text-text-muted" aria-busy="true">{s.common.loading}</p>
+            ) : (
+              <>
+                {iconResults.map((n) => {
+                  const Ico = iconSet.iconComponent(n)
+                  if (!Ico) return null
+                  return (
+                    <IconButton
+                      key={n}
+                      aria-label={n}
+                      aria-pressed={icon === n}
+                      title={n}
+                      onClick={() => setIcon(n)}
+                      className={cn(icon === n && 'bg-primary text-white hover:bg-primary hover:text-white')}
+                    >
+                      <Ico className="h-5 w-5" aria-hidden="true" />
+                    </IconButton>
+                  )
+                })}
+                {iconResults.length === 0 && (
+                  <p className="px-1 py-2 text-sm text-text-muted">{s.admin.iconNoResults}</p>
+                )}
+              </>
+            )}
           </div>
         </fieldset>
       </div>

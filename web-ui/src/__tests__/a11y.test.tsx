@@ -135,7 +135,7 @@ describe('a11y (axe) — UI primitives', () => {
 describe('a11y (axe) — prop-driven views', () => {
   it('Greeting renders the salutation as the page h1', async () => {
     const { baseElement } = render(
-      <Greeting firstName="Tim" locale="de" isMobile={false} favCount={3} maintenanceCount={2} onShowMaintenance={() => {}} />,
+      <Greeting firstName="Tim" locale="de" isMobile={false} favCount={3} maintenanceCount={2} onShowFavorites={() => {}} onShowMaintenance={() => {}} />,
     )
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Tim')
     await a11y(baseElement)
@@ -164,16 +164,21 @@ describe('a11y (axe) — prop-driven views', () => {
       logo_dark: '/d.svg',
       favicon: '/f.svg',
       default_locale: 'de',
+      imprint_url: 'https://example.edu/impressum',
+      privacy_url: 'https://example.edu/datenschutz',
       theme: { light: {}, dark: {} },
     } as Branding
     const me = { display_name: 'Tim B', email: 't@example.edu', is_admin: true } as Me
     const { baseElement } = render(
       <TopBar
         branding={branding}
+        locale="de"
+        currentLocalePref="auto"
         tab="dienste"
         onTab={() => {}}
         isDark={false}
         onToggleTheme={() => {}}
+        onSetLocale={() => {}}
         userInitials="TB"
         userName={me.display_name}
         userEmail={me.email}

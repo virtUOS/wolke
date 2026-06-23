@@ -65,9 +65,9 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
         </label>
         <label className="text-sm">
           <span className="mb-1 block font-medium">{s.admin.labelEn}</span>
-          <Input value={en} onChange={(e) => setEn(e.target.value)} className="w-40" />
+          <Input value={en} onChange={(e) => setEn(e.target.value)} className="w-40" aria-required />
         </label>
-        <Button type="submit" size="sm" disabled={!slugValid || de.trim() === ''}>
+        <Button type="submit" size="sm" disabled={!slugValid || de.trim() === '' || en.trim() === ''}>
           {s.admin.createCategory}
         </Button>
       </form>

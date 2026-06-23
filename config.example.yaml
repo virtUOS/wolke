@@ -38,6 +38,9 @@ branding:
   logo_dark: /branding/logo-dark.svg
   favicon: /branding/favicon.svg
   default_locale: de
+  # Legal footer links (institution-specific). Leave empty to hide a link.
+  imprint_url: "https://www.uni-osnabrueck.de/impressum/"
+  privacy_url: "https://www.uni-osnabrueck.de/datenschutz/"
   theme:
     light:
       primary: "#A6093D"

@@ -69,8 +69,11 @@ func validateServiceInput(in Draft) error {
 	if strings.TrimSpace(in.Description["de"]) == "" {
 		return &ValidationError{Field: "description", Msg: "German text (de) is required"}
 	}
-	if !allowedIcons[in.Icon] {
-		return &ValidationError{Field: "icon", Msg: "not an allowed icon name"}
+	if strings.TrimSpace(in.Description["en"]) == "" {
+		return &ValidationError{Field: "description", Msg: "English text (en) is required"}
+	}
+	if !validIconName(in.Icon) {
+		return &ValidationError{Field: "icon", Msg: "must be a kebab-case lucide icon name"}
 	}
 	if in.ServiceURL == "" && in.DocURL == "" {
 		return &ValidationError{Field: "service_url", Msg: "a service URL or a documentation URL is required"}
@@ -239,6 +242,9 @@ func CreateCategory(ctx context.Context, db AdminDB, actor Actor, slug string, l
 	}
 	if strings.TrimSpace(label["de"]) == "" {
 		return store.Category{}, &ValidationError{Field: "label", Msg: "German label (de) is required"}
+	}
+	if strings.TrimSpace(label["en"]) == "" {
+		return store.Category{}, &ValidationError{Field: "label", Msg: "English label (en) is required"}
 	}
 	var out store.Category
 	err := inTx(ctx, db, func(q *store.Queries) error {

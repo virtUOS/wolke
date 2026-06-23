@@ -74,7 +74,11 @@ type Branding struct {
 	LogoDark      string `yaml:"logo_dark" json:"logo_dark"`
 	Favicon       string `yaml:"favicon" json:"favicon"`
 	DefaultLocale string `yaml:"default_locale" json:"default_locale"`
-	Theme         Theme  `yaml:"theme" json:"theme"`
+	// Legal footer links. Institution-specific, so they live in config (never
+	// hardcoded). An empty value hides that link.
+	ImprintURL string `yaml:"imprint_url" json:"imprint_url"`
+	PrivacyURL string `yaml:"privacy_url" json:"privacy_url"`
+	Theme      Theme  `yaml:"theme" json:"theme"`
 }
 
 // Theme carries the light/dark token sets. Tokens are a map so the variable
@@ -111,6 +115,8 @@ func Defaults() Config {
 			LogoDark:      "/branding/logo-dark.svg",
 			Favicon:       "/branding/favicon.svg",
 			DefaultLocale: "de",
+			ImprintURL:    "https://www.uni-osnabrueck.de/impressum/",
+			PrivacyURL:    "https://www.uni-osnabrueck.de/datenschutz/",
 			Theme: Theme{
 				// TBD: lock against the UOS Corporate Design manual (concept §8.1).
 				// The full brand-overridable palette (docs/03 §2). Names are

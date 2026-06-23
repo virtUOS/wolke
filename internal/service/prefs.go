@@ -29,6 +29,7 @@ type PrefsStore interface {
 type Prefs struct {
 	Theme                string
 	ViewMode             string
+	Locale               string
 	FavoritesOrder       string
 	FavoritesSeparateTab bool
 }
@@ -36,6 +37,7 @@ type Prefs struct {
 var (
 	validThemes          = map[string]bool{"light": true, "dark": true, "system": true}
 	validViewModes       = map[string]bool{"list": true, "table": true, "auto": true}
+	validLocales         = map[string]bool{"auto": true, "de": true, "en": true}
 	validFavoritesOrders = map[string]bool{"usage": true, "alpha": true}
 )
 
@@ -49,6 +51,9 @@ func UpdatePrefs(ctx context.Context, db PrefsStore, userID pgtype.UUID, p Prefs
 	if !validViewModes[p.ViewMode] {
 		return store.User{}, &ValidationError{Field: "view_mode", Msg: "must be one of list, table, auto"}
 	}
+	if !validLocales[p.Locale] {
+		return store.User{}, &ValidationError{Field: "locale", Msg: "must be one of auto, de, en"}
+	}
 	if !validFavoritesOrders[p.FavoritesOrder] {
 		return store.User{}, &ValidationError{Field: "favorites_order", Msg: "must be one of usage, alpha"}
 	}
@@ -56,6 +61,7 @@ func UpdatePrefs(ctx context.Context, db PrefsStore, userID pgtype.UUID, p Prefs
 		ID:                   userID,
 		ViewMode:             p.ViewMode,
 		Theme:                p.Theme,
+		Locale:               p.Locale,
 		FavoritesOrder:       p.FavoritesOrder,
 		FavoritesSeparateTab: p.FavoritesSeparateTab,
 	})

@@ -75,10 +75,17 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
                 {!svc.is_active && <Badge className="ml-2">{s.admin.inactive}</Badge>}
                 <span className="ml-2 text-xs text-text-muted">{svc.categories.join(', ')}</span>
               </span>
-              <span className="flex items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={() => setMode({ kind: 'edit', service: svc })}>{s.common.edit}</Button>
+              <span className="flex items-center gap-2">
+                <Button variant="outline" size="sm" className="border-border" onClick={() => setMode({ kind: 'edit', service: svc })}>{s.common.edit}</Button>
                 {svc.is_active && (
-                  <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(svc.id)}>{s.common.delete}</Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-border hover:border-danger hover:bg-[color-mix(in_srgb,var(--danger)_10%,var(--bg))] hover:text-danger"
+                    onClick={() => setConfirmDelete(svc.id)}
+                  >
+                    {s.common.delete}
+                  </Button>
                 )}
               </span>
             </ListItem>

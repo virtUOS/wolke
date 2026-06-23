@@ -23,6 +23,7 @@ select * from users where oidc_sub = @oidc_sub;
 update users
 set view_mode              = @view_mode,
     theme                  = @theme,
+    locale                 = @locale,
     favorites_order        = @favorites_order,
     favorites_separate_tab = @favorites_separate_tab
 where id = @id

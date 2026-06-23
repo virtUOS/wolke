@@ -58,5 +58,9 @@ export function useAdminActions() {
       mutationFn: (v: { id: string; input: AnnouncementInput }) => api.updateAnnouncement(v.id, v.input),
       onSuccess: afterAnnouncementWrite,
     }),
+    deleteAnnouncement: useMutation({
+      mutationFn: (id: string) => api.deleteAnnouncement(id),
+      onSuccess: afterAnnouncementWrite,
+    }),
   }
 }

@@ -33,6 +33,7 @@ describe('ServiceForm', () => {
     const { onSubmit, user } = setup()
     await user.type(screen.getByLabelText(/^Name/), 'MyShare')
     await user.type(screen.getByLabelText(/^Beschreibung \(Deutsch\)/), 'Netzspeicher.')
+    await user.type(screen.getByLabelText(/^Beschreibung \(English\)/), 'Network storage.')
     await user.type(screen.getByLabelText(/Service-URL/), 'https://myshare.example.edu')
     await user.click(screen.getByText('Netz & Daten'))
     await user.click(screen.getByRole('button', { name: 'Anlegen' }))

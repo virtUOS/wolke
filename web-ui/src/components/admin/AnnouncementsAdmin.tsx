@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Announcement, AnnouncementInput, Audience, Severity } from '@/lib/api'
+import { localized, localizedInput, type Announcement, type AnnouncementInput, type Audience, type Severity } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { useAdminActions, useAdminAnnouncements } from '@/lib/admin-hooks'
 import { Alert } from '@/components/ui/alert'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Field } from '@/components/ui/field'
@@ -18,8 +19,11 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
   const s = t(locale)
   const list = useAdminAnnouncements()
   const actions = useAdminActions()
+  // The announcement is a singleton: at most one exists, so manage "the" one.
+  const current = list.data?.announcements?.[0] ?? null
   const [editing, setEditing] = useState<Announcement | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [formError, setFormError] = useState<string | undefined>()
 
   // Return focus to the heading when the form closes (else it's lost to <body>).
@@ -34,10 +38,13 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 ref={headingRef} tabIndex={-1} className="focus:outline-hidden" style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.announcementsHeading}</h2>
-        <Button size="sm" onClick={() => { setEditing(null); setFormError(undefined); setShowForm(true) }}>{s.admin.newAnnouncement}</Button>
+        {/* Singleton: offer "create" only when none exists and the form is closed. */}
+        {!current && !showForm && (
+          <Button size="sm" onClick={() => { setEditing(null); setFormError(undefined); setShowForm(true) }}>{s.admin.newAnnouncement}</Button>
+        )}
       </div>
 
-      {showForm && (
+      {showForm ? (
         <AnnouncementForm
           key={editing?.id ?? 'new'}
           locale={locale}
@@ -57,19 +64,37 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
             }
           }}
         />
+      ) : current ? (
+        <List className="text-sm">
+          <ListItem>
+            <Badge variant={severityVariant(current.severity)}>{s.admin.severityLabel(current.severity)}</Badge>
+            <span className="min-w-0 flex-1 truncate">{localized(current.title, locale)}</span>
+            <span className="text-xs text-text-muted">{s.admin.audienceLabel(current.audience)}{current.ends_at ? ` · ${s.admin.until} ${isoToLocalInput(current.ends_at).replace('T', ' ')}` : ''}</span>
+            <Button variant="ghost" size="sm" onClick={() => { setEditing(current); setFormError(undefined); setShowForm(true) }}>{s.common.edit}</Button>
+            <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>{s.common.delete}</Button>
+          </ListItem>
+        </List>
+      ) : (
+        <p className="text-sm text-text-muted">{s.admin.noAnnouncements}</p>
       )}
 
-      <List className="text-sm">
-        {(list.data?.announcements ?? []).map((a) => (
-          <ListItem key={a.id}>
-            <Badge variant={severityVariant(a.severity)}>{a.severity}</Badge>
-            <span className="min-w-0 flex-1 truncate">{a.title.de}</span>
-            <span className="text-xs text-text-muted">{a.audience}{a.ends_at ? ` · ${s.admin.until} ${isoToLocalInput(a.ends_at).replace('T', ' ')}` : ''}</span>
-            <Button variant="ghost" size="sm" onClick={() => { setEditing(a); setShowForm(true) }}>{s.common.edit}</Button>
-          </ListItem>
-        ))}
-        {(list.data?.announcements ?? []).length === 0 && <ListItem className="text-text-muted">{s.admin.noAnnouncements}</ListItem>}
-      </List>
+      <Dialog
+        open={confirmDelete}
+        onOpenChange={(o) => !o && setConfirmDelete(false)}
+        title={s.admin.deleteAnnouncementTitle}
+        description={s.admin.deleteAnnouncementDesc}
+        closeLabel={s.common.close}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>{s.common.cancel}</Button>
+            <Button
+              onClick={() => current && actions.deleteAnnouncement.mutate(current.id, { onSettled: () => setConfirmDelete(false) })}
+            >
+              {s.common.delete}
+            </Button>
+          </>
+        }
+      />
     </div>
   )
 }
@@ -112,13 +137,15 @@ function AnnouncementForm({
     headingRef.current?.focus()
   }, [])
   const [titleDe, setTitleDe] = useState(initial?.title.de ?? '')
+  const [titleEn, setTitleEn] = useState(initial?.title.en ?? '')
   const [bodyDe, setBodyDe] = useState(initial?.body.de ?? '')
+  const [bodyEn, setBodyEn] = useState(initial?.body.en ?? '')
   const [severity, setSeverity] = useState<Severity>(initial?.severity ?? 'info')
   const [audience, setAudience] = useState<Audience>(initial?.audience ?? 'all')
   const [endsAt, setEndsAt] = useState(initial?.ends_at ? isoToLocalInput(initial.ends_at) : '') // datetime-local (local wall-clock)
   const [dismissible, setDismissible] = useState(initial?.dismissible ?? true)
 
-  const valid = titleDe.trim() !== '' && bodyDe.trim() !== ''
+  const valid = titleDe.trim() !== '' && titleEn.trim() !== '' && bodyDe.trim() !== '' && bodyEn.trim() !== ''
 
   return (
     <form
@@ -126,10 +153,11 @@ function AnnouncementForm({
         e.preventDefault()
         if (!valid) return
         onSubmit({
-          // Preserve any non-de locales (e.g. en) the announcement already has;
-          // the form only edits de but must not delete the rest (CLAUDE.md i18n).
-          title: { ...initial?.title, de: titleDe.trim() },
-          body: { ...initial?.body, de: bodyDe.trim() },
+          // de is required; en is optional. An empty en field clears the
+          // translation rather than persisting "" (CLAUDE.md i18n: ship de,
+          // keep en wired). Any other locales already present are preserved.
+          title: localizedInput(initial?.title, titleDe, titleEn),
+          body: localizedInput(initial?.body, bodyDe, bodyEn),
           severity,
           audience,
           ends_at: endsAt ? new Date(endsAt).toISOString() : null,
@@ -144,18 +172,24 @@ function AnnouncementForm({
       <Field label={s.admin.fTitleDe} required>
         <Input value={titleDe} onChange={(e) => setTitleDe(e.target.value)} />
       </Field>
+      <Field label={s.admin.fTitleEn} required>
+        <Input value={titleEn} onChange={(e) => setTitleEn(e.target.value)} />
+      </Field>
       <Field label={s.admin.fTextDe} required>
         <Textarea value={bodyDe} onChange={(e) => setBodyDe(e.target.value)} rows={2} />
+      </Field>
+      <Field label={s.admin.fTextEn} required>
+        <Textarea value={bodyEn} onChange={(e) => setBodyEn(e.target.value)} rows={2} />
       </Field>
       <div className="flex flex-wrap gap-3">
         <Field label={s.admin.fSeverity}>
           <Select value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}>
-            {SEVERITIES.map((sev) => <option key={sev} value={sev}>{sev}</option>)}
+            {SEVERITIES.map((sev) => <option key={sev} value={sev}>{s.admin.severityLabel(sev)}</option>)}
           </Select>
         </Field>
         <Field label={s.admin.fAudience}>
           <Select value={audience} onChange={(e) => setAudience(e.target.value as Audience)}>
-            {AUDIENCES.map((a) => <option key={a} value={a}>{a}</option>)}
+            {AUDIENCES.map((a) => <option key={a} value={a}>{s.admin.audienceLabel(a)}</option>)}
           </Select>
         </Field>
         <Field label={s.admin.fEndsAt}>

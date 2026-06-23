@@ -24,6 +24,10 @@ export default defineConfig({
       workbox: {
         // Precache the static shell only (hashed assets, fonts, icons, the shell).
         globPatterns: ['**/*.{js,css,html,woff2,svg,png,ico}'],
+        // The full lucide set is one lazy chunk (icon-set), loaded on demand by
+        // the admin picker / the rare uncommon catalog icon. Never precache it —
+        // else the SW would download the whole library on install.
+        globIgnores: ['**/icon-set-*.js'],
         navigateFallback: '/index.html',
         // Never let the SW answer these from the shell — they're server-driven
         // (OIDC redirects), per-user, or sensitive. They must hit the network.

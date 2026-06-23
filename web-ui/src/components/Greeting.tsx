@@ -7,12 +7,14 @@ interface GreetingProps {
   isMobile: boolean
   favCount: number
   maintenanceCount: number
+  onShowFavorites: () => void
   onShowMaintenance: () => void
 }
 
 // Editorial greeting header: time-of-day salutation, the date, and at-a-glance
-// counts (favorites, and a clickable "in maintenance" shortcut).
-export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCount, onShowMaintenance }: GreetingProps) {
+// counts — both the favorites and "in maintenance" counts are clickable
+// shortcuts to their respective views.
+export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCount, onShowFavorites, onShowMaintenance }: GreetingProps) {
   const s = t(locale)
   return (
     // Plain <div>, not <header>: this sits inside <main>, and the salutation is
@@ -43,9 +45,17 @@ export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCou
         {favCount > 0 && (
           <>
             <Dot />
-            <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+            <button
+              type="button"
+              onClick={onShowFavorites}
+              className="rounded hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+              style={{
+                fontSize: 14, color: 'var(--text-muted)', cursor: 'pointer',
+                background: 'none', border: 'none', padding: 0,
+              }}
+            >
               {s.greeting.favCount(favCount)}
-            </span>
+            </button>
           </>
         )}
         {maintenanceCount > 0 && (

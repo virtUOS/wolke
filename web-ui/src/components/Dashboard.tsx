@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Wrench, X } from 'lucide-react'
+import { Wrench } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Branding } from '@/lib/branding'
-import { api, localized, type Category, type Me, type Service, type ServiceTag } from '@/lib/api'
-import { t } from '@/lib/i18n'
+import { api, localized, type Category, type Me, type Service } from '@/lib/api'
+import { t, effectiveLocale } from '@/lib/i18n'
+import { applyFilter, filterEq, searchAll, type Filter } from '@/lib/catalog-filter'
 import {
   useApplyTheme,
   useCatalog,
@@ -39,28 +40,22 @@ function useIsMobile(): boolean {
 const NO_SERVICES: Service[] = []
 const NO_CATEGORIES: Category[] = []
 
-function filterServices(services: Service[], cats: string[], query: string, tag: ServiceTag | null = null): Service[] {
-  const q = query.trim().toLowerCase()
-  return services.filter((s) => {
-    if (tag && s.tag !== tag) return false
-    if (cats.length > 0 && !s.categories.some((c) => cats.includes(c))) return false
-    if (q && !(
-      s.name.toLowerCase().includes(q) ||
-      Object.values(s.description).some((d) => d.toLowerCase().includes(q))
-    )) return false
-    return true
-  })
-}
-
 export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
-  const locale = branding.default_locale || 'de'
+  // Effective locale: an explicit user pref ('de'/'en') wins; 'auto' defers to
+  // the browser and then branding.default_locale. Resolved once here and threaded
+  // down so every view (and the chrome) renders in one language.
+  const locale = effectiveLocale(me.locale, branding.default_locale)
   const tr = t(locale)
+  // Keep <html lang> authoritative once the user (and their pref) is known.
+  useEffect(() => {
+    document.documentElement.lang = locale
+  }, [locale])
   const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('favoriten')
   const [query, setQuery] = useState('')
-  const [cats, setCats] = useState<string[]>([]) // [] = Alle; slugs
-  const [tagFilter, setTagFilter] = useState<ServiceTag | null>(null) // quick-filter by status tag
+  const [filter, setFilter] = useState<Filter>({ kind: 'all' }) // single active facet
   const [adminOpen, setAdminOpen] = useState(false)
+  const searching = query.trim() !== ''
   const isMobile = useIsMobile()
   const layout = isMobile ? 'list' : 'grid'
 
@@ -88,46 +83,54 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     },
   }
 
-  // Category chips and the status-tag quick-filter are distinct filter axes;
-  // selecting a category clears the tag filter so the result set stays legible.
-  const toggleCat = (slug: string) => {
-    setTagFilter(null)
-    if (slug === '') { setCats([]); return }
-    setCats((prev) => (prev.includes(slug) ? prev.filter((c) => c !== slug) : [...prev, slug]))
+  // Filters are single-select: picking a facet replaces the active one, and
+  // clicking the active facet again returns to "Alle".
+  const selectFilter = (next: Filter) => setFilter((prev) => (filterEq(prev, next) ? { kind: 'all' } : next))
+
+  // Search is global: when a query is present it matches across ALL services,
+  // independent of the active tab, and any active filter is deactivated.
+  const onSearch = (value: string) => {
+    setQuery(value)
+    if (value.trim() && filter.kind !== 'all') setFilter({ kind: 'all' })
+  }
+
+  // Jump to the favorites tab (shortcut from the greeting's favorites count).
+  const showFavorites = () => {
+    setTab('favoriten')
+    setQuery('')
   }
 
   // Jump to the Dienste tab showing only services currently in maintenance.
   const showMaintenance = () => {
     setTab('dienste')
-    setCats([])
     setQuery('')
-    setTagFilter('wartung')
+    setFilter({ kind: 'maintenance' })
   }
 
-  const diensteServices = useMemo(
-    () => filterServices(allServices, cats, query, tagFilter),
-    [allServices, cats, query, tagFilter],
-  )
+  // Result set: a search overrides everything (global, no tab/filter); otherwise
+  // favorites are shown as-is and the Dienste tab applies the active facet.
+  const results = useMemo(() => {
+    if (searching) return searchAll(allServices, query)
+    if (tab === 'favoriten') return favoriteServices
+    return applyFilter(allServices, filter)
+  }, [searching, query, tab, allServices, favoriteServices, filter])
+
   const maintenanceCount = useMemo(
     () => allServices.filter((s) => s.tag === 'wartung').length,
     [allServices],
   )
-  const filteredFavorites = useMemo(
-    () => filterServices(favoriteServices, [], query),
-    [favoriteServices, query],
-  )
 
-  // Section heading for the current tab/filter (find the category once).
+  // Section heading for the current view.
   const heading = useMemo(() => {
+    if (searching) return tr.dash.searchResults
     if (tab === 'favoriten') return tr.dash.favorites
-    if (tagFilter === 'wartung') return tr.dash.inMaintenance
-    if (cats.length === 0) return tr.dash.allServices
-    if (cats.length === 1) {
-      const c = allCategories.find((x) => x.slug === cats[0])
-      return c ? localized(c.label, locale) : cats[0]
+    if (filter.kind === 'maintenance') return tr.dash.inMaintenance
+    if (filter.kind === 'category') {
+      const c = allCategories.find((x) => x.slug === filter.slug)
+      return c ? localized(c.label, locale) : filter.slug
     }
-    return tr.dash.categoriesCount(cats.length)
-  }, [tab, tagFilter, cats, allCategories, locale, tr])
+    return tr.dash.allServices
+  }, [searching, tab, filter, allCategories, locale, tr])
 
   const favCount = favoriteServices.length
   const firstName = me.display_name.split(' ')[0]
@@ -135,10 +138,13 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const shellProps = {
     branding,
     me,
+    locale,
     tab,
-    onTab: setTab,
+    // Switching tab always returns to the dashboard, even from the admin view.
+    onTab: (next: Tab) => { setAdminOpen(false); setTab(next) },
     isDark,
     onToggleTheme: () => prefs.mutate({ theme: isDark ? 'light' : 'dark' }),
+    onSetLocale: (next: Me['locale']) => prefs.mutate({ locale: next }),
     onAdmin: () => setAdminOpen(true),
     isMobile,
     focusKey: adminOpen ? 'admin' : 'dashboard',
@@ -160,6 +166,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         isMobile={isMobile}
         favCount={favCount}
         maintenanceCount={maintenanceCount}
+        onShowFavorites={showFavorites}
         onShowMaintenance={showMaintenance}
       />
 
@@ -189,7 +196,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         <input
           type="search"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => onSearch(e.target.value)}
           placeholder={tr.dash.searchPlaceholder}
           aria-label={tr.dash.searchLabel}
           style={{ width: isMobile ? '100%' : 260 }}
@@ -197,38 +204,37 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         />
       </div>
 
-      {/* Category chips (Dienste tab only) */}
-      {tab === 'dienste' && allCategories.length > 0 && (
+      {/* Single-select filters (Dienste tab; hidden while searching, since a
+          search is global and deactivates filters). "In Wartung" is always
+          shown so maintenance is reachable as a normal facet. */}
+      {tab === 'dienste' && !searching && (
         <div
           role="group"
           aria-label={tr.dash.filterCategories}
           style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: isMobile ? 16 : 20 }}
         >
           <PillButton
-            active={cats.length === 0 && !tagFilter}
-            aria-pressed={cats.length === 0 && !tagFilter}
-            onClick={() => toggleCat('')}
+            active={filter.kind === 'all'}
+            aria-pressed={filter.kind === 'all'}
+            onClick={() => selectFilter({ kind: 'all' })}
           >
             {tr.dash.all}
           </PillButton>
-          {tagFilter === 'wartung' && (
-            <PillButton
-              active
-              aria-pressed
-              onClick={() => setTagFilter(null)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-            >
-              <Wrench className="h-[13px] w-[13px]" aria-hidden="true" />
-              {tr.dash.inMaintenance}
-              <X className="h-[13px] w-[13px]" aria-hidden="true" />
-            </PillButton>
-          )}
+          <PillButton
+            active={filter.kind === 'maintenance'}
+            aria-pressed={filter.kind === 'maintenance'}
+            onClick={() => selectFilter({ kind: 'maintenance' })}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <Wrench className="h-[13px] w-[13px]" aria-hidden="true" />
+            {tr.dash.inMaintenance}
+          </PillButton>
           {allCategories.map((c) => (
             <PillButton
               key={c.slug}
-              active={cats.includes(c.slug)}
-              aria-pressed={cats.includes(c.slug)}
-              onClick={() => toggleCat(c.slug)}
+              active={filter.kind === 'category' && filter.slug === c.slug}
+              aria-pressed={filter.kind === 'category' && filter.slug === c.slug}
+              onClick={() => selectFilter({ kind: 'category', slug: c.slug })}
             >
               {localized(c.label, locale)}
             </PillButton>
@@ -240,28 +246,30 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           when a search/filter/tab change alters what's shown (it stays silent on
           first render). */}
       <div aria-live="polite" className="sr-only">
-        {tr.dash.resultCount(tab === 'favoriten' ? filteredFavorites.length : diensteServices.length)}
+        {tr.dash.resultCount(results.length)}
       </div>
 
-      {/* Tab content */}
-      {tab === 'favoriten' ? (
+      {/* Content: a search shows global results; otherwise the active tab/filter.
+          Favorites render their own list; everything else needs the catalog. */}
+      {!searching && tab === 'favoriten' ? (
         <CatalogView
-          services={filteredFavorites}
+          services={results}
           categories={allCategories}
           locale={locale}
           layout={layout}
           actions={actions}
-          emptyMessage={query ? tr.dash.searchEmpty(query) : tr.dash.favEmpty}
+          emptyMessage={tr.dash.favEmpty}
         />
       ) : catalog.isLoading ? (
         <p style={{ fontSize: 14, color: 'var(--text-muted)' }} role="status" aria-busy="true">{tr.common.loading}</p>
       ) : (
         <CatalogView
-          services={diensteServices}
+          services={results}
           categories={allCategories}
           locale={locale}
           layout={layout}
           actions={actions}
+          emptyMessage={searching ? tr.dash.searchEmpty(query) : undefined}
         />
       )}
     </DashboardShell>

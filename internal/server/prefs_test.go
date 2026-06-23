@@ -29,8 +29,8 @@ func reqWithUser(method, target, body string, user store.User) *http.Request {
 
 func TestUpdatePrefsPartialKeepsCurrent(t *testing.T) {
 	f := &fakePrefsStore{}
-	current := store.User{ID: pgtype.UUID{Valid: true}, ViewMode: "auto", Theme: "system", FavoritesOrder: "usage"}
-	// Only theme is sent; view_mode must keep its current value.
+	current := store.User{ID: pgtype.UUID{Valid: true}, ViewMode: "auto", Theme: "system", Locale: "auto", FavoritesOrder: "usage"}
+	// Only theme is sent; view_mode and locale must keep their current values.
 	req := reqWithUser(http.MethodPatch, "/api/me/prefs", `{"theme":"dark"}`, current)
 	rec := httptest.NewRecorder()
 	updatePrefs(f)(rec, req)
@@ -47,6 +47,32 @@ func TestUpdatePrefsPartialKeepsCurrent(t *testing.T) {
 	}
 	if body.Theme != "dark" || body.ViewMode != "auto" {
 		t.Errorf("response %+v, want theme=dark view_mode=auto", body)
+	}
+}
+
+func TestUpdatePrefsSetsLocale(t *testing.T) {
+	f := &fakePrefsStore{}
+	current := store.User{ID: pgtype.UUID{Valid: true}, ViewMode: "auto", Theme: "system", Locale: "auto", FavoritesOrder: "usage"}
+	req := reqWithUser(http.MethodPatch, "/api/me/prefs", `{"locale":"en"}`, current)
+	rec := httptest.NewRecorder()
+	updatePrefs(f)(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if f.got.Locale != "en" {
+		t.Errorf("persisted locale = %q, want en", f.got.Locale)
+	}
+}
+
+func TestUpdatePrefsRejectsInvalidLocale(t *testing.T) {
+	f := &fakePrefsStore{}
+	current := store.User{ViewMode: "auto", Theme: "system", Locale: "auto", FavoritesOrder: "usage"}
+	req := reqWithUser(http.MethodPatch, "/api/me/prefs", `{"locale":"fr"}`, current)
+	rec := httptest.NewRecorder()
+	updatePrefs(f)(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
 	}
 }
 

@@ -46,6 +46,17 @@ func (q *Queries) AdminListAnnouncements(ctx context.Context, lim int32) ([]Anno
 	return items, nil
 }
 
+const countAnnouncements = `-- name: CountAnnouncements :one
+select count(*) from announcements
+`
+
+func (q *Queries) CountAnnouncements(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAnnouncements)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAnnouncement = `-- name: CreateAnnouncement :one
 insert into announcements (title, body, severity, audience, starts_at, ends_at, dismissible, created_by)
 values ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -90,6 +101,35 @@ func (q *Queries) CreateAnnouncement(ctx context.Context, arg CreateAnnouncement
 	return i, err
 }
 
+const deleteAnnouncement = `-- name: DeleteAnnouncement :execrows
+delete from announcements where id = $1
+`
+
+func (q *Queries) DeleteAnnouncement(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteAnnouncement, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const dismissAnnouncement = `-- name: DismissAnnouncement :exec
+insert into announcement_dismissals (user_id, announcement_id)
+values ($1, $2)
+on conflict (user_id, announcement_id) do nothing
+`
+
+type DismissAnnouncementParams struct {
+	UserID         pgtype.UUID `json:"user_id"`
+	AnnouncementID pgtype.UUID `json:"announcement_id"`
+}
+
+// Record a per-user dismissal. Idempotent: dismissing twice is a no-op.
+func (q *Queries) DismissAnnouncement(ctx context.Context, arg DismissAnnouncementParams) error {
+	_, err := q.db.Exec(ctx, dismissAnnouncement, arg.UserID, arg.AnnouncementID)
+	return err
+}
+
 const getAnnouncementByID = `-- name: GetAnnouncementByID :one
 select id, title, body, severity, audience, starts_at, ends_at, dismissible, created_by, created_at from announcements where id = $1
 `
@@ -113,18 +153,27 @@ func (q *Queries) GetAnnouncementByID(ctx context.Context, id pgtype.UUID) (Anno
 }
 
 const listActiveAnnouncements = `-- name: ListActiveAnnouncements :many
-select id, title, body, severity, audience, starts_at, ends_at, dismissible, created_by, created_at
-from announcements
-where (starts_at is null or starts_at <= now())
-  and (ends_at is null or ends_at > now())
-  and (audience = 'all' or audience = $1)
-order by case severity when 'critical' then 0 when 'warning' then 1 else 2 end, created_at desc
+select a.id, a.title, a.body, a.severity, a.audience, a.starts_at, a.ends_at, a.dismissible, a.created_by, a.created_at
+from announcements a
+where (a.starts_at is null or a.starts_at <= now())
+  and (a.ends_at is null or a.ends_at > now())
+  and (a.audience = 'all' or a.audience = $1)
+  and not exists (
+    select 1 from announcement_dismissals d
+    where d.announcement_id = a.id and d.user_id = $2
+  )
+order by case a.severity when 'critical' then 0 when 'warning' then 1 else 2 end, a.created_at desc
 `
 
-// Active = within its time window and addressed to the user's role (or all),
-// most-severe first (docs/01 §4.7).
-func (q *Queries) ListActiveAnnouncements(ctx context.Context, role string) ([]Announcement, error) {
-	rows, err := q.db.Query(ctx, listActiveAnnouncements, role)
+type ListActiveAnnouncementsParams struct {
+	Role   string      `json:"role"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+// Active = within its time window, addressed to the user's role (or all), and
+// not already dismissed by the user, most-severe first (docs/01 §4.7).
+func (q *Queries) ListActiveAnnouncements(ctx context.Context, arg ListActiveAnnouncementsParams) ([]Announcement, error) {
+	rows, err := q.db.Query(ctx, listActiveAnnouncements, arg.Role, arg.UserID)
 	if err != nil {
 		return nil, err
 	}

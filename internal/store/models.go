@@ -21,6 +21,12 @@ type Announcement struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type AnnouncementDismissal struct {
+	UserID         pgtype.UUID        `json:"user_id"`
+	AnnouncementID pgtype.UUID        `json:"announcement_id"`
+	DismissedAt    pgtype.Timestamptz `json:"dismissed_at"`
+}
+
 type AuditLog struct {
 	ID        int64              `json:"id"`
 	ActorID   pgtype.UUID        `json:"actor_id"`
@@ -108,4 +114,5 @@ type User struct {
 	FavoritesOrder       string             `json:"favorites_order"`
 	FavoritesSeparateTab bool               `json:"favorites_separate_tab"`
 	FavoritesSeeded      bool               `json:"favorites_seeded"`
+	Locale               string             `json:"locale"`
 }

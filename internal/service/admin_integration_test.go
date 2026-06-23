@@ -61,7 +61,7 @@ func TestAdminServiceLifecycleAudited(t *testing.T) {
 
 	in := Draft{
 		Name:        "Admin Test Service",
-		Description: map[string]string{"de": "Testdienst."},
+		Description: map[string]string{"de": "Testdienst.", "en": "Test service."},
 		ServiceURL:  "https://test.example.edu",
 		Icon:        "server",
 		Categories:  []string{"data"},

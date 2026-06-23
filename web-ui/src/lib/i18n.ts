@@ -4,12 +4,39 @@
 //
 // `de` is the source of truth; `en` is typed `Strings` so a missing/renamed key
 // is a compile error. Parameterized strings are functions. Components resolve the
-// active locale (from branding.default_locale) once via `t(locale)`.
+// active locale via `resolveLocale(branding.default_locale)` and pass it to `t(locale)`.
 
 export type Lang = 'de' | 'en'
 
+const SUPPORTED: readonly Lang[] = ['de', 'en']
+
 export function pickLang(locale: string | undefined): Lang {
   return locale === 'en' ? 'en' : 'de'
+}
+
+// resolveLocale picks the UI language from the browser's preference order,
+// falling back to the configured default when the browser expresses no
+// supported language. The browser wins so a `de`-configured deployment still
+// serves English to an English browser (the app is genuinely de/en, not de-only).
+export function resolveLocale(defaultLocale: string | undefined, languages?: readonly string[]): Lang {
+  const prefs =
+    languages ??
+    (typeof navigator !== 'undefined' ? navigator.languages ?? [navigator.language] : [])
+  for (const tag of prefs) {
+    if (!tag) continue
+    const base = tag.toLowerCase().split('-')[0]
+    if (SUPPORTED.includes(base as Lang)) return base as Lang
+  }
+  return pickLang(defaultLocale)
+}
+
+// effectiveLocale resolves the language to render in. An explicit user
+// preference ('de'/'en') wins; 'auto' (or anything else) defers to the browser
+// and then the configured default. This is the single source of truth for the
+// active locale once the user is known (the prefs persist via /api/me/prefs).
+export function effectiveLocale(pref: string | undefined, defaultLocale: string | undefined): Lang {
+  if (pref === 'de' || pref === 'en') return pref
+  return resolveLocale(defaultLocale)
 }
 
 const de = {
@@ -22,6 +49,12 @@ const de = {
     close: 'Schließen',
     skipToContent: 'Zum Inhalt springen',
   },
+  shell: {
+    signingIn: 'Anmeldung…',
+    loadError: 'Die Anwendung konnte nicht geladen werden.',
+    loadErrorHint:
+      'Falls der Server ohne OIDC läuft, sind die angemeldeten Endpunkte nicht verfügbar. Siehe README → „Local development".',
+  },
   topbar: {
     mainNav: 'Hauptnavigation',
     favorites: 'Favoriten',
@@ -32,6 +65,10 @@ const de = {
     account: 'Konto',
     administration: 'Administration',
     logout: 'Abmelden',
+    language: 'Sprache',
+    langAuto: 'Automatisch',
+    langDe: 'Deutsch',
+    langEn: 'English',
   },
   greeting: {
     salutation: (): string => {
@@ -51,6 +88,7 @@ const de = {
     all: 'Alle',
     inMaintenance: 'In Wartung',
     allServices: 'Alle Dienste',
+    searchResults: 'Suchergebnisse',
     categoriesCount: (n: number) => `${n} Kategorien`,
     filterCategories: 'Kategorien filtern',
     favEmpty: 'Noch keine Favoriten — markiere Dienste mit dem Stern.',
@@ -77,6 +115,11 @@ const de = {
   announce: {
     region: 'Ankündigungen',
     dismiss: 'Ankündigung schließen',
+  },
+  footer: {
+    legal: 'Rechtliches',
+    imprint: 'Impressum',
+    privacy: 'Datenschutz',
   },
   admin: {
     back: 'Zurück zum Dashboard',
@@ -107,11 +150,14 @@ const de = {
     statusBeta: 'Beta',
     statusWartung: 'Wartung',
     fIcon: 'Icon',
+    iconSearch: 'Icon suchen…',
+    iconNoResults: 'Keine Icons gefunden.',
     preview: 'Vorschau',
     previewName: 'Dienstname',
     create: 'Anlegen',
     errNameMissing: 'Name fehlt.',
     errDescMissing: 'Beschreibung (de) fehlt.',
+    errDescEnMissing: 'Beschreibung (en) fehlt.',
     errUrlRequired: 'Service- oder Dokumentations-URL erforderlich.',
     errServiceUrl: 'Service-URL muss mit http(s):// beginnen.',
     errDocUrl: 'Dokumentations-URL muss mit http(s):// beginnen.',
@@ -125,14 +171,22 @@ const de = {
     slugPlaceholder: 'z. B. forschung',
     slugError: 'Slug: nur Kleinbuchstaben, Ziffern und Bindestriche (z. B. „forschung").',
     failed: 'Fehlgeschlagen.',
-    announcementsHeading: 'Ankündigungen',
-    newAnnouncement: 'Neue Ankündigung',
-    noAnnouncements: 'Keine Ankündigungen.',
+    announcementsHeading: 'Ankündigung',
+    newAnnouncement: 'Ankündigung anlegen',
+    noAnnouncements: 'Keine Ankündigung.',
+    deleteAnnouncementTitle: 'Ankündigung entfernen?',
+    deleteAnnouncementDesc: 'Die Ankündigung wird gelöscht und verschwindet für alle Nutzer.',
     until: 'bis',
     fTitleDe: 'Titel (de)',
+    fTitleEn: 'Titel (en)',
     fTextDe: 'Text (de)',
+    fTextEn: 'Text (en)',
     fSeverity: 'Schweregrad',
     fAudience: 'Zielgruppe',
+    severityLabel: (s: string): string =>
+      ({ info: 'Info', warning: 'Warnung', critical: 'Kritisch' })[s] ?? s,
+    audienceLabel: (a: string): string =>
+      ({ all: 'Alle', student: 'Studierende', teacher: 'Lehrende', staff: 'Beschäftigte' })[a] ?? a,
     fEndsAt: 'Endet am (optional)',
     dismissible: 'Schließbar',
     publish: 'Veröffentlichen',
@@ -161,6 +215,12 @@ const en: Strings = {
     close: 'Close',
     skipToContent: 'Skip to content',
   },
+  shell: {
+    signingIn: 'Signing in…',
+    loadError: 'The application could not be loaded.',
+    loadErrorHint:
+      'If the server is running without OIDC, the authenticated endpoints are unavailable. See README → “Local development”.',
+  },
   topbar: {
     mainNav: 'Main navigation',
     favorites: 'Favorites',
@@ -171,6 +231,10 @@ const en: Strings = {
     account: 'Account',
     administration: 'Administration',
     logout: 'Sign out',
+    language: 'Language',
+    langAuto: 'Automatic',
+    langDe: 'Deutsch',
+    langEn: 'English',
   },
   greeting: {
     salutation: () => {
@@ -190,6 +254,7 @@ const en: Strings = {
     all: 'All',
     inMaintenance: 'In maintenance',
     allServices: 'All services',
+    searchResults: 'Search results',
     categoriesCount: (n: number) => `${n} categories`,
     filterCategories: 'Filter by category',
     favEmpty: 'No favorites yet — mark services with the star.',
@@ -213,6 +278,11 @@ const en: Strings = {
   announce: {
     region: 'Announcements',
     dismiss: 'Dismiss announcement',
+  },
+  footer: {
+    legal: 'Legal',
+    imprint: 'Imprint',
+    privacy: 'Privacy',
   },
   admin: {
     back: 'Back to dashboard',
@@ -243,11 +313,14 @@ const en: Strings = {
     statusBeta: 'Beta',
     statusWartung: 'Maintenance',
     fIcon: 'Icon',
+    iconSearch: 'Search icons…',
+    iconNoResults: 'No icons found.',
     preview: 'Preview',
     previewName: 'Service name',
     create: 'Create',
     errNameMissing: 'Name is missing.',
     errDescMissing: 'Description (de) is missing.',
+    errDescEnMissing: 'Description (en) is missing.',
     errUrlRequired: 'A service or documentation URL is required.',
     errServiceUrl: 'Service URL must start with http(s)://.',
     errDocUrl: 'Documentation URL must start with http(s)://.',
@@ -261,14 +334,22 @@ const en: Strings = {
     slugPlaceholder: 'e.g. research',
     slugError: 'Slug: lowercase letters, digits and hyphens only (e.g. “research”).',
     failed: 'Failed.',
-    announcementsHeading: 'Announcements',
-    newAnnouncement: 'New announcement',
-    noAnnouncements: 'No announcements.',
+    announcementsHeading: 'Announcement',
+    newAnnouncement: 'Create announcement',
+    noAnnouncements: 'No announcement.',
+    deleteAnnouncementTitle: 'Remove announcement?',
+    deleteAnnouncementDesc: 'The announcement will be deleted and disappear for all users.',
     until: 'until',
     fTitleDe: 'Title (de)',
+    fTitleEn: 'Title (en)',
     fTextDe: 'Text (de)',
+    fTextEn: 'Text (en)',
     fSeverity: 'Severity',
     fAudience: 'Audience',
+    severityLabel: (s: string): string =>
+      ({ info: 'Info', warning: 'Warning', critical: 'Critical' })[s] ?? s,
+    audienceLabel: (a: string): string =>
+      ({ all: 'Everyone', student: 'Students', teacher: 'Teachers', staff: 'Staff' })[a] ?? a,
     fEndsAt: 'Ends at (optional)',
     dismissible: 'Dismissible',
     publish: 'Publish',
