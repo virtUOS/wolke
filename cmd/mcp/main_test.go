@@ -100,7 +100,7 @@ func TestProposeConfirmOverProtocol(t *testing.T) {
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
 		Name: "service.propose_create",
 		Arguments: map[string]any{
-			"name": "MCP Proto Svc", "description_de": "Test.",
+			"name": "MCP Proto Svc", "description_de": "Test.", "description_en": "Test.",
 			"service_url": "https://proto.example.edu", "icon": "server", "categories": []string{"data"},
 		},
 	})

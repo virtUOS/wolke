@@ -59,10 +59,10 @@ func TestAdminAPIFlow(t *testing.T) {
 	}
 
 	// Create a category, then a service in it.
-	if rec := call(adminCreateCategory(d), http.MethodPost, "/api/admin/categories", `{"slug":"api-test-cat","label":{"de":"API Test"},"sort":99}`, "", ""); rec.Code != http.StatusCreated {
+	if rec := call(adminCreateCategory(d), http.MethodPost, "/api/admin/categories", `{"slug":"api-test-cat","label":{"de":"API Test","en":"API Test"},"sort":99}`, "", ""); rec.Code != http.StatusCreated {
 		t.Fatalf("create category = %d, want 201 (%s)", rec.Code, rec.Body.String())
 	}
-	body := `{"name":"API Test Service","description":{"de":"Test."},"service_url":"https://t.example.edu","icon":"server","categories":["api-test-cat"]}`
+	body := `{"name":"API Test Service","description":{"de":"Test.","en":"Test."},"service_url":"https://t.example.edu","icon":"server","categories":["api-test-cat"]}`
 	rec := call(adminCreateService(d), http.MethodPost, "/api/admin/services", body, "", "")
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create service = %d, want 201 (%s)", rec.Code, rec.Body.String())
