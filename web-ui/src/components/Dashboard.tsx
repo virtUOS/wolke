@@ -219,21 +219,19 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
       )}
 
       {/* Section head. Mobile is intentionally minimal — just the search box on
-          the Dienste tab (no heading, no category chips); discovery relies on
-          search. Desktop keeps the heading + search and the category filters. */}
+          both tabs (no heading, no category chips); discovery relies on search.
+          Desktop keeps the heading + search and the category filters. */}
       {isMobile ? (
-        tab === 'dienste' && (
-          <div style={{ marginBottom: 16 }}>
-            <SearchBox
-              value={query}
-              onChange={onSearch}
-              placeholder={tr.dash.searchPlaceholder}
-              label={tr.dash.searchLabel}
-              clearLabel={tr.dash.searchClear}
-              width="100%"
-            />
-          </div>
-        )
+        <div style={{ marginBottom: 16 }}>
+          <SearchBox
+            value={query}
+            onChange={onSearch}
+            placeholder={tr.dash.searchPlaceholder}
+            label={tr.dash.searchLabel}
+            clearLabel={tr.dash.searchClear}
+            width="100%"
+          />
+        </div>
       ) : (
         <div
           style={{
