@@ -5,6 +5,9 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      semver-major-days: 14
+      semver-minor-days: 14
     open-pull-requests-limit: 5
     groups:
       go-modules:
@@ -15,6 +18,9 @@ updates:
     directory: "/web-ui"
     schedule:
       interval: weekly
+    cooldown:
+      semver-major-days: 14
+      semver-minor-days: 14
     open-pull-requests-limit: 5
     groups:
       npm-prod:
