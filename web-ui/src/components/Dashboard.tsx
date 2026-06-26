@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Wrench } from 'lucide-react'
+import { Wrench, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { Branding } from '@/lib/branding'
 import { api, localized, type Category, type Me, type Service } from '@/lib/api'
@@ -22,6 +22,47 @@ import { Greeting } from './Greeting'
 import { type TileActions } from './Tile'
 import { type Tab } from './TopBar'
 import { PillButton } from '@/components/ui/pill-button'
+
+// SearchBox is the service search field with a one-click clear (✕) button that
+// shows while there's a query. Shared by the mobile and desktop layouts.
+function SearchBox({
+  value,
+  onChange,
+  placeholder,
+  label,
+  clearLabel,
+  width,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  label: string
+  clearLabel: string
+  width: number | string
+}) {
+  return (
+    <div style={{ position: 'relative', width }}>
+      <input
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-label={label}
+        className="h-9 w-full rounded-md border border-border bg-surface pl-3 pr-9 text-sm text-text placeholder:text-text-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] [&::-webkit-search-cancel-button]:appearance-none"
+      />
+      {value !== '' && (
+        <button
+          type="button"
+          aria-label={clearLabel}
+          onClick={() => onChange('')}
+          className="absolute right-1 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded text-text-muted transition-colors hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  )
+}
 
 function useIsMobile(): boolean {
   const [mobile, setMobile] = useState(() => !window.matchMedia('(min-width: 768px)').matches)
@@ -183,14 +224,13 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
       {isMobile ? (
         tab === 'dienste' && (
           <div style={{ marginBottom: 16 }}>
-            <input
-              type="search"
+            <SearchBox
               value={query}
-              onChange={(e) => onSearch(e.target.value)}
+              onChange={onSearch}
               placeholder={tr.dash.searchPlaceholder}
-              aria-label={tr.dash.searchLabel}
-              style={{ width: '100%' }}
-              className="h-9 rounded-md border border-border bg-surface px-3 text-sm text-text placeholder:text-text-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+              label={tr.dash.searchLabel}
+              clearLabel={tr.dash.searchClear}
+              width="100%"
             />
           </div>
         )
@@ -210,14 +250,13 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           >
             {heading}
           </h2>
-          <input
-            type="search"
+          <SearchBox
             value={query}
-            onChange={(e) => onSearch(e.target.value)}
+            onChange={onSearch}
             placeholder={tr.dash.searchPlaceholder}
-            aria-label={tr.dash.searchLabel}
-            style={{ width: 260 }}
-            className="h-9 rounded-md border border-border bg-surface px-3 text-sm text-text placeholder:text-text-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+            label={tr.dash.searchLabel}
+            clearLabel={tr.dash.searchClear}
+            width={260}
           />
         </div>
       )}
