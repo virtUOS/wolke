@@ -406,6 +406,8 @@ branding:
   favicon:    /branding/favicon.svg
   imprint_url: "https://www.uni-osnabrueck.de/impressum/"   # legal footer links
   privacy_url: "https://www.uni-osnabrueck.de/datenschutz/" # (empty hides the link)
+  bot_url:  ""   # top-bar chatbot button (env BOT_URL); empty hides it
+  help_url: ""   # top-bar help button (env HELP_URL): an http(s) URL or a phone/tel: number
   theme:
     light: { primary: "#A6093D", primary_hover: "#8A0732", accent: "#F2C879",
              surface: "#F4F4F5", text: "#18181B" }

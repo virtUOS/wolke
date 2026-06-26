@@ -78,7 +78,12 @@ type Branding struct {
 	// hardcoded). An empty value hides that link.
 	ImprintURL string `yaml:"imprint_url" json:"imprint_url"`
 	PrivacyURL string `yaml:"privacy_url" json:"privacy_url"`
-	Theme      Theme  `yaml:"theme" json:"theme"`
+	// Top-bar quick actions, each shown only when set. BotURL opens a chatbot in
+	// a new tab. HelpURL opens a help/contact target: an http(s) URL (new tab) or
+	// a phone number / tel: link (the dialer on a smartphone).
+	BotURL  string `yaml:"bot_url" json:"bot_url"`
+	HelpURL string `yaml:"help_url" json:"help_url"`
+	Theme   Theme  `yaml:"theme" json:"theme"`
 }
 
 // Theme carries the light/dark token sets. Tokens are a map so the variable
@@ -191,6 +196,8 @@ func applyEnv(cfg *Config, lookupEnv func(string) (string, bool)) {
 	setStr("METRICS_TOKEN", &cfg.MetricsToken)
 	setStr("LOG_LEVEL", &cfg.LogLevel)
 	setStr("BRANDING_DIR", &cfg.BrandingDir)
+	setStr("BOT_URL", &cfg.Branding.BotURL)
+	setStr("HELP_URL", &cfg.Branding.HelpURL)
 	setCSV("TRUSTED_PROXIES", &cfg.TrustedProxies)
 
 	setStr("OIDC_ISSUER_URL", &cfg.OIDC.IssuerURL)
