@@ -15,6 +15,8 @@ export interface Branding {
   default_locale: string
   imprint_url: string
   privacy_url: string
+  bot_url: string
+  help_url: string
   theme: {
     light: ThemeTokens
     dark: ThemeTokens
@@ -23,6 +25,18 @@ export interface Branding {
 
 export async function fetchBranding(signal?: AbortSignal): Promise<Branding> {
   return getJSON<Branding>('/api/branding', signal)
+}
+
+// contactHref resolves a help_url value to a link target. An http(s) URL opens
+// in a new tab; a phone number (or an explicit tel: value) becomes a tel: link,
+// which opens the dialer on a smartphone. Returns null for an empty value.
+export function contactHref(value: string): { href: string; external: boolean } | null {
+  const v = value.trim()
+  if (!v) return null
+  if (/^tel:/i.test(v)) return { href: v, external: false }
+  if (/^https?:\/\//i.test(v)) return { href: v, external: true }
+  if (/^\+?\d[\d\s()/.-]*$/.test(v)) return { href: `tel:${v.replace(/[\s()/.-]/g, '')}`, external: false }
+  return { href: v, external: true }
 }
 
 // tokensToCSS turns {primary_hover: "#8A0732"} into "--primary-hover: #8A0732;",

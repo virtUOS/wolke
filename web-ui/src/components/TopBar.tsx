@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { ArrowRight, Languages, Moon, Shield, Sun, LogOut } from 'lucide-react'
-import type { Branding } from '@/lib/branding'
+import { ArrowRight, Bot, Languages, MessageCircleQuestionMark, Moon, Shield, Sun, LogOut } from 'lucide-react'
+import { contactHref, type Branding } from '@/lib/branding'
 import { t, type Lang } from '@/lib/i18n'
 import type { Me } from '@/lib/api'
-import { IconButton } from '@/components/ui/icon-button'
+import { iconButtonVariants } from '@/components/ui/icon-button'
 import { PillButton } from '@/components/ui/pill-button'
 import { focusFirst, trapTab } from '@/lib/focus'
 
@@ -47,6 +47,7 @@ export function TopBar({
   onLogout,
 }: TopBarProps) {
   const s = t(locale)
+  const help = contactHref(branding.help_url)
   return (
     <header
       style={{
@@ -95,19 +96,37 @@ export function TopBar({
 
         <div style={{ flex: 1 }} />
 
-        {/* Actions */}
+        {/* Actions. The chatbot + help buttons each appear only when their link
+            is configured (branding.bot_url / help_url). The theme toggle now
+            lives in the account menu. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <IconButton
-            aria-label={isDark ? s.topbar.toLight : s.topbar.toDark}
-            aria-pressed={isDark}
-            onClick={onToggleTheme}
-          >
-            {isDark ? <Sun className="h-5 w-5" aria-hidden="true" /> : <Moon className="h-5 w-5" aria-hidden="true" />}
-          </IconButton>
+          {branding.bot_url && (
+            <a
+              href={branding.bot_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={s.topbar.bot}
+              className={iconButtonVariants()}
+            >
+              <Bot className="h-5 w-5" aria-hidden="true" />
+            </a>
+          )}
+          {help && (
+            <a
+              href={help.href}
+              {...(help.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+              aria-label={s.topbar.help}
+              className={iconButtonVariants()}
+            >
+              <MessageCircleQuestionMark className="h-5 w-5" aria-hidden="true" />
+            </a>
+          )}
           <AccountMenu
             locale={locale}
             currentLocalePref={currentLocalePref}
             onSetLocale={onSetLocale}
+            isDark={isDark}
+            onToggleTheme={onToggleTheme}
             initials={userInitials}
             name={userName}
             email={userEmail}
@@ -127,6 +146,8 @@ interface AccountMenuProps {
   locale: Lang
   currentLocalePref: Me['locale']
   onSetLocale: (locale: Me['locale']) => void
+  isDark: boolean
+  onToggleTheme: () => void
   initials: string
   name: string
   email?: string
@@ -135,7 +156,7 @@ interface AccountMenuProps {
   onLogout: () => void
 }
 
-function AccountMenu({ locale, currentLocalePref, onSetLocale, initials, name, email, isAdmin, onAdmin, onLogout }: AccountMenuProps) {
+function AccountMenu({ locale, currentLocalePref, onSetLocale, isDark, onToggleTheme, initials, name, email, isAdmin, onAdmin, onLogout }: AccountMenuProps) {
   const s = t(locale)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -228,6 +249,22 @@ function AccountMenu({ locale, currentLocalePref, onSetLocale, initials, name, e
           </div>
 
           <div style={{ height: 1, background: 'var(--border)', margin: '0 0 4px' }} aria-hidden="true" />
+
+          {/* Theme toggle (moved here from the top bar). */}
+          <button
+            type="button"
+            style={itemStyle}
+            aria-pressed={isDark}
+            className="hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+            onClick={onToggleTheme}
+          >
+            {isDark ? (
+              <Sun className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
+            ) : (
+              <Moon className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
+            )}
+            <span style={{ flex: 1 }}>{isDark ? s.topbar.toLight : s.topbar.toDark}</span>
+          </button>
 
           {/* Language switcher: persists as a user pref (locale: auto | de | en).
               'auto' defers to the browser; de/en pin the language. */}
