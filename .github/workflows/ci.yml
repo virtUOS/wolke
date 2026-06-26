@@ -160,11 +160,11 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          # Always push, including on pull requests. (Without this, push defaults
-          # to false and the image is built but never published — pulls then get a
-          # stale image.) Note: PRs from forks lack packages:write and will fail
-          # this step; that's fine for an internal repo.
-          push: true
+          # Build on every run, but only publish on non-PR events. PR runs
+          # (including Dependabot and forks) get a read-only GITHUB_TOKEN without
+          # packages:write — and the GHCR login above is skipped — so a push 403s.
+          # PRs therefore validate the build only; main/tags publish.
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
