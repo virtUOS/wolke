@@ -123,6 +123,7 @@ const de = {
     legal: 'Rechtliches',
     imprint: 'Impressum',
     privacy: 'Datenschutz',
+    feedback: 'Feedback',
   },
   admin: {
     back: 'Zurück zum Dashboard',
@@ -289,6 +290,7 @@ const en: Strings = {
     legal: 'Legal',
     imprint: 'Imprint',
     privacy: 'Privacy',
+    feedback: 'Feedback',
   },
   admin: {
     back: 'Back to dashboard',

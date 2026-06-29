@@ -15,6 +15,7 @@ export interface Branding {
   default_locale: string
   imprint_url: string
   privacy_url: string
+  feedback_url: string
   bot_url: string
   help_url: string
   theme: {
@@ -36,6 +37,18 @@ export function contactHref(value: string): { href: string; external: boolean } 
   if (/^tel:/i.test(v)) return { href: v, external: false }
   if (/^https?:\/\//i.test(v)) return { href: v, external: true }
   if (/^\+?\d[\d\s()/.-]*$/.test(v)) return { href: `tel:${v.replace(/[\s()/.-]/g, '')}`, external: false }
+  return { href: v, external: true }
+}
+
+// feedbackHref resolves a feedback_url value to a link target. An http(s) URL
+// opens in a new tab; an email (or explicit mailto:) becomes a mailto: link.
+// Returns null for an empty value.
+export function feedbackHref(value: string): { href: string; external: boolean } | null {
+  const v = value.trim()
+  if (!v) return null
+  if (/^mailto:/i.test(v)) return { href: v, external: false }
+  if (/^https?:\/\//i.test(v)) return { href: v, external: true }
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return { href: `mailto:${v}`, external: false }
   return { href: v, external: true }
 }
 

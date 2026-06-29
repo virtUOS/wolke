@@ -406,6 +406,7 @@ branding:
   favicon:    /branding/favicon.svg
   imprint_url: "https://www.uni-osnabrueck.de/impressum/"   # legal footer links
   privacy_url: "https://www.uni-osnabrueck.de/datenschutz/" # (empty hides the link)
+  feedback_url: ""  # right-aligned footer feedback link (env FEEDBACK_URL): URL or email/mailto:
   bot_url:  ""   # top-bar chatbot button (env BOT_URL); empty hides it
   help_url: ""   # top-bar help button (env HELP_URL): an http(s) URL or a phone/tel: number
   theme:

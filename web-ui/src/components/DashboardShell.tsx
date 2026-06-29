@@ -1,6 +1,6 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import type { Me } from '@/lib/api'
-import type { Branding } from '@/lib/branding'
+import { feedbackHref, type Branding } from '@/lib/branding'
 import { t, type Lang } from '@/lib/i18n'
 import { TopBar, type Tab } from './TopBar'
 
@@ -58,6 +58,7 @@ export function DashboardShell({
   children,
 }: DashboardShellProps) {
   const s = t(locale)
+  const feedback = feedbackHref(branding.feedback_url)
   const mainRef = useRef<HTMLElement>(null)
   const prevKey = useRef(focusKey)
 
@@ -124,7 +125,7 @@ export function DashboardShell({
       >
         {children}
       </main>
-      {(branding.imprint_url || branding.privacy_url) && (
+      {(branding.imprint_url || branding.privacy_url || feedback) && (
         <footer
           aria-label={s.footer.legal}
           style={{
@@ -137,7 +138,7 @@ export function DashboardShell({
         >
           <div
             style={{
-              display: 'flex', flexWrap: 'wrap', gap: 20,
+              display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 20,
               borderTop: '1px solid var(--border)', paddingTop: 16,
             }}
           >
@@ -159,6 +160,16 @@ export function DashboardShell({
                 className="rounded text-sm text-text-muted no-underline transition-colors hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
               >
                 {s.footer.privacy}
+              </a>
+            )}
+            {feedback && (
+              <a
+                href={feedback.href}
+                {...(feedback.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                style={{ marginLeft: 'auto' }}
+                className="rounded text-sm text-text-muted no-underline transition-colors hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+              >
+                {s.footer.feedback}
               </a>
             )}
           </div>
