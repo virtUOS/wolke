@@ -163,6 +163,8 @@ export interface AdminService {
   is_active: boolean
   categories: string[]
   tag?: ServiceTag
+  // Search aliases (flat, language-agnostic). Search-only; not in /api/catalog.
+  keywords: string[]
 }
 
 export interface ServiceDraft {
@@ -174,6 +176,7 @@ export interface ServiceDraft {
   categories: string[]
   // '' means "no status label"; the backend treats empty as unset.
   tag: ServiceTag | ''
+  keywords: string[]
 }
 
 export type Severity = 'info' | 'warning' | 'critical'

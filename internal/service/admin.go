@@ -43,7 +43,14 @@ type Draft struct {
 	Icon        string
 	Categories  []string // category slugs
 	Tag         string   // "" | "beta" | "wartung"
+	Keywords    []string // optional search aliases; flat, language-agnostic
 }
+
+// Keyword limits keep the search aliases sane and the input bounded.
+const (
+	maxKeywords      = 32
+	maxKeywordLength = 50
+)
 
 // AdminService is the admin read model (includes is_active / soft-deleted).
 type AdminService struct {
@@ -56,9 +63,31 @@ type AdminService struct {
 	IsActive    bool              `json:"is_active"`
 	Categories  []string          `json:"categories"`
 	Tag         string            `json:"tag,omitempty"`
+	Keywords    []string          `json:"keywords"`
 }
 
 var validRoles = map[string]bool{"student": true, "teacher": true, "staff": true}
+
+// normalizeKeywords trims, drops blanks, and de-dupes case-insensitively while
+// preserving the first occurrence's original casing and order. Always returns a
+// non-nil slice so it maps cleanly onto a Postgres text[] (never SQL NULL).
+func normalizeKeywords(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := make(map[string]bool, len(in))
+	for _, k := range in {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		lk := strings.ToLower(k)
+		if seen[lk] {
+			continue
+		}
+		seen[lk] = true
+		out = append(out, k)
+	}
+	return out
+}
 
 // validateServiceInput enforces the catalog rules centrally so the form and the
 // MCP server behave identically (docs/02 §10).
@@ -90,6 +119,15 @@ func validateServiceInput(in Draft) error {
 	if in.Tag != "" && in.Tag != "beta" && in.Tag != "wartung" {
 		return &ValidationError{Field: "tag", Msg: `must be "", "beta", or "wartung"`}
 	}
+	kws := normalizeKeywords(in.Keywords)
+	if len(kws) > maxKeywords {
+		return &ValidationError{Field: "keywords", Msg: fmt.Sprintf("at most %d keywords are allowed", maxKeywords)}
+	}
+	for _, k := range kws {
+		if len([]rune(k)) > maxKeywordLength {
+			return &ValidationError{Field: "keywords", Msg: fmt.Sprintf("each keyword must be at most %d characters", maxKeywordLength)}
+		}
+	}
 	return nil
 }
 
@@ -101,6 +139,10 @@ func validHTTPURL(s string) bool {
 // ValidateDraft exposes service validation for the MCP propose step, which must
 // validate without writing (docs/02 §8).
 func ValidateDraft(in Draft) error { return validateServiceInput(in) }
+
+// NormalizeKeywords exposes keyword normalization so the MCP propose preview
+// reflects exactly what a confirm would store (docs/02 §8).
+func NormalizeKeywords(in []string) []string { return normalizeKeywords(in) }
 
 // GetAdminService returns one service (including inactive) with its categories,
 // or a NotFoundError. Read-only.
@@ -138,6 +180,7 @@ func CreateService(ctx context.Context, db AdminDB, actor Actor, in Draft) (Admi
 			DocUrl:      pgText(in.DocURL),
 			Icon:        in.Icon,
 			Tag:         pgText(in.Tag),
+			Keywords:    normalizeKeywords(in.Keywords),
 		})
 		if err != nil {
 			return fmt.Errorf("create service: %w", err)
@@ -179,6 +222,7 @@ func UpdateService(ctx context.Context, db AdminDB, actor Actor, id pgtype.UUID,
 			DocUrl:      pgText(in.DocURL),
 			Icon:        in.Icon,
 			Tag:         pgText(in.Tag),
+			Keywords:    normalizeKeywords(in.Keywords),
 		})
 		if err != nil {
 			return fmt.Errorf("update service: %w", err)
@@ -334,6 +378,10 @@ func toAdminService(s store.Service, slugs []string) AdminService {
 	if slugs == nil {
 		slugs = []string{}
 	}
+	keywords := s.Keywords
+	if keywords == nil {
+		keywords = []string{}
+	}
 	return AdminService{
 		ID:          uuidStr(s.ID),
 		Name:        s.Name,
@@ -344,6 +392,7 @@ func toAdminService(s store.Service, slugs []string) AdminService {
 		IsActive:    s.IsActive,
 		Categories:  slugs,
 		Tag:         textVal(s.Tag),
+		Keywords:    keywords,
 	}
 }
 

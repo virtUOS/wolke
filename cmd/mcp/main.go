@@ -79,6 +79,7 @@ type serviceFields struct {
 	DocURL        string   `json:"doc_url,omitempty"`
 	Icon          string   `json:"icon"` // kebab-case lucide icon name, e.g. "graduation-cap"
 	Categories    []string `json:"categories"`
+	Keywords      []string `json:"keywords,omitempty"` // optional search aliases (flat, DE+EN mixed)
 }
 
 func (f serviceFields) draft() service.Draft {
@@ -89,6 +90,7 @@ func (f serviceFields) draft() service.Draft {
 		DocURL:      f.DocURL,
 		Icon:        f.Icon,
 		Categories:  f.Categories,
+		Keywords:    f.Keywords,
 	}
 }
 

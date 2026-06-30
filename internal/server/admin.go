@@ -56,6 +56,7 @@ type serviceBody struct {
 	Icon        string            `json:"icon"`
 	Categories  []string          `json:"categories"`
 	Tag         string            `json:"tag"`
+	Keywords    []string          `json:"keywords"`
 }
 
 func (b serviceBody) draft() service.Draft {
@@ -67,6 +68,7 @@ func (b serviceBody) draft() service.Draft {
 		Icon:        b.Icon,
 		Categories:  b.Categories,
 		Tag:         b.Tag,
+		Keywords:    b.Keywords,
 	}
 }
 

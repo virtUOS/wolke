@@ -223,6 +223,7 @@ func draftPreview(d service.Draft, active bool) service.AdminService {
 	if cats == nil {
 		cats = []string{}
 	}
+	kws := service.NormalizeKeywords(d.Keywords)
 	return service.AdminService{
 		Name:        d.Name,
 		Description: d.Description,
@@ -232,6 +233,7 @@ func draftPreview(d service.Draft, active bool) service.AdminService {
 		IsActive:    active,
 		Categories:  cats,
 		Tag:         d.Tag,
+		Keywords:    kws,
 	}
 }
 

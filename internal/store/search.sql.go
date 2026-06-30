@@ -22,6 +22,7 @@ where s.is_active = true and (
     or s.description ->> 'en' ilike '%' || $1 || '%'
     or c.label ->> 'de' ilike '%' || $1 || '%'
     or c.label ->> 'en' ilike '%' || $1 || '%'
+    or array_to_string(s.keywords, ' ') ilike '%' || $1 || '%'
     or similarity(s.name, $1) > 0.2
 )
 group by s.id, s.name
@@ -29,10 +30,10 @@ order by max(similarity(s.name, $1)) desc, s.name
 limit 50
 `
 
-// Fuzzy/substring search over name, localized descriptions, and category labels
-// (docs/01 §4.6, docs/02 §5). Returns active service ids ranked by name
-// similarity then name. Categories are attached from the catalog snapshot in the
-// handler, so the result shape matches /api/catalog.
+// Fuzzy/substring search over name, localized descriptions, category labels, and
+// the admin-configured keywords (docs/01 §4.6, docs/02 §5). Returns active service
+// ids ranked by name similarity then name. Categories are attached from the
+// catalog snapshot in the handler, so the result shape matches /api/catalog.
 func (q *Queries) SearchServiceIDs(ctx context.Context, q_ pgtype.Text) ([]pgtype.UUID, error) {
 	rows, err := q.db.Query(ctx, searchServiceIDs, q_)
 	if err != nil {

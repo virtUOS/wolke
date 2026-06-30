@@ -13,6 +13,31 @@ export function useCatalog() {
   return useQuery({ queryKey: ['catalog'], queryFn: ({ signal }) => api.catalog(signal) })
 }
 
+// useDebouncedValue delays propagating rapid changes (e.g. each keystroke) so
+// search doesn't fire a request per character.
+export function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delayMs)
+    return () => clearTimeout(id)
+  }, [value, delayMs])
+  return debounced
+}
+
+// useSearch runs the server-side search for a (trimmed) query. It's the single
+// search path — fuzzy/keyword matching and ranking live in the backend (docs/01
+// §4.6). Previous results stay visible while the next query loads, so typing
+// doesn't flash an empty list.
+export function useSearch(query: string) {
+  const q = query.trim()
+  return useQuery({
+    queryKey: ['search', q],
+    queryFn: ({ signal }) => api.search(q, signal),
+    enabled: q !== '',
+    placeholderData: (prev) => prev,
+  })
+}
+
 export function useDefaults() {
   return useQuery({ queryKey: ['defaults'], queryFn: ({ signal }) => api.defaults(signal) })
 }

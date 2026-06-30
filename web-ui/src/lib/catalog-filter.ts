@@ -1,8 +1,6 @@
-// Catalog filtering for the dashboard. Two orthogonal concerns:
-//   • search — global, matches name/description across ALL services; and
-//   • filter — a single active facet (all | one category | maintenance).
-// Search wins over filter (a query searches every service and ignores the
-// active facet); these helpers are pure so the Dashboard wiring stays thin.
+// Catalog filtering for the dashboard's facet pills: a single active facet
+// (all | one category | maintenance). Search is a separate concern handled
+// server-side (see useSearch); these helpers are pure so the wiring stays thin.
 
 import type { Service } from './api'
 
@@ -16,23 +14,6 @@ export function filterEq(a: Filter, b: Filter): boolean {
   if (a.kind !== b.kind) return false
   if (a.kind === 'category' && b.kind === 'category') return a.slug === b.slug
   return true
-}
-
-// matchesQuery: case-insensitive match on the service name or any localized
-// description. An empty query matches everything.
-export function matchesQuery(s: Service, query: string): boolean {
-  const q = query.trim().toLowerCase()
-  if (!q) return true
-  return (
-    s.name.toLowerCase().includes(q) ||
-    Object.values(s.description).some((d) => d.toLowerCase().includes(q))
-  )
-}
-
-// searchAll: global search over the given services, ignoring any filter.
-export function searchAll(services: Service[], query: string): Service[] {
-  if (!query.trim()) return services
-  return services.filter((s) => matchesQuery(s, query))
 }
 
 // applyFilter: narrow services to the active facet (no search applied).

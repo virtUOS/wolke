@@ -77,6 +77,7 @@ type Service struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	Tag         pgtype.Text        `json:"tag"`
+	Keywords    []string           `json:"keywords"`
 }
 
 type ServiceCategory struct {

@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 import { localized, type AdminService, type Category, type Service, type ServiceDraft, type ServiceTag } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { curatedIconNames } from '@/lib/icons'
@@ -44,6 +45,8 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
   const [iconQuery, setIconQuery] = useState('')
   const [cats, setCats] = useState<Set<string>>(new Set(initial?.categories ?? []))
   const [tag, setTag] = useState<ServiceTag | ''>(initial?.tag ?? '')
+  const [keywords, setKeywords] = useState<string[]>(initial?.keywords ?? [])
+  const [kwInput, setKwInput] = useState('')
 
   // The full lucide set loads as ONE lazy chunk only here (admin picker), so
   // searching every icon costs a single request, not one per glyph. Normal users
@@ -103,9 +106,45 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
       return next
     })
 
+  // Add the typed term(s) as keyword chips: a comma may separate several at once;
+  // blanks and case-insensitive duplicates are dropped (the server normalizes too).
+  const addKeywords = (raw: string) => {
+    const parts = raw.split(',').map((p) => p.trim()).filter(Boolean)
+    if (parts.length === 0) return
+    setKeywords((prev) => {
+      const next = [...prev]
+      const seen = new Set(prev.map((k) => k.toLowerCase()))
+      for (const p of parts) {
+        if (!seen.has(p.toLowerCase())) {
+          seen.add(p.toLowerCase())
+          next.push(p)
+        }
+      }
+      return next
+    })
+    setKwInput('')
+  }
+
+  const removeKeyword = (kw: string) => setKeywords((prev) => prev.filter((k) => k !== kw))
+
+  const onKeywordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      addKeywords(kwInput)
+    } else if (e.key === 'Backspace' && kwInput === '' && keywords.length > 0) {
+      removeKeyword(keywords[keywords.length - 1])
+    }
+  }
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!valid) return
+    // Flush a term left in the input (admin typed it but didn't press Enter).
+    const pending = kwInput.trim()
+    const finalKeywords =
+      pending && !keywords.some((k) => k.toLowerCase() === pending.toLowerCase())
+        ? [...keywords, pending]
+        : keywords
     onSubmit({
       name: name.trim(),
       description: { de: descDe.trim(), en: descEn.trim() },
@@ -114,6 +153,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
       icon,
       categories: [...cats],
       tag,
+      keywords: finalKeywords,
     })
   }
 
@@ -153,6 +193,36 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
               </label>
             ))}
           </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className="mb-1 text-sm font-medium">{s.admin.fKeywords}</legend>
+          <p className="mb-1 text-xs text-text-muted">{s.admin.keywordsHint}</p>
+          {keywords.length > 0 && (
+            <ul className="mb-2 flex flex-wrap gap-1.5">
+              {keywords.map((kw) => (
+                <li key={kw} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-0.5 text-sm">
+                  <span>{kw}</span>
+                  <button
+                    type="button"
+                    aria-label={s.admin.keywordRemove(kw)}
+                    onClick={() => removeKeyword(kw)}
+                    className="grid h-4 w-4 place-items-center rounded text-text-muted hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                  >
+                    <X className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Input
+            value={kwInput}
+            onChange={(e) => setKwInput(e.target.value)}
+            onKeyDown={onKeywordKeyDown}
+            onBlur={() => addKeywords(kwInput)}
+            placeholder={s.admin.keywordsPlaceholder}
+            aria-label={s.admin.fKeywords}
+          />
         </fieldset>
 
         <fieldset>
