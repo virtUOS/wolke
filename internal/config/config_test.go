@@ -44,6 +44,25 @@ func TestDefaultsWhenNoFileNoEnv(t *testing.T) {
 	if cfg.Branding.ImprintURL == "" || cfg.Branding.PrivacyURL == "" {
 		t.Error("default branding should carry imprint/privacy footer links")
 	}
+	if cfg.AnnouncementRetentionDays != 60 {
+		t.Errorf("AnnouncementRetentionDays = %d, want default 60", cfg.AnnouncementRetentionDays)
+	}
+}
+
+func TestAnnouncementRetentionDaysFromEnv(t *testing.T) {
+	cfg, err := load("", envMap(map[string]string{"ANNOUNCEMENT_RETENTION_DAYS": "30"}))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.AnnouncementRetentionDays != 30 {
+		t.Errorf("AnnouncementRetentionDays = %d, want 30 from env", cfg.AnnouncementRetentionDays)
+	}
+}
+
+func TestNegativeRetentionRejected(t *testing.T) {
+	if _, err := load("", envMap(map[string]string{"ANNOUNCEMENT_RETENTION_DAYS": "-5"})); err == nil {
+		t.Fatal("load: want error for negative announcement_retention_days, got nil")
+	}
 }
 
 func TestFileOverridesDefaults(t *testing.T) {

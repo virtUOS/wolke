@@ -6,6 +6,7 @@ import type { Me } from '@/lib/api'
 import { iconButtonVariants } from '@/components/ui/icon-button'
 import { PillButton } from '@/components/ui/pill-button'
 import { focusFirst, trapTab } from '@/lib/focus'
+import { NotificationBell } from './NotificationBell'
 
 export type Tab = 'favoriten' | 'dienste'
 
@@ -121,6 +122,7 @@ export function TopBar({
               <MessageCircleQuestionMark className="h-5 w-5" aria-hidden="true" />
             </a>
           )}
+          <NotificationBell locale={locale} />
           <AccountMenu
             locale={locale}
             currentLocalePref={currentLocalePref}
