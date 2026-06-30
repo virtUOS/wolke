@@ -56,6 +56,8 @@ type Querier interface {
 	// (service_id, category slug) pairs for active services, to assemble the
 	// many-to-many in Go when building the catalog snapshot.
 	ListActiveServiceCategories(ctx context.Context) ([]ListActiveServiceCategoriesRow, error)
+	// Note: keywords are intentionally NOT selected — they are a search-only aid
+	// matched in SQL (search.sql), never exposed via /api/catalog.
 	ListActiveServices(ctx context.Context) ([]ListActiveServicesRow, error)
 	// Active = within its time window, across ALL audiences. For the public,
 	// identity-less catalog MCP server, which has no user role to filter on and
@@ -84,10 +86,10 @@ type Querier interface {
 	// window). Idempotent: SET (not add). Days whose raw events have been purged are
 	// no longer recomputed, so their aggregate rows stay frozen at their last value.
 	RollupClicks(ctx context.Context) error
-	// Fuzzy/substring search over name, localized descriptions, and category labels
-	// (docs/01 §4.6, docs/02 §5). Returns active service ids ranked by name
-	// similarity then name. Categories are attached from the catalog snapshot in the
-	// handler, so the result shape matches /api/catalog.
+	// Fuzzy/substring search over name, localized descriptions, category labels, and
+	// the admin-configured keywords (docs/01 §4.6, docs/02 §5). Returns active service
+	// ids ranked by name similarity then name. Categories are attached from the
+	// catalog snapshot in the handler, so the result shape matches /api/catalog.
 	SearchServiceIDs(ctx context.Context, q_ pgtype.Text) ([]pgtype.UUID, error)
 	// One-time pre-fill: copy the user's role defaults into favorites as real,
 	// editable entries (concept §4.4).

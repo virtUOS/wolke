@@ -4,14 +4,16 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { Branding } from '@/lib/branding'
 import { api, localized, type Category, type Me, type Service } from '@/lib/api'
 import { t, effectiveLocale } from '@/lib/i18n'
-import { applyFilter, filterEq, searchAll, type Filter } from '@/lib/catalog-filter'
+import { applyFilter, filterEq, type Filter } from '@/lib/catalog-filter'
 import {
   useApplyTheme,
   useCatalog,
+  useDebouncedValue,
   useFavoriteActions,
   useFavorites,
   usePrefersDark,
   usePrefsMutation,
+  useSearch,
 } from '@/lib/hooks'
 import { useAnnouncements } from '@/lib/admin-hooks'
 import { AdminView } from './admin/AdminView'
@@ -110,6 +112,11 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const favorites = useFavorites()
   const fav = useFavoriteActions()
 
+  // Search is server-side and debounced (the one search path; matching + ranking
+  // live in the backend). Results stay visible while the next query loads.
+  const debouncedQuery = useDebouncedValue(query, 150)
+  const searchResults = useSearch(debouncedQuery)
+
   const allServices: Service[] = catalog.data?.services ?? NO_SERVICES
   const allCategories: Category[] = catalog.data?.categories ?? NO_CATEGORIES
   const favoriteServices: Service[] = favorites.data?.services ?? NO_SERVICES
@@ -151,10 +158,14 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   // Result set: a search overrides everything (global, no tab/filter); otherwise
   // favorites are shown as-is and the Dienste tab applies the active facet.
   const results = useMemo(() => {
-    if (searching) return searchAll(allServices, query)
+    if (searching) return searchResults.data?.services ?? NO_SERVICES
     if (tab === 'favoriten') return favoriteServices
     return applyFilter(allServices, filter)
-  }, [searching, query, tab, allServices, favoriteServices, filter])
+  }, [searching, searchResults.data, tab, allServices, favoriteServices, filter])
+
+  // True only until the first results for the current search arrive; subsequent
+  // keystrokes keep the previous list (placeholderData) so it doesn't flicker.
+  const searchPending = searching && searchResults.data === undefined
 
   const maintenanceCount = useMemo(
     () => allServices.filter((s) => s.tag === 'wartung').length,
@@ -304,8 +315,9 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         {tr.dash.resultCount(results.length)}
       </div>
 
-      {/* Content: a search shows global results; otherwise the active tab/filter.
-          Favorites render their own list; everything else needs the catalog. */}
+      {/* Content: a search shows global results from the server; otherwise the
+          active tab/filter. Favorites render their own list; everything else
+          needs the catalog. */}
       {!searching && tab === 'favoriten' ? (
         <CatalogView
           services={results}
@@ -315,7 +327,9 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           actions={actions}
           emptyMessage={tr.dash.favEmpty}
         />
-      ) : catalog.isLoading ? (
+      ) : searchPending ? (
+        <p style={{ fontSize: 14, color: 'var(--text-muted)' }} role="status" aria-busy="true">{tr.dash.searching}</p>
+      ) : !searching && catalog.isLoading ? (
         <p style={{ fontSize: 14, color: 'var(--text-muted)' }} role="status" aria-busy="true">{tr.common.loading}</p>
       ) : (
         <CatalogView

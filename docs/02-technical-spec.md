@@ -131,6 +131,8 @@ create table services (
   service_url   text,                    -- NULL => documentation-only entry
   doc_url       text,
   icon          text not null,           -- a lucide icon name, validated against an allowlist
+  tag           text,                    -- NULL | 'beta' | 'wartung' (status label)
+  keywords      text[] not null default '{}',  -- search aliases; flat, language-agnostic
   is_active     boolean not null default true,   -- soft delete = false
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
@@ -220,9 +222,19 @@ Indexes worth having from day one: `services(is_active)`, a trigram/GIN index on
 
 ## 5. Search
 Start with **PostgreSQL full-text + `pg_trgm`** (fuzzy/prefix over name + description + category
-labels). It is more than enough for a few hundred services and a few thousand users, and it
-adds zero infrastructure. Only reach for a dedicated search engine if the catalog grows
-unexpectedly large or you need cross-field ranking you can't express in SQL — unlikely here.
+labels + per-service `keywords`). It is more than enough for a few hundred services and a few
+thousand users, and it adds zero infrastructure. Only reach for a dedicated search engine if the
+catalog grows unexpectedly large or you need cross-field ranking you can't express in SQL —
+unlikely here.
+
+`keywords` are admin-configured search aliases — a flat, language-agnostic `text[]` per service
+(admins mix German and English terms). They bridge vocabulary gaps the literal text can't (e.g.
+`video conference` → BigBlueButton). Matched in SQL via `array_to_string(keywords,' ') ilike …`
+alongside the other fields; **search-only**, never exposed via `/api/catalog`. No GIN index on
+the joined keywords yet: `array_to_string`/array-to-text casts aren't `IMMUTABLE`, and the catalog
+is small enough that the predicate is cheap — revisit with an immutable-wrapper index only if the
+scale trigger (§9) is hit. Search runs server-side at `/api/search` (debounced in the SPA) and is
+the single search path — there is no client-side fallback matcher.
 
 ## 6. Auth — generic OIDC via the BFF pattern
 
@@ -366,7 +378,8 @@ balancer only when an HA requirement (not raw load) forces it.
 ## 10. Cross-cutting
 
 - **Validation:** central, in `/internal/service`, so form and MCP enforce the same rules
-  (URL format, icon allowlist, at least one category, etc.).
+  (URL format, icon allowlist, at least one category, keyword limits — trimmed, de-duped
+  case-insensitively, ≤32 per service and ≤50 chars each, etc.).
 - **Errors:** API returns problem+json with a stable code + human message; the SPA renders
   empty/error/loading states explicitly (no silent failures).
 - **Security headers:** strict CSP (the SPA is same-origin, so this is straightforward),
