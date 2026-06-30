@@ -61,6 +61,8 @@ const de = {
     services: 'Dienste',
     toLight: 'Helles Design aktivieren',
     toDark: 'Dunkles Design aktivieren',
+    bot: 'Chatbot öffnen',
+    help: 'Hilfe & Kontakt',
     openAccount: 'Konto-Menü öffnen',
     account: 'Konto',
     administration: 'Administration',
@@ -121,6 +123,7 @@ const de = {
     legal: 'Rechtliches',
     imprint: 'Impressum',
     privacy: 'Datenschutz',
+    feedback: 'Feedback',
   },
   admin: {
     back: 'Zurück zum Dashboard',
@@ -228,6 +231,8 @@ const en: Strings = {
     services: 'Services',
     toLight: 'Switch to light theme',
     toDark: 'Switch to dark theme',
+    bot: 'Open chatbot',
+    help: 'Help & contact',
     openAccount: 'Open account menu',
     account: 'Account',
     administration: 'Administration',
@@ -285,6 +290,7 @@ const en: Strings = {
     legal: 'Legal',
     imprint: 'Imprint',
     privacy: 'Privacy',
+    feedback: 'Feedback',
   },
   admin: {
     back: 'Back to dashboard',
