@@ -41,6 +41,14 @@ branding:
   # Legal footer links (institution-specific). Leave empty to hide a link.
   imprint_url: "https://www.uni-osnabrueck.de/impressum/"
   privacy_url: "https://www.uni-osnabrueck.de/datenschutz/"
+  # Right-aligned feedback link in the footer (env: FEEDBACK_URL). An http(s) URL
+  # or an email / mailto: address. Empty hides it.
+  feedback_url: ""
+  # Top-bar quick actions (env: BOT_URL / HELP_URL). Each button is hidden when
+  # empty. bot_url opens a chatbot in a new tab; help_url opens an http(s) URL in
+  # a new tab, or a phone number / tel: link (opens the dialer on a phone).
+  bot_url: ""
+  help_url: ""
   theme:
     light:
       primary: "#A6093D"
