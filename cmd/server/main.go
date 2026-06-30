@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/virtuos/wolke/internal/announce"
 	"github.com/virtuos/wolke/internal/auth"
 	"github.com/virtuos/wolke/internal/catalog"
 	"github.com/virtuos/wolke/internal/config"
@@ -28,9 +29,10 @@ import (
 const catalogCacheTTL = 60 * time.Second
 
 const (
-	gaugeRefreshInterval = 30 * time.Second
-	usageRollupInterval  = time.Hour
-	usageRetention       = 90 * 24 * time.Hour // raw click_events retention (docs/01 §8.9)
+	gaugeRefreshInterval      = 30 * time.Second
+	usageRollupInterval       = time.Hour
+	usageRetention            = 90 * 24 * time.Hour // raw click_events retention (docs/01 §8.9)
+	announcementPurgeInterval = 24 * time.Hour      // how often the history retention sweep runs
 )
 
 // refreshGauges periodically updates the metric gauges from the database.
@@ -57,6 +59,31 @@ func runUsageRollup(ctx context.Context, log *slog.Logger, db *store.DB) {
 	for {
 		if err := usage.Rollup(ctx, db, usageRetention); err != nil {
 			log.Warn("usage rollup", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// runAnnouncementPurge periodically deletes expired announcements older than the
+// configured retention window (docs/01 §4.7). retentionDays <= 0 disables it.
+func runAnnouncementPurge(ctx context.Context, log *slog.Logger, db *store.DB, retentionDays int) {
+	if retentionDays <= 0 {
+		log.Info("announcement history retention disabled (keep forever)")
+		return
+	}
+	window := time.Duration(retentionDays) * 24 * time.Hour
+	t := time.NewTicker(announcementPurgeInterval)
+	defer t.Stop()
+	for {
+		n, err := announce.Purge(ctx, db, time.Now().Add(-window))
+		if err != nil {
+			log.Warn("announcement purge", "error", err)
+		} else if n > 0 {
+			log.Info("purged expired announcements", "count", n, "retention_days", retentionDays)
 		}
 		select {
 		case <-ctx.Done():
@@ -175,6 +202,7 @@ func run() error {
 	if db != nil {
 		go refreshGauges(ctx, logger, m, db)
 		go runUsageRollup(ctx, logger, db)
+		go runAnnouncementPurge(ctx, logger, db, cfg.AnnouncementRetentionDays)
 	}
 
 	errCh := make(chan error, 1)

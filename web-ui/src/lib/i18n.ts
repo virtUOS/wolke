@@ -116,6 +116,11 @@ const de = {
   announce: {
     region: 'Ankündigungen',
     dismiss: 'Ankündigung schließen',
+    bell: (n: number) => (n > 0 ? `Mitteilungen (${n} neu)` : 'Mitteilungen'),
+    center: 'Mitteilungen',
+    current: 'Aktuell',
+    history: 'Verlauf',
+    empty: 'Keine Mitteilungen.',
   },
   footer: {
     legal: 'Rechtliches',
@@ -280,6 +285,11 @@ const en: Strings = {
   announce: {
     region: 'Announcements',
     dismiss: 'Dismiss announcement',
+    bell: (n: number) => (n > 0 ? `Announcements (${n} new)` : 'Announcements'),
+    center: 'Announcements',
+    current: 'Current',
+    history: 'History',
+    empty: 'No announcements.',
   },
   footer: {
     legal: 'Legal',

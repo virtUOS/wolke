@@ -61,6 +61,10 @@ type Querier interface {
 	// identity-less catalog MCP server, which has no user role to filter on and
 	// must not hide a maintenance notice addressed to a specific role.
 	ListAllActiveAnnouncements(ctx context.Context) ([]Announcement, error)
+	// A user's past notices for the notification center: addressed to their role (or
+	// all), already started, and no longer an active banner for them — either the
+	// window has ended OR they dismissed it. Most recent first.
+	ListAnnouncementHistory(ctx context.Context, arg ListAnnouncementHistoryParams) ([]Announcement, error)
 	// LEFT JOIN so rows whose actor_id is null (MCP/system, or no user) still list;
 	// actor_name resolves the acting user for the admin audit view.
 	ListAudit(ctx context.Context, lim int32) ([]ListAuditRow, error)
@@ -73,6 +77,11 @@ type Querier interface {
 	ListServiceCategorySlugs(ctx context.Context, serviceID pgtype.UUID) ([]string, error)
 	MarkFavoritesSeeded(ctx context.Context, userID pgtype.UUID) error
 	NextFavoriteSort(ctx context.Context, userID pgtype.UUID) (int32, error)
+	// Permanently delete expired announcements that started before the retention
+	// cutoff (history retention; dismissals cascade away). Only expired notices are
+	// purged, so an active banner is never removed regardless of age. starts_at may
+	// be null for notices shown immediately, so fall back to created_at.
+	PurgeAnnouncementsBefore(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
 	PurgeOldClicks(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
 	// A lightweight click event (docs/01 §5.4). user_role is denormalized so
 	// aggregate metrics (Phase 4) need no join. target distinguishes a launch
@@ -80,6 +89,10 @@ type Querier interface {
 	// user/service delete keep history intact when a user or service is removed.
 	RecordClick(ctx context.Context, arg RecordClickParams) error
 	RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) (int64, error)
+	// Close any currently-active announcement by ending its window now. Called when
+	// a new announcement is created so there is at most one active notice at a time,
+	// while the retired one stays in the table as history (docs/01 §4.7).
+	RetireActiveAnnouncements(ctx context.Context) error
 	// Recompute usage_daily from the raw events still present (the retention
 	// window). Idempotent: SET (not add). Days whose raw events have been purged are
 	// no longer recomputed, so their aggregate rows stay frozen at their last value.

@@ -18,6 +18,16 @@ export function useAnnouncements() {
   return useQuery({ queryKey: ['announcements'], queryFn: ({ signal }) => api.announcements(signal) })
 }
 
+// useAnnouncementHistory is the user's past notices for the notification center.
+// Fetched lazily (only once the panel opens) so the dashboard pays nothing for it.
+export function useAnnouncementHistory(enabled: boolean) {
+  return useQuery({
+    queryKey: ['announcements', 'history'],
+    queryFn: ({ signal }) => api.announcementHistory(signal),
+    enabled,
+  })
+}
+
 // useAdminActions bundles the admin write mutations; each refreshes the views it
 // affects (admin lists + the public catalog/announcements + audit).
 export function useAdminActions() {

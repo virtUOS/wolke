@@ -24,6 +24,7 @@ type Announcement struct {
 	StartsAt    string            `json:"starts_at,omitempty"` // RFC3339, empty if unset
 	EndsAt      string            `json:"ends_at,omitempty"`
 	Dismissible bool              `json:"dismissible"`
+	CreatedAt   string            `json:"created_at,omitempty"` // RFC3339; when the notice was posted
 }
 
 // Store is the read surface the announce package needs.
@@ -31,7 +32,17 @@ type Store interface {
 	ListActiveAnnouncements(ctx context.Context, arg store.ListActiveAnnouncementsParams) ([]store.Announcement, error)
 	ListAllActiveAnnouncements(ctx context.Context) ([]store.Announcement, error)
 	AdminListAnnouncements(ctx context.Context, lim int32) ([]store.Announcement, error)
+	ListAnnouncementHistory(ctx context.Context, arg store.ListAnnouncementHistoryParams) ([]store.Announcement, error)
 }
+
+// PurgeStore is the write surface the retention sweep needs.
+type PurgeStore interface {
+	PurgeAnnouncementsBefore(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
+}
+
+// historyLimit caps the notification-center history so the panel stays bounded.
+// The retention sweep keeps the table small, so this is generous headroom.
+const historyLimit = 100
 
 // ListActive returns announcements currently in-window, addressed to the role,
 // and not already dismissed by the user.
@@ -51,6 +62,27 @@ func ListAllActive(ctx context.Context, db Store) ([]Announcement, error) {
 		return nil, fmt.Errorf("list all active announcements: %w", err)
 	}
 	return views(rows), nil
+}
+
+// ListHistory returns a user's past notices for the notification center:
+// addressed to their role, already started, and no longer an active banner for
+// them (expired or dismissed). Most recent first.
+func ListHistory(ctx context.Context, db Store, role string, userID pgtype.UUID) ([]Announcement, error) {
+	rows, err := db.ListAnnouncementHistory(ctx, store.ListAnnouncementHistoryParams{Role: role, UserID: userID, Lim: historyLimit})
+	if err != nil {
+		return nil, fmt.Errorf("list announcement history: %w", err)
+	}
+	return views(rows), nil
+}
+
+// Purge permanently deletes expired announcements older than the retention
+// cutoff (their dismissals cascade away). Returns the number of rows removed.
+func Purge(ctx context.Context, db PurgeStore, cutoff time.Time) (int64, error) {
+	n, err := db.PurgeAnnouncementsBefore(ctx, pgtype.Timestamptz{Time: cutoff, Valid: true})
+	if err != nil {
+		return 0, fmt.Errorf("purge announcements: %w", err)
+	}
+	return n, nil
 }
 
 // AdminList returns the most recent announcements (all states), for management.
@@ -81,6 +113,7 @@ func View(a store.Announcement) Announcement {
 		StartsAt:    tsString(a.StartsAt),
 		EndsAt:      tsString(a.EndsAt),
 		Dismissible: a.Dismissible,
+		CreatedAt:   tsString(a.CreatedAt),
 	}
 }
 
