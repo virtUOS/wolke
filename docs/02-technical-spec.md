@@ -236,6 +236,15 @@ is small enough that the predicate is cheap — revisit with an immutable-wrappe
 scale trigger (§9) is hit. Search runs server-side at `/api/search` (debounced in the SPA) and is
 the single search path — there is no client-side fallback matcher.
 
+**Zero-result insights.** Each search appends a row to `search_events (query_norm, result_count,
+created_at)` — best-effort, so a logging failure never breaks or slows the response. `query_norm`
+is the lowercased/whitespace-collapsed/length-capped query; **no user id is stored** (aggregate-only,
+privacy by construction). `GET /api/admin/search-insights` (admin-only) groups recent zero-result
+queries by frequency over a window (default 30 days, a partial index on `result_count = 0` keeps it
+cheap); the same data is exposed read-only via the MCP `search.insights` tool. Retention is bounded
+by pruning old rows (`DeleteSearchEventsBefore`, run from ops/a scheduled job). The insights drive
+the keyword worklist — see docs/01 §4.6.
+
 ## 6. Auth — generic OIDC via the BFF pattern
 
 The SPA must never hold tokens. The Go server is the confidential client. **The provider is not

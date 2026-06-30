@@ -111,6 +111,13 @@ type servicesOut struct {
 type categoriesOut struct {
 	Categories []adminmcp.Category `json:"categories"`
 }
+type insightsInput struct {
+	Days  int `json:"days,omitempty"`  // window in days (default 30)
+	Limit int `json:"limit,omitempty"` // max rows (default 50)
+}
+type insightsOut struct {
+	Insights []adminmcp.SearchInsight `json:"insights"`
+}
 type resultOut struct {
 	Result string `json:"result"`
 }
@@ -132,6 +139,12 @@ func registerTools(s *mcp.Server, mgr *adminmcp.Manager) {
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ empty) (*mcp.CallToolResult, categoriesOut, error) {
 			cats, err := mgr.ListCategories(ctx)
 			return nil, categoriesOut{Categories: cats}, err
+		})
+
+	mcp.AddTool(s, &mcp.Tool{Name: "search.insights", Description: "List recent searches that returned no results — the worklist for adding service keywords. Read-only; aggregate-only (no user data). Optional days (default 30) and limit (default 50)."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in insightsInput) (*mcp.CallToolResult, insightsOut, error) {
+			list, err := mgr.SearchInsights(ctx, in.Days, in.Limit)
+			return nil, insightsOut{Insights: list}, err
 		})
 
 	mcp.AddTool(s, &mcp.Tool{Name: "service.propose_create", Description: "Validate a new service and return a preview + change_token. Does NOT write. Requires both description_de and description_en, a kebab-case lucide icon name, and at least one category."},

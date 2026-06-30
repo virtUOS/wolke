@@ -135,6 +135,7 @@ const de = {
     tabRoles: 'Rollen',
     tabAnnouncements: 'Ankündigungen',
     tabAudit: 'Audit',
+    tabInsights: 'Suchanalyse',
     servicesHeading: 'Dienste',
     newService: 'Neuer Dienst',
     serviceForm: (editing: boolean): string => (editing ? 'Dienst bearbeiten' : 'Neuen Dienst anlegen'),
@@ -209,6 +210,12 @@ const de = {
     saved: 'Gespeichert.',
     auditHeading: 'Audit-Log',
     noEntries: 'Keine Einträge.',
+    insightsHeading: 'Suchen ohne Ergebnis',
+    insightsHint: 'Was Nutzer gesucht und nicht gefunden haben — Kandidaten für neue Suchbegriffe. Letzte 30 Tage.',
+    insightsEmpty: 'Keine ergebnislosen Suchen im Zeitraum.',
+    insightsQuery: 'Suchbegriff',
+    insightsCount: 'Anzahl',
+    insightsLastSeen: 'Zuletzt',
   },
 }
 
@@ -307,6 +314,7 @@ const en: Strings = {
     tabRoles: 'Roles',
     tabAnnouncements: 'Announcements',
     tabAudit: 'Audit',
+    tabInsights: 'Search insights',
     servicesHeading: 'Services',
     newService: 'New service',
     serviceForm: (editing: boolean) => (editing ? 'Edit service' : 'Create a service'),
@@ -381,6 +389,12 @@ const en: Strings = {
     saved: 'Saved.',
     auditHeading: 'Audit log',
     noEntries: 'No entries.',
+    insightsHeading: 'Searches with no results',
+    insightsHint: 'What users searched for and didn’t find — candidates for new keywords. Last 30 days.',
+    insightsEmpty: 'No empty searches in this period.',
+    insightsQuery: 'Query',
+    insightsCount: 'Count',
+    insightsLastSeen: 'Last seen',
   },
 }
 

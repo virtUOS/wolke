@@ -97,6 +97,12 @@ keyboard-navigable. On a result, the same tile behavior applies. Search runs ser
 (`/api/search`, debounced) — the single search path. Search is a **must-have**, so it ships
 in Phase 1, not later.
 
+**Zero-result insights.** Every query is logged with its result count (aggregate-only — the
+normalized query text and a count, never a user id). An admin view lists recent searches that
+returned **nothing**, ranked by frequency — the worklist that tells admins which keywords to add,
+and the proof a fix worked (the query stops showing up empty). This closes the loop: keywords are
+the lever, the zero-result list is the dial that says which lever to pull.
+
 ### 4.7 Announcements
 A dismissible banner region at the top of the dashboard for outages and major notices.
 Each announcement has a severity (info / warning / critical), an optional time window

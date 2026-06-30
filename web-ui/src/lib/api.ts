@@ -151,6 +151,16 @@ export const api = {
     send<Announcement>('PATCH', `/api/admin/announcements/${id}`, a),
   deleteAnnouncement: (id: string) => send<void>('DELETE', `/api/admin/announcements/${id}`),
   audit: (signal?: AbortSignal) => getJSON<{ entries: AuditEntry[] }>('/api/admin/audit', signal),
+  searchInsights: (signal?: AbortSignal) =>
+    getJSON<{ entries: SearchInsight[]; days: number }>('/api/admin/search-insights', signal),
+}
+
+// SearchInsight is one query users ran that returned nothing — the worklist for
+// adding service keywords.
+export interface SearchInsight {
+  query: string
+  searches: number
+  last_seen: string
 }
 
 export interface AdminService {

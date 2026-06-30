@@ -214,6 +214,46 @@ type auditEntry struct {
 	CreatedAt string          `json:"created_at"`
 }
 
+// searchInsight is the API shape of one zero-result query row.
+type searchInsight struct {
+	Query    string `json:"query"`
+	Searches int64  `json:"searches"`
+	LastSeen string `json:"last_seen"`
+}
+
+// adminSearchInsights lists recent searches that returned nothing — the admin
+// worklist for adding service keywords (docs/01 §4.6). Aggregate-only.
+func adminSearchInsights(d AdminDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		days := int32(30)
+		if v := r.URL.Query().Get("days"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 365 {
+				days = int32(n)
+			}
+		}
+		limit := int32(50)
+		if v := r.URL.Query().Get("limit"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 200 {
+				limit = int32(n)
+			}
+		}
+		rows, err := d.Store.ListZeroResultSearches(r.Context(), store.ListZeroResultSearchesParams{Days: days, Lim: limit})
+		if err != nil {
+			writeProblem(w, http.StatusInternalServerError, "insights_unavailable", "Could not load search insights.")
+			return
+		}
+		out := make([]searchInsight, 0, len(rows))
+		for _, e := range rows {
+			out = append(out, searchInsight{
+				Query:    e.QueryNorm,
+				Searches: e.Searches,
+				LastSeen: e.LastSeen.Time.Format("2006-01-02T15:04:05Z07:00"),
+			})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"entries": out, "days": days})
+	}
+}
+
 func adminListAudit(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		limit := int32(100)
