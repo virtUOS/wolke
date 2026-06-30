@@ -75,6 +75,35 @@ type Category struct {
 	Label map[string]string `json:"label"`
 }
 
+// SearchInsight is the read shape for search.insights: a query users ran that
+// returned nothing, with how often and when it was last seen.
+type SearchInsight struct {
+	Query    string `json:"query"`
+	Searches int64  `json:"searches"`
+	LastSeen string `json:"last_seen"`
+}
+
+// SearchInsights lists recent zero-result searches — the worklist for adding
+// service keywords (docs/01 §4.6). Read-only; aggregate-only. days/limit are
+// clamped to the same bounds as the HTTP endpoint.
+func (m *Manager) SearchInsights(ctx context.Context, days, limit int) ([]SearchInsight, error) {
+	if days < 1 || days > 365 {
+		days = 30
+	}
+	if limit < 1 || limit > 200 {
+		limit = 50
+	}
+	rows, err := m.db.ListZeroResultSearches(ctx, store.ListZeroResultSearchesParams{Days: int32(days), Lim: int32(limit)})
+	if err != nil {
+		return nil, fmt.Errorf("search insights: %w", err)
+	}
+	out := make([]SearchInsight, 0, len(rows))
+	for _, e := range rows {
+		out = append(out, SearchInsight{Query: e.QueryNorm, Searches: e.Searches, LastSeen: e.LastSeen.Time.Format(time.RFC3339)})
+	}
+	return out, nil
+}
+
 // ListCategories returns the managed categories.
 func (m *Manager) ListCategories(ctx context.Context) ([]Category, error) {
 	rows, err := m.db.ListCategories(ctx)

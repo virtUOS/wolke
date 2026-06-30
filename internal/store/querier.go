@@ -33,6 +33,8 @@ type Querier interface {
 	DeleteAnnouncement(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteRoleDefaults(ctx context.Context, role string) error
+	// Retention pruning: drop events older than a cutoff (run from ops/a scheduled job).
+	DeleteSearchEventsBefore(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
 	DeleteServiceCategories(ctx context.Context, serviceID pgtype.UUID) error
 	DeleteSession(ctx context.Context, id string) error
 	// Record a per-user dismissal. Idempotent: dismissing twice is a no-op.
@@ -50,6 +52,8 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserBySub(ctx context.Context, oidcSub string) (User, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
+	// Append one search to the log (best-effort; never blocks the search response).
+	InsertSearchEvent(ctx context.Context, arg InsertSearchEventParams) error
 	// Active = within its time window, addressed to the user's role (or all), and
 	// not already dismissed by the user, most-severe first (docs/01 §4.7).
 	ListActiveAnnouncements(ctx context.Context, arg ListActiveAnnouncementsParams) ([]Announcement, error)
@@ -73,6 +77,9 @@ type Querier interface {
 	// stored order as a stable tiebreaker.
 	ListFavoritesByUsage(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
 	ListServiceCategorySlugs(ctx context.Context, serviceID pgtype.UUID) ([]string, error)
+	// Most-searched queries that returned nothing within the last @days days — the
+	// admin worklist for adding keywords (docs/01 §4.6). Aggregate-only.
+	ListZeroResultSearches(ctx context.Context, arg ListZeroResultSearchesParams) ([]ListZeroResultSearchesRow, error)
 	MarkFavoritesSeeded(ctx context.Context, userID pgtype.UUID) error
 	NextFavoriteSort(ctx context.Context, userID pgtype.UUID) (int32, error)
 	PurgeOldClicks(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
