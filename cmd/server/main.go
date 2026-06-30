@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/virtuos/wolke/internal/announce"
 	"github.com/virtuos/wolke/internal/auth"
 	"github.com/virtuos/wolke/internal/catalog"
 	"github.com/virtuos/wolke/internal/config"
@@ -35,6 +36,8 @@ const (
 
 	searchPruneInterval  = 24 * time.Hour
 	searchEventRetention = 180 * 24 * time.Hour // aggregate search_events retention (docs/02 §5)
+
+	announcementPurgeInterval = 24 * time.Hour // how often the history retention sweep runs
 )
 
 // refreshGauges periodically updates the metric gauges from the database.
@@ -80,6 +83,31 @@ func runSearchEventPrune(ctx context.Context, log *slog.Logger, db *store.DB) {
 			log.Warn("search event prune", "error", err)
 		} else if n > 0 {
 			log.Info("pruned old search events", "count", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// runAnnouncementPurge periodically deletes expired announcements older than the
+// configured retention window (docs/01 §4.7). retentionDays <= 0 disables it.
+func runAnnouncementPurge(ctx context.Context, log *slog.Logger, db *store.DB, retentionDays int) {
+	if retentionDays <= 0 {
+		log.Info("announcement history retention disabled (keep forever)")
+		return
+	}
+	window := time.Duration(retentionDays) * 24 * time.Hour
+	t := time.NewTicker(announcementPurgeInterval)
+	defer t.Stop()
+	for {
+		n, err := announce.Purge(ctx, db, time.Now().Add(-window))
+		if err != nil {
+			log.Warn("announcement purge", "error", err)
+		} else if n > 0 {
+			log.Info("purged expired announcements", "count", n, "retention_days", retentionDays)
 		}
 		select {
 		case <-ctx.Done():
@@ -199,6 +227,7 @@ func run() error {
 		go refreshGauges(ctx, logger, m, db)
 		go runUsageRollup(ctx, logger, db)
 		go runSearchEventPrune(ctx, logger, db)
+		go runAnnouncementPurge(ctx, logger, db, cfg.AnnouncementRetentionDays)
 	}
 
 	errCh := make(chan error, 1)

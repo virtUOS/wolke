@@ -13,9 +13,9 @@ import (
 	"github.com/virtuos/wolke/internal/store"
 )
 
-// Integration: the announcement singleton, role/window scoping, per-user
-// dismissal, delete, and audit. Needs DATABASE_URL.
-func TestAnnouncementsSingletonScopingDismissal(t *testing.T) {
+// Integration: retire-on-create (one active at a time), role/window scoping,
+// per-user dismissal, history, delete, and audit. Needs DATABASE_URL.
+func TestAnnouncementsRetireScopingDismissal(t *testing.T) {
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {
 		t.Skip("DATABASE_URL not set; skipping announcements integration test")
@@ -67,14 +67,28 @@ func TestAnnouncementsSingletonScopingDismissal(t *testing.T) {
 		return got
 	}
 
-	// Singleton: a second create is rejected while one exists.
+	// Retire-on-create: a second create succeeds and retires the first into
+	// history, so only the newest announcement stays active. The retired one is
+	// now expired, so it surfaces in the user's history.
 	a := mk("info", "all", nil)
-	if _, err := CreateAnnouncement(ctx, db, actor, AnnouncementInput{
+	b, err := CreateAnnouncement(ctx, db, actor, AnnouncementInput{
 		Title: map[string]string{"de": "T2", "en": "T2"}, Body: map[string]string{"de": "B2", "en": "B2"}, Severity: "info", Audience: "all",
-	}); err == nil {
-		t.Error("second create should be rejected (singleton)")
+	})
+	if err != nil {
+		t.Fatalf("second create should succeed (retire-on-create): %v", err)
+	}
+	if got := listAs("staff", admin.ID); len(got) != 1 {
+		t.Errorf("after retire-on-create, active = %d, want 1 (newest only)", len(got))
+	}
+	hist, err := announce.ListHistory(ctx, db, "staff", admin.ID)
+	if err != nil {
+		t.Fatalf("ListHistory: %v", err)
+	}
+	if len(hist) != 1 {
+		t.Errorf("history = %d, want 1 (the retired announcement)", len(hist))
 	}
 	del(a.ID)
+	del(b.ID)
 
 	// Role scoping: a student-only notice is visible to a student, not to staff.
 	a = mk("warning", "student", nil)
@@ -134,3 +148,64 @@ func TestAnnouncementsSingletonScopingDismissal(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// TestAnnouncementPurge covers the retention sweep: expired announcements older
+// than the cutoff are deleted; recent or still-active ones are kept. Needs
+// DATABASE_URL.
+func TestAnnouncementPurge(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("DATABASE_URL not set; skipping announcement purge integration test")
+	}
+	ctx := context.Background()
+	db, err := store.Open(ctx, url)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	admin, err := db.UpsertUser(ctx, store.UpsertUserParams{OidcSub: "ann-purge", DisplayName: "Purge", PrimaryRole: "staff", IsAdmin: true})
+	if err != nil {
+		t.Fatalf("upsert admin: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.Pool.Exec(ctx, "delete from announcements where created_by = $1", admin.ID)
+		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub = 'ann-purge'")
+		db.Close()
+	})
+
+	day := 24 * time.Hour
+	now := time.Now()
+	ins := func(starts time.Time, ends *time.Time) {
+		t.Helper()
+		var endsArg any
+		if ends != nil {
+			endsArg = *ends
+		}
+		_, err := db.Pool.Exec(ctx,
+			`insert into announcements (title, body, severity, audience, starts_at, ends_at, dismissible, created_by)
+			 values ('{}','{}','info','all',$1,$2,true,$3)`, starts, endsArg, admin.ID)
+		if err != nil {
+			t.Fatalf("insert announcement: %v", err)
+		}
+	}
+
+	oldExpired := now.Add(-1 * day)
+	ins(now.Add(-90*day), &oldExpired) // old + expired  -> purged
+	recentExpired := now.Add(-1 * day)
+	ins(now.Add(-10*day), &recentExpired) // recent + expired -> kept (within retention)
+	ins(now.Add(-90*day), nil)            // old but still active (open-ended) -> kept
+
+	n, err := announce.Purge(ctx, db, now.Add(-60*day))
+	if err != nil {
+		t.Fatalf("Purge: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("purged %d, want 1 (only the old expired notice)", n)
+	}
+	var remaining int
+	if err := db.Pool.QueryRow(ctx, "select count(*) from announcements where created_by = $1", admin.ID).Scan(&remaining); err != nil {
+		t.Fatalf("count remaining: %v", err)
+	}
+	if remaining != 2 {
+		t.Errorf("remaining = %d, want 2 (recent-expired + active)", remaining)
+	}
+}
