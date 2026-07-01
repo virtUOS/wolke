@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -300,6 +301,48 @@ func CreateCategory(ctx context.Context, db AdminDB, actor Actor, slug string, l
 		return audit(ctx, q, actor, "category.create", c.ID, map[string]any{"after": map[string]any{"slug": slug, "label": label}})
 	})
 	return out, err
+}
+
+// SearchInsight is one zero-result query with how often and when it was last
+// searched — the worklist for adding service keywords (docs/01 §4.6).
+type SearchInsight struct {
+	Query    string `json:"query"`
+	Searches int64  `json:"searches"`
+	LastSeen string `json:"last_seen"`
+}
+
+// Bounds for the zero-result insights window/size (shared by form + MCP).
+const (
+	defaultInsightDays  = 30
+	maxInsightDays      = 365
+	defaultInsightLimit = 50
+	maxInsightLimit     = 200
+)
+
+// ListSearchInsights returns the most frequent zero-result searches within the
+// window. days/limit are clamped to sane bounds; a zero/out-of-range value falls
+// back to the default. One use-case layer for both the HTTP handler and the MCP
+// tool (CLAUDE.md rule 3). Read-only; aggregate-only (no user data).
+func ListSearchInsights(ctx context.Context, db store.Querier, days, limit int) ([]SearchInsight, error) {
+	if days < 1 || days > maxInsightDays {
+		days = defaultInsightDays
+	}
+	if limit < 1 || limit > maxInsightLimit {
+		limit = defaultInsightLimit
+	}
+	rows, err := db.ListZeroResultSearches(ctx, store.ListZeroResultSearchesParams{Days: int32(days), Lim: int32(limit)})
+	if err != nil {
+		return nil, fmt.Errorf("list search insights: %w", err)
+	}
+	out := make([]SearchInsight, 0, len(rows))
+	for _, e := range rows {
+		out = append(out, SearchInsight{
+			Query:    e.QueryNorm,
+			Searches: e.Searches,
+			LastSeen: e.LastSeen.Time.Format(time.RFC3339),
+		})
+	}
+	return out, nil
 }
 
 // ListAdminServices returns the full catalog (incl. inactive) with categories.

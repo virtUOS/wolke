@@ -152,7 +152,7 @@ export const api = {
   deleteAnnouncement: (id: string) => send<void>('DELETE', `/api/admin/announcements/${id}`),
   audit: (signal?: AbortSignal) => getJSON<{ entries: AuditEntry[] }>('/api/admin/audit', signal),
   searchInsights: (signal?: AbortSignal) =>
-    getJSON<{ entries: SearchInsight[]; days: number }>('/api/admin/search-insights', signal),
+    getJSON<{ entries: SearchInsight[] }>('/api/admin/search-insights', signal),
 }
 
 // SearchInsight is one query users ran that returned nothing — the worklist for

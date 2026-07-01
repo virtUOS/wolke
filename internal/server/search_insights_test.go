@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/service"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -84,12 +85,12 @@ func TestSearchInsightsZeroResults(t *testing.T) {
 		t.Fatalf("insights status = %d, want 200", rec.Code)
 	}
 	var resp struct {
-		Entries []searchInsight `json:"entries"`
+		Entries []service.SearchInsight `json:"entries"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode insights: %v", err)
 	}
-	var got *searchInsight
+	var got *service.SearchInsight
 	for i, e := range resp.Entries {
 		if e.Query == norm {
 			got = &resp.Entries[i]

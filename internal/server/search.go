@@ -16,7 +16,7 @@ import (
 // (ranked; categories attached from the cache so results match /api/catalog),
 // plus best-effort logging of each query for the zero-result insights.
 type SearchStore interface {
-	SearchServiceIDs(ctx context.Context, q pgtype.Text) ([]pgtype.UUID, error)
+	SearchServiceIDs(ctx context.Context, q string) ([]pgtype.UUID, error)
 	InsertSearchEvent(ctx context.Context, arg store.InsertSearchEventParams) error
 }
 
@@ -41,7 +41,7 @@ func search(c *catalog.Cache, s SearchStore) http.HandlerFunc {
 			writeJSON(w, http.StatusOK, map[string]any{"query": "", "services": []catalog.Service{}})
 			return
 		}
-		ids, err := s.SearchServiceIDs(r.Context(), pgtype.Text{String: q, Valid: true})
+		ids, err := s.SearchServiceIDs(r.Context(), q)
 		if err != nil {
 			writeProblem(w, http.StatusInternalServerError, "search_failed", "Search is temporarily unavailable.")
 			return

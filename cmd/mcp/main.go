@@ -116,7 +116,7 @@ type insightsInput struct {
 	Limit int `json:"limit,omitempty"` // max rows (default 50)
 }
 type insightsOut struct {
-	Insights []adminmcp.SearchInsight `json:"insights"`
+	Insights []service.SearchInsight `json:"insights"`
 }
 type resultOut struct {
 	Result string `json:"result"`

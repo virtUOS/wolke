@@ -97,7 +97,11 @@ type Querier interface {
 	// the admin-configured keywords (docs/01 §4.6, docs/02 §5). Returns active service
 	// ids ranked by name similarity then name. Categories are attached from the
 	// catalog snapshot in the handler, so the result shape matches /api/catalog.
-	SearchServiceIDs(ctx context.Context, q_ pgtype.Text) ([]pgtype.UUID, error)
+	//
+	// LIKE metacharacters in the query are escaped here (the `e` CTE) so % and _ are
+	// matched literally instead of acting as wildcards; @q stays raw for trigram
+	// similarity. Escaping lives in SQL so every caller (HTTP + read MCP) is covered.
+	SearchServiceIDs(ctx context.Context, q_ string) ([]pgtype.UUID, error)
 	// One-time pre-fill: copy the user's role defaults into favorites as real,
 	// editable entries (concept §4.4).
 	SeedFavoritesFromRoleDefaults(ctx context.Context, arg SeedFavoritesFromRoleDefaultsParams) error

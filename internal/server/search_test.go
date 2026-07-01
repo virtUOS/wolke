@@ -79,6 +79,14 @@ func TestSearch(t *testing.T) {
 	if got := names(""); len(got) != 0 {
 		t.Errorf("empty query returned %v, want none", got)
 	}
+	// LIKE metacharacters are escaped: '%' is matched literally, not as a
+	// wildcard, so it returns nothing rather than every service.
+	if got := names("%"); len(got) != 0 {
+		t.Errorf("search '%%' returned %v, want none (wildcard must be escaped)", got)
+	}
+	if got := names("_"); len(got) != 0 {
+		t.Errorf("search '_' returned %v, want none (wildcard must be escaped)", got)
+	}
 }
 
 func contains(ss []string, want string) bool {
