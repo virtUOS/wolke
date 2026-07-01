@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -43,7 +44,14 @@ type Draft struct {
 	Icon        string
 	Categories  []string // category slugs
 	Tag         string   // "" | "beta" | "wartung"
+	Keywords    []string // optional search aliases; flat, language-agnostic
 }
+
+// Keyword limits keep the search aliases sane and the input bounded.
+const (
+	maxKeywords      = 32
+	maxKeywordLength = 50
+)
 
 // AdminService is the admin read model (includes is_active / soft-deleted).
 type AdminService struct {
@@ -56,9 +64,31 @@ type AdminService struct {
 	IsActive    bool              `json:"is_active"`
 	Categories  []string          `json:"categories"`
 	Tag         string            `json:"tag,omitempty"`
+	Keywords    []string          `json:"keywords"`
 }
 
 var validRoles = map[string]bool{"student": true, "teacher": true, "staff": true}
+
+// normalizeKeywords trims, drops blanks, and de-dupes case-insensitively while
+// preserving the first occurrence's original casing and order. Always returns a
+// non-nil slice so it maps cleanly onto a Postgres text[] (never SQL NULL).
+func normalizeKeywords(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := make(map[string]bool, len(in))
+	for _, k := range in {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		lk := strings.ToLower(k)
+		if seen[lk] {
+			continue
+		}
+		seen[lk] = true
+		out = append(out, k)
+	}
+	return out
+}
 
 // validateServiceInput enforces the catalog rules centrally so the form and the
 // MCP server behave identically (docs/02 §10).
@@ -90,6 +120,15 @@ func validateServiceInput(in Draft) error {
 	if in.Tag != "" && in.Tag != "beta" && in.Tag != "wartung" {
 		return &ValidationError{Field: "tag", Msg: `must be "", "beta", or "wartung"`}
 	}
+	kws := normalizeKeywords(in.Keywords)
+	if len(kws) > maxKeywords {
+		return &ValidationError{Field: "keywords", Msg: fmt.Sprintf("at most %d keywords are allowed", maxKeywords)}
+	}
+	for _, k := range kws {
+		if len([]rune(k)) > maxKeywordLength {
+			return &ValidationError{Field: "keywords", Msg: fmt.Sprintf("each keyword must be at most %d characters", maxKeywordLength)}
+		}
+	}
 	return nil
 }
 
@@ -101,6 +140,10 @@ func validHTTPURL(s string) bool {
 // ValidateDraft exposes service validation for the MCP propose step, which must
 // validate without writing (docs/02 §8).
 func ValidateDraft(in Draft) error { return validateServiceInput(in) }
+
+// NormalizeKeywords exposes keyword normalization so the MCP propose preview
+// reflects exactly what a confirm would store (docs/02 §8).
+func NormalizeKeywords(in []string) []string { return normalizeKeywords(in) }
 
 // GetAdminService returns one service (including inactive) with its categories,
 // or a NotFoundError. Read-only.
@@ -138,6 +181,7 @@ func CreateService(ctx context.Context, db AdminDB, actor Actor, in Draft) (Admi
 			DocUrl:      pgText(in.DocURL),
 			Icon:        in.Icon,
 			Tag:         pgText(in.Tag),
+			Keywords:    normalizeKeywords(in.Keywords),
 		})
 		if err != nil {
 			return fmt.Errorf("create service: %w", err)
@@ -179,6 +223,7 @@ func UpdateService(ctx context.Context, db AdminDB, actor Actor, id pgtype.UUID,
 			DocUrl:      pgText(in.DocURL),
 			Icon:        in.Icon,
 			Tag:         pgText(in.Tag),
+			Keywords:    normalizeKeywords(in.Keywords),
 		})
 		if err != nil {
 			return fmt.Errorf("update service: %w", err)
@@ -258,6 +303,60 @@ func CreateCategory(ctx context.Context, db AdminDB, actor Actor, slug string, l
 	return out, err
 }
 
+// SearchInsight is one zero-result query with how often and when it was last
+// searched — the worklist for adding service keywords (docs/01 §4.6).
+type SearchInsight struct {
+	Query    string `json:"query"`
+	Searches int64  `json:"searches"`
+	LastSeen string `json:"last_seen"`
+}
+
+// Bounds for the zero-result insights window/size (shared by form + MCP).
+const (
+	defaultInsightDays  = 30
+	maxInsightDays      = 365
+	defaultInsightLimit = 50
+	maxInsightLimit     = 200
+)
+
+// ListSearchInsights returns the most frequent zero-result searches within the
+// window. days/limit are clamped to sane bounds; a zero/out-of-range value falls
+// back to the default. One use-case layer for both the HTTP handler and the MCP
+// tool (CLAUDE.md rule 3). Read-only; aggregate-only (no user data).
+func ListSearchInsights(ctx context.Context, db store.Querier, days, limit int) ([]SearchInsight, error) {
+	if days < 1 || days > maxInsightDays {
+		days = defaultInsightDays
+	}
+	if limit < 1 || limit > maxInsightLimit {
+		limit = defaultInsightLimit
+	}
+	rows, err := db.ListZeroResultSearches(ctx, store.ListZeroResultSearchesParams{Days: int32(days), Lim: int32(limit)})
+	if err != nil {
+		return nil, fmt.Errorf("list search insights: %w", err)
+	}
+	out := make([]SearchInsight, 0, len(rows))
+	for _, e := range rows {
+		out = append(out, SearchInsight{
+			Query:    e.QueryNorm,
+			Searches: e.Searches,
+			LastSeen: e.LastSeen.Time.Format(time.RFC3339),
+		})
+	}
+	return out, nil
+}
+
+// PruneSearchEvents deletes search_events older than the retention window and
+// returns how many rows were removed (docs/02 §5). Bounds the table: the events
+// are aggregate-only telemetry, not audit data, so old rows can be discarded.
+func PruneSearchEvents(ctx context.Context, db store.Querier, retention time.Duration) (int64, error) {
+	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-retention), Valid: true}
+	n, err := db.DeleteSearchEventsBefore(ctx, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("prune search events: %w", err)
+	}
+	return n, nil
+}
+
 // ListAdminServices returns the full catalog (incl. inactive) with categories.
 func ListAdminServices(ctx context.Context, db store.Querier) ([]AdminService, error) {
 	rows, err := db.AdminListServices(ctx)
@@ -334,6 +433,10 @@ func toAdminService(s store.Service, slugs []string) AdminService {
 	if slugs == nil {
 		slugs = []string{}
 	}
+	keywords := s.Keywords
+	if keywords == nil {
+		keywords = []string{}
+	}
 	return AdminService{
 		ID:          uuidStr(s.ID),
 		Name:        s.Name,
@@ -344,6 +447,7 @@ func toAdminService(s store.Service, slugs []string) AdminService {
 		IsActive:    s.IsActive,
 		Categories:  slugs,
 		Tag:         textVal(s.Tag),
+		Keywords:    keywords,
 	}
 }
 

@@ -75,6 +75,13 @@ type Category struct {
 	Label map[string]string `json:"label"`
 }
 
+// SearchInsights lists recent zero-result searches — the worklist for adding
+// service keywords (docs/01 §4.6). Read-only; aggregate-only. Delegates to the
+// shared service-layer read so the HTTP and MCP paths stay identical.
+func (m *Manager) SearchInsights(ctx context.Context, days, limit int) ([]service.SearchInsight, error) {
+	return service.ListSearchInsights(ctx, m.db, days, limit)
+}
+
 // ListCategories returns the managed categories.
 func (m *Manager) ListCategories(ctx context.Context) ([]Category, error) {
 	rows, err := m.db.ListCategories(ctx)
@@ -223,6 +230,7 @@ func draftPreview(d service.Draft, active bool) service.AdminService {
 	if cats == nil {
 		cats = []string{}
 	}
+	kws := service.NormalizeKeywords(d.Keywords)
 	return service.AdminService{
 		Name:        d.Name,
 		Description: d.Description,
@@ -232,6 +240,7 @@ func draftPreview(d service.Draft, active bool) service.AdminService {
 		IsActive:    active,
 		Categories:  cats,
 		Tag:         d.Tag,
+		Keywords:    kws,
 	}
 }
 

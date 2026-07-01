@@ -19,6 +19,7 @@ import (
 	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/metrics"
 	"github.com/virtuos/wolke/internal/server"
+	"github.com/virtuos/wolke/internal/service"
 	"github.com/virtuos/wolke/internal/store"
 	"github.com/virtuos/wolke/internal/usage"
 )
@@ -31,6 +32,9 @@ const (
 	gaugeRefreshInterval = 30 * time.Second
 	usageRollupInterval  = time.Hour
 	usageRetention       = 90 * 24 * time.Hour // raw click_events retention (docs/01 §8.9)
+
+	searchPruneInterval  = 24 * time.Hour
+	searchEventRetention = 180 * 24 * time.Hour // aggregate search_events retention (docs/02 §5)
 )
 
 // refreshGauges periodically updates the metric gauges from the database.
@@ -57,6 +61,25 @@ func runUsageRollup(ctx context.Context, log *slog.Logger, db *store.DB) {
 	for {
 		if err := usage.Rollup(ctx, db, usageRetention); err != nil {
 			log.Warn("usage rollup", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// runSearchEventPrune periodically deletes search_events past the retention
+// window so the aggregate search log stays bounded (docs/02 §5).
+func runSearchEventPrune(ctx context.Context, log *slog.Logger, db *store.DB) {
+	t := time.NewTicker(searchPruneInterval)
+	defer t.Stop()
+	for {
+		if n, err := service.PruneSearchEvents(ctx, db, searchEventRetention); err != nil {
+			log.Warn("search event prune", "error", err)
+		} else if n > 0 {
+			log.Info("pruned old search events", "count", n)
 		}
 		select {
 		case <-ctx.Done():
@@ -175,6 +198,7 @@ func run() error {
 	if db != nil {
 		go refreshGauges(ctx, logger, m, db)
 		go runUsageRollup(ctx, logger, db)
+		go runSearchEventPrune(ctx, logger, db)
 	}
 
 	errCh := make(chan error, 1)

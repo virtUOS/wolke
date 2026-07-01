@@ -66,6 +66,13 @@ type RoleDefault struct {
 	Sort      int32       `json:"sort"`
 }
 
+type SearchEvent struct {
+	ID          int64              `json:"id"`
+	QueryNorm   string             `json:"query_norm"`
+	ResultCount int32              `json:"result_count"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type Service struct {
 	ID          pgtype.UUID        `json:"id"`
 	Name        string             `json:"name"`
@@ -77,6 +84,7 @@ type Service struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	Tag         pgtype.Text        `json:"tag"`
+	Keywords    []string           `json:"keywords"`
 }
 
 type ServiceCategory struct {

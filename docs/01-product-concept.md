@@ -89,9 +89,19 @@ most-clicked services over a rolling window. This is **derived from click tracki
 something the user curates. It answers "take me back to what I was just using."
 
 ### 4.6 Search
-Always reachable from the top bar. Searches name, description, and category. Fuzzy/prefix
-matching, results grouped by category, keyboard-navigable. On a result, the same tile behavior
-applies. Search is a **must-have**, so it ships in Phase 1, not later.
+Always reachable from the top bar. Searches name, description, category, and per-service
+**keywords** — admin-configured search aliases (a flat, language-agnostic list, e.g.
+`video conference` → BigBlueButton) that surface a service even when the term appears in
+neither its name nor its description. Fuzzy/prefix matching, results grouped by category,
+keyboard-navigable. On a result, the same tile behavior applies. Search runs server-side
+(`/api/search`, debounced) — the single search path. Search is a **must-have**, so it ships
+in Phase 1, not later.
+
+**Zero-result insights.** Every query is logged with its result count (aggregate-only — the
+normalized query text and a count, never a user id). An admin view lists recent searches that
+returned **nothing**, ranked by frequency — the worklist that tells admins which keywords to add,
+and the proof a fix worked (the query stops showing up empty). This closes the loop: keywords are
+the lever, the zero-result list is the dial that says which lever to pull.
 
 ### 4.7 Announcements
 A dismissible banner region at the top of the dashboard for outages and major notices.

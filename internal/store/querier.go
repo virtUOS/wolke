@@ -33,6 +33,8 @@ type Querier interface {
 	DeleteAnnouncement(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteRoleDefaults(ctx context.Context, role string) error
+	// Retention pruning: drop events older than a cutoff (run from ops/a scheduled job).
+	DeleteSearchEventsBefore(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
 	DeleteServiceCategories(ctx context.Context, serviceID pgtype.UUID) error
 	DeleteSession(ctx context.Context, id string) error
 	// Record a per-user dismissal. Idempotent: dismissing twice is a no-op.
@@ -50,12 +52,16 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserBySub(ctx context.Context, oidcSub string) (User, error)
 	InsertAudit(ctx context.Context, arg InsertAuditParams) error
+	// Append one search to the log (best-effort; never blocks the search response).
+	InsertSearchEvent(ctx context.Context, arg InsertSearchEventParams) error
 	// Active = within its time window, addressed to the user's role (or all), and
 	// not already dismissed by the user, most-severe first (docs/01 §4.7).
 	ListActiveAnnouncements(ctx context.Context, arg ListActiveAnnouncementsParams) ([]Announcement, error)
 	// (service_id, category slug) pairs for active services, to assemble the
 	// many-to-many in Go when building the catalog snapshot.
 	ListActiveServiceCategories(ctx context.Context) ([]ListActiveServiceCategoriesRow, error)
+	// Note: keywords are intentionally NOT selected — they are a search-only aid
+	// matched in SQL (search.sql), never exposed via /api/catalog.
 	ListActiveServices(ctx context.Context) ([]ListActiveServicesRow, error)
 	// Active = within its time window, across ALL audiences. For the public,
 	// identity-less catalog MCP server, which has no user role to filter on and
@@ -71,6 +77,9 @@ type Querier interface {
 	// stored order as a stable tiebreaker.
 	ListFavoritesByUsage(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
 	ListServiceCategorySlugs(ctx context.Context, serviceID pgtype.UUID) ([]string, error)
+	// Most-searched queries that returned nothing within the last @days days — the
+	// admin worklist for adding keywords (docs/01 §4.6). Aggregate-only.
+	ListZeroResultSearches(ctx context.Context, arg ListZeroResultSearchesParams) ([]ListZeroResultSearchesRow, error)
 	MarkFavoritesSeeded(ctx context.Context, userID pgtype.UUID) error
 	NextFavoriteSort(ctx context.Context, userID pgtype.UUID) (int32, error)
 	PurgeOldClicks(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
@@ -84,11 +93,15 @@ type Querier interface {
 	// window). Idempotent: SET (not add). Days whose raw events have been purged are
 	// no longer recomputed, so their aggregate rows stay frozen at their last value.
 	RollupClicks(ctx context.Context) error
-	// Fuzzy/substring search over name, localized descriptions, and category labels
-	// (docs/01 §4.6, docs/02 §5). Returns active service ids ranked by name
-	// similarity then name. Categories are attached from the catalog snapshot in the
-	// handler, so the result shape matches /api/catalog.
-	SearchServiceIDs(ctx context.Context, q_ pgtype.Text) ([]pgtype.UUID, error)
+	// Fuzzy/substring search over name, localized descriptions, category labels, and
+	// the admin-configured keywords (docs/01 §4.6, docs/02 §5). Returns active service
+	// ids ranked by name similarity then name. Categories are attached from the
+	// catalog snapshot in the handler, so the result shape matches /api/catalog.
+	//
+	// LIKE metacharacters in the query are escaped here (the `e` CTE) so % and _ are
+	// matched literally instead of acting as wildcards; @q stays raw for trigram
+	// similarity. Escaping lives in SQL so every caller (HTTP + read MCP) is covered.
+	SearchServiceIDs(ctx context.Context, q_ string) ([]pgtype.UUID, error)
 	// One-time pre-fill: copy the user's role defaults into favorites as real,
 	// editable entries (concept §4.4).
 	SeedFavoritesFromRoleDefaults(ctx context.Context, arg SeedFavoritesFromRoleDefaultsParams) error

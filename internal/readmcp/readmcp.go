@@ -25,7 +25,7 @@ import (
 // Store is the read surface the catalog MCP server needs: search and
 // announcements. The catalog itself is served through the snapshot cache.
 type Store interface {
-	SearchServiceIDs(ctx context.Context, q pgtype.Text) ([]pgtype.UUID, error)
+	SearchServiceIDs(ctx context.Context, q string) ([]pgtype.UUID, error)
 	announce.Store
 }
 
@@ -90,7 +90,7 @@ func (m *Manager) Search(ctx context.Context, query string) ([]catalog.Service, 
 	if q == "" {
 		return []catalog.Service{}, nil
 	}
-	ids, err := m.db.SearchServiceIDs(ctx, pgtype.Text{String: q, Valid: true})
+	ids, err := m.db.SearchServiceIDs(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}
