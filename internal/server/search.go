@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -11,6 +12,11 @@ import (
 	"github.com/virtuos/wolke/internal/catalog"
 	"github.com/virtuos/wolke/internal/store"
 )
+
+// minLoggedQueryLen is the shortest normalized query worth recording for the
+// zero-result insights: 1–2 character fragments are almost always mid-typing
+// noise, not a real dead end (docs/01 §4.6).
+const minLoggedQueryLen = 3
 
 // SearchStore is the search capability: active service ids matching a query
 // (ranked; categories attached from the cache so results match /api/catalog),
@@ -43,6 +49,12 @@ func search(c *catalog.Cache, s SearchStore) http.HandlerFunc {
 		}
 		ids, err := s.SearchServiceIDs(r.Context(), q)
 		if err != nil {
+			// A canceled context means the client aborted (e.g. a superseded
+			// keystroke) — that's normal debounced typing, not a search outage,
+			// so don't emit a 500.
+			if errors.Is(err, context.Canceled) {
+				return
+			}
 			writeProblem(w, http.StatusInternalServerError, "search_failed", "Search is temporarily unavailable.")
 			return
 		}
@@ -58,12 +70,15 @@ func search(c *catalog.Cache, s SearchStore) http.HandlerFunc {
 			}
 		}
 		// Best-effort log for the zero-result insights (docs/01 §4.6): a failure
-		// here must never break or slow the actual search response.
-		if err := s.InsertSearchEvent(r.Context(), store.InsertSearchEventParams{
-			QueryNorm:   normalizeSearchQuery(q),
-			ResultCount: int32(len(services)),
-		}); err != nil {
-			slog.WarnContext(r.Context(), "search event log failed", "error", err)
+		// here must never break or slow the actual search response. Skip very short
+		// queries to keep mid-typing fragments out of the insights worklist.
+		if norm := normalizeSearchQuery(q); len([]rune(norm)) >= minLoggedQueryLen {
+			if err := s.InsertSearchEvent(r.Context(), store.InsertSearchEventParams{
+				QueryNorm:   norm,
+				ResultCount: int32(len(services)),
+			}); err != nil {
+				slog.WarnContext(r.Context(), "search event log failed", "error", err)
+			}
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"query": q, "services": services})
 	}

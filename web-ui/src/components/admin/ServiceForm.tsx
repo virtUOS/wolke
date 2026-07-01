@@ -24,6 +24,24 @@ interface ServiceFormProps {
 
 const httpURL = (s: string) => /^https?:\/\/.+/.test(s)
 
+// Keyword limits mirror the service-layer validation (internal/service/admin.go).
+const MAX_KEYWORDS = 32
+const MAX_KEYWORD_LENGTH = 50
+
+// mergeKeywords folds comma/blank-separated raw input into an existing list,
+// dropping blanks and case-insensitive duplicates (the server normalizes too).
+function mergeKeywords(existing: string[], raw: string): string[] {
+  const next = [...existing]
+  const seen = new Set(existing.map((k) => k.toLowerCase()))
+  for (const p of raw.split(',').map((s) => s.trim()).filter(Boolean)) {
+    if (!seen.has(p.toLowerCase())) {
+      seen.add(p.toLowerCase())
+      next.push(p)
+    }
+  }
+  return next
+}
+
 // Admin create/edit form for a catalog service, with a live tile preview, an
 // icon picker, multi-category selection, and URL validation (docs/03 §6). The
 // server re-validates authoritatively; this gives immediate feedback.
@@ -93,6 +111,11 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
   if (serviceUrl !== '' && !httpURL(serviceUrl)) errors.push(s.admin.errServiceUrl)
   if (docUrl !== '' && !httpURL(docUrl)) errors.push(s.admin.errDocUrl)
   if (cats.size === 0) errors.push(s.admin.errCategory)
+  // Effective keywords include a term typed but not yet committed (flushed on
+  // submit), so validation and the submitted payload agree.
+  const effectiveKeywords = mergeKeywords(keywords, kwInput)
+  if (effectiveKeywords.length > MAX_KEYWORDS) errors.push(s.admin.errKeywordCount(MAX_KEYWORDS))
+  if (effectiveKeywords.some((k) => k.length > MAX_KEYWORD_LENGTH)) errors.push(s.admin.errKeywordLength(MAX_KEYWORD_LENGTH))
   const valid = errors.length === 0
 
   const toggleCat = (slug: string) =>
@@ -109,19 +132,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
   // Add the typed term(s) as keyword chips: a comma may separate several at once;
   // blanks and case-insensitive duplicates are dropped (the server normalizes too).
   const addKeywords = (raw: string) => {
-    const parts = raw.split(',').map((p) => p.trim()).filter(Boolean)
-    if (parts.length === 0) return
-    setKeywords((prev) => {
-      const next = [...prev]
-      const seen = new Set(prev.map((k) => k.toLowerCase()))
-      for (const p of parts) {
-        if (!seen.has(p.toLowerCase())) {
-          seen.add(p.toLowerCase())
-          next.push(p)
-        }
-      }
-      return next
-    })
+    setKeywords((prev) => mergeKeywords(prev, raw))
     setKwInput('')
   }
 
@@ -139,12 +150,6 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!valid) return
-    // Flush a term left in the input (admin typed it but didn't press Enter).
-    const pending = kwInput.trim()
-    const finalKeywords =
-      pending && !keywords.some((k) => k.toLowerCase() === pending.toLowerCase())
-        ? [...keywords, pending]
-        : keywords
     onSubmit({
       name: name.trim(),
       description: { de: descDe.trim(), en: descEn.trim() },
@@ -153,7 +158,8 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
       icon,
       categories: [...cats],
       tag,
-      keywords: finalKeywords,
+      // effectiveKeywords flushes any term left in the input, comma-split like the chips.
+      keywords: effectiveKeywords,
     })
   }
 

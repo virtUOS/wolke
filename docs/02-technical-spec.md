@@ -239,11 +239,14 @@ the single search path — there is no client-side fallback matcher.
 **Zero-result insights.** Each search appends a row to `search_events (query_norm, result_count,
 created_at)` — best-effort, so a logging failure never breaks or slows the response. `query_norm`
 is the lowercased/whitespace-collapsed/length-capped query; **no user id is stored** (aggregate-only,
-privacy by construction). `GET /api/admin/search-insights` (admin-only) groups recent zero-result
-queries by frequency over a window (default 30 days, a partial index on `result_count = 0` keeps it
-cheap); the same data is exposed read-only via the MCP `search.insights` tool. Retention is bounded
-by pruning old rows (`DeleteSearchEventsBefore`, run from ops/a scheduled job). The insights drive
-the keyword worklist — see docs/01 §4.6.
+privacy by construction). Queries shorter than 3 characters aren't logged, keeping mid-typing
+fragments out of the worklist. The read path (clamp window/size, aggregate, map) lives once in
+`service.ListSearchInsights`; both `GET /api/admin/search-insights` (admin-only) and the MCP
+`search.insights` tool are thin wrappers over it (CLAUDE.md rule 3). It groups zero-result queries
+by frequency over a window (default 30 days, a partial index on `result_count = 0` keeps it cheap).
+Retention is bounded by a background pruner (`service.PruneSearchEvents` on a daily ticker in
+`cmd/server`, 180-day window) — the events are telemetry, not audit data. The insights drive the
+keyword worklist — see docs/01 §4.6.
 
 ## 6. Auth — generic OIDC via the BFF pattern
 
