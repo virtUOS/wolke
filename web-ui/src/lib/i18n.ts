@@ -173,6 +173,8 @@ const de = {
     errServiceUrl: 'Service-URL muss mit http(s):// beginnen.',
     errDocUrl: 'Dokumentations-URL muss mit http(s):// beginnen.',
     errCategory: 'Mindestens eine Kategorie wählen.',
+    errKeywordCount: (n: number) => `Höchstens ${n} Suchbegriffe erlaubt.`,
+    errKeywordLength: (n: number) => `Suchbegriffe dürfen höchstens ${n} Zeichen lang sein.`,
     saveFailed: 'Speichern fehlgeschlagen.',
     categoriesHeading: 'Kategorien',
     slug: 'Slug',
@@ -214,9 +216,6 @@ const de = {
     insightsHeading: 'Suchen ohne Ergebnis',
     insightsHint: 'Was Nutzer gesucht und nicht gefunden haben — Kandidaten für neue Suchbegriffe. Letzte 30 Tage.',
     insightsEmpty: 'Keine ergebnislosen Suchen im Zeitraum.',
-    insightsQuery: 'Suchbegriff',
-    insightsCount: 'Anzahl',
-    insightsLastSeen: 'Zuletzt',
   },
 }
 
@@ -353,6 +352,8 @@ const en: Strings = {
     errServiceUrl: 'Service URL must start with http(s)://.',
     errDocUrl: 'Documentation URL must start with http(s)://.',
     errCategory: 'Choose at least one category.',
+    errKeywordCount: (n: number) => `At most ${n} keywords allowed.`,
+    errKeywordLength: (n: number) => `Keywords must be at most ${n} characters.`,
     saveFailed: 'Saving failed.',
     categoriesHeading: 'Categories',
     slug: 'Slug',
@@ -394,9 +395,6 @@ const en: Strings = {
     insightsHeading: 'Searches with no results',
     insightsHint: 'What users searched for and didn’t find — candidates for new keywords. Last 30 days.',
     insightsEmpty: 'No empty searches in this period.',
-    insightsQuery: 'Query',
-    insightsCount: 'Count',
-    insightsLastSeen: 'Last seen',
   },
 }
 

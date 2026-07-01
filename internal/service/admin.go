@@ -345,6 +345,18 @@ func ListSearchInsights(ctx context.Context, db store.Querier, days, limit int) 
 	return out, nil
 }
 
+// PruneSearchEvents deletes search_events older than the retention window and
+// returns how many rows were removed (docs/02 §5). Bounds the table: the events
+// are aggregate-only telemetry, not audit data, so old rows can be discarded.
+func PruneSearchEvents(ctx context.Context, db store.Querier, retention time.Duration) (int64, error) {
+	cutoff := pgtype.Timestamptz{Time: time.Now().Add(-retention), Valid: true}
+	n, err := db.DeleteSearchEventsBefore(ctx, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("prune search events: %w", err)
+	}
+	return n, nil
+}
+
 // ListAdminServices returns the full catalog (incl. inactive) with categories.
 func ListAdminServices(ctx context.Context, db store.Querier) ([]AdminService, error) {
 	rows, err := db.AdminListServices(ctx)

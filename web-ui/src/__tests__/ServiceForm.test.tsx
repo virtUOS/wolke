@@ -61,6 +61,18 @@ describe('ServiceForm', () => {
     expect(onSubmit.mock.calls[0][0].keywords).toEqual(['videokonferenz', 'video conference'])
   })
 
+  it('blocks an over-long keyword client-side', async () => {
+    const { user } = setup()
+    await user.type(screen.getByLabelText(/^Name/), 'X')
+    await user.type(screen.getByLabelText(/^Beschreibung \(Deutsch\)/), 'Y')
+    await user.type(screen.getByLabelText(/^Beschreibung \(English\)/), 'Z')
+    await user.type(screen.getByLabelText(/Service-URL/), 'https://x.example.edu')
+    await user.click(screen.getByText('Netz & Daten'))
+    await user.type(screen.getByLabelText(/Suchbegriffe/), 'x'.repeat(51))
+    expect(screen.getByRole('button', { name: 'Anlegen' })).toBeDisabled()
+    expect(screen.getByText(/höchstens 50 Zeichen/)).toBeInTheDocument()
+  })
+
   it('rejects a non-http URL', async () => {
     const { user } = setup()
     await user.type(screen.getByLabelText(/^Name/), 'X')
