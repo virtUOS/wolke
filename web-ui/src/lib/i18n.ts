@@ -97,6 +97,7 @@ const de = {
     favEmpty: 'Noch keine Favoriten — markiere Dienste mit dem Stern.',
     searchEmpty: (q: string) => `Keine Dienste für „${q}" gefunden.`,
     searching: 'Suchen…',
+    searchError: 'Suche momentan nicht verfügbar. Bitte erneut versuchen.',
     resultCount: (n: number) => `${n} ${n === 1 ? 'Dienst' : 'Dienste'}`,
   },
   tile: {
@@ -279,6 +280,7 @@ const en: Strings = {
     favEmpty: 'No favorites yet — mark services with the star.',
     searchEmpty: (q: string) => `No services found for “${q}”.`,
     searching: 'Searching…',
+    searchError: 'Search is temporarily unavailable. Please try again.',
     resultCount: (n: number) => `${n} ${n === 1 ? 'service' : 'services'}`,
   },
   tile: {

@@ -163,9 +163,12 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     return applyFilter(allServices, filter)
   }, [searching, searchResults.data, tab, allServices, favoriteServices, filter])
 
+  // A failed /api/search shows an error (not a stuck spinner): search is now a
+  // server round-trip, so unlike the old client-side filter it can fail.
+  const searchFailed = searching && searchResults.isError
   // True only until the first results for the current search arrive; subsequent
   // keystrokes keep the previous list (placeholderData) so it doesn't flicker.
-  const searchPending = searching && searchResults.data === undefined
+  const searchPending = searching && !searchFailed && searchResults.data === undefined
 
   const maintenanceCount = useMemo(
     () => allServices.filter((s) => s.tag === 'wartung').length,
@@ -327,6 +330,8 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           actions={actions}
           emptyMessage={tr.dash.favEmpty}
         />
+      ) : searchFailed ? (
+        <p style={{ fontSize: 14, color: 'var(--danger)' }} role="alert">{tr.dash.searchError}</p>
       ) : searchPending ? (
         <p style={{ fontSize: 14, color: 'var(--text-muted)' }} role="status" aria-busy="true">{tr.dash.searching}</p>
       ) : !searching && catalog.isLoading ? (
