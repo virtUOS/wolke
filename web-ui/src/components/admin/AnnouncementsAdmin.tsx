@@ -19,7 +19,9 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
   const s = t(locale)
   const list = useAdminAnnouncements()
   const actions = useAdminActions()
-  // The announcement is a singleton: at most one exists, so manage "the" one.
+  // At most one announcement is active at a time; the newest row is the current
+  // one. Creating a new one retires the current into the user-facing history
+  // rather than destroying it (the server stamps its end time).
   const current = list.data?.announcements?.[0] ?? null
   const [editing, setEditing] = useState<Announcement | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -38,8 +40,9 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 ref={headingRef} tabIndex={-1} className="focus:outline-hidden" style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.announcementsHeading}</h2>
-        {/* Singleton: offer "create" only when none exists and the form is closed. */}
-        {!current && !showForm && (
+        {/* Creating retires the current active notice into history, so the create
+            action is always available (not gated on there being none). */}
+        {!showForm && (
           <Button size="sm" onClick={() => { setEditing(null); setFormError(undefined); setShowForm(true) }}>{s.admin.newAnnouncement}</Button>
         )}
       </div>

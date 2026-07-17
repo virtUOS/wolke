@@ -131,6 +131,7 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 		}
 		if deps.Announce != nil {
 			pr.With(requireUserJSON).Get("/api/announcements", userAnnouncements(deps.Announce))
+			pr.With(requireUserJSON).Get("/api/announcements/history", userAnnouncementHistory(deps.Announce))
 		}
 		if deps.AnnounceDismiss != nil {
 			pr.With(requireUserJSON).Post("/api/announcements/{id}/dismiss", dismissAnnouncement(deps.AnnounceDismiss))

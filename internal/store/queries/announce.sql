@@ -24,6 +24,43 @@ delete from announcements where id = @id;
 -- name: CountAnnouncements :one
 select count(*) from announcements;
 
+-- name: RetireActiveAnnouncements :exec
+-- Close any currently-active announcement by ending its window now. Called when
+-- a new announcement is created so there is at most one active notice at a time,
+-- while the retired one stays in the table as history (docs/01 §4.7).
+update announcements
+set ends_at = now()
+where (starts_at is null or starts_at <= now())
+  and (ends_at is null or ends_at > now());
+
+-- name: ListAnnouncementHistory :many
+-- A user's past notices for the notification center: addressed to their role (or
+-- all), already started, and no longer an active banner for them — either the
+-- window has ended OR they dismissed it. Most recent first.
+select a.*
+from announcements a
+where (a.starts_at is null or a.starts_at <= now())
+  and (a.audience = 'all' or a.audience = @role)
+  and (
+    (a.ends_at is not null and a.ends_at <= now())
+    or exists (
+      select 1 from announcement_dismissals d
+      where d.announcement_id = a.id and d.user_id = @user_id
+    )
+  )
+order by a.created_at desc
+limit @lim;
+
+-- name: PurgeAnnouncementsBefore :execrows
+-- Permanently delete expired announcements that started before the retention
+-- cutoff (history retention; dismissals cascade away). Only expired notices are
+-- purged, so an active banner is never removed regardless of age. starts_at may
+-- be null for notices shown immediately, so fall back to created_at.
+delete from announcements
+where coalesce(starts_at, created_at) < @cutoff
+  and ends_at is not null
+  and ends_at <= now();
+
 -- name: DismissAnnouncement :exec
 -- Record a per-user dismissal. Idempotent: dismissing twice is a no-op.
 insert into announcement_dismissals (user_id, announcement_id)

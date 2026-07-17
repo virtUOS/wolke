@@ -109,6 +109,15 @@ Each announcement has a severity (info / warning / critical), an optional time w
 (auto-expire), and an audience (all, or scoped to a role). Critical ones are not dismissible
 until resolved. Admins create them (form + MCP).
 
+**One active at a time, with a history.** At most one announcement is active at once;
+creating a new one *retires* the current active one (ends its window now) rather than
+deleting it. Past notices — expired or dismissed — are kept and reachable from a
+**notification center** (the bell in the top bar), which lists the active notices above
+the user's history. Retired notices are purged permanently after a server-configured
+retention window (`announcement_retention_days`, default 60 days from `starts_at`; `0`
+disables purging). Only expired notices are purged, so an active banner is never removed
+regardless of age.
+
 ## 5. Features resolved into behavior
 
 ### 5.1 The catalog changes over time
