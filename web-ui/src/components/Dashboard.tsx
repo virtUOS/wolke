@@ -103,6 +103,16 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const isMobile = useIsMobile()
   const layout = isMobile ? 'list' : 'grid'
 
+  // Mobile has no filter controls (the pills and the greeting shortcuts are
+  // desktop-only), so a filter carried across the breakpoint would be stuck
+  // with no way to clear it. Discovery on mobile is search-only — reset on
+  // entering the mobile layout (state adjusted during render, not an effect).
+  const [wasMobile, setWasMobile] = useState(isMobile)
+  if (isMobile !== wasMobile) {
+    setWasMobile(isMobile)
+    if (isMobile) setFilter({ kind: 'all' })
+  }
+
   const prefersDark = usePrefersDark()
   const isDark = me.theme === 'dark' || (me.theme === 'system' && prefersDark)
 
