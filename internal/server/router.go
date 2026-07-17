@@ -156,6 +156,7 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 				ar.Patch("/announcements/{id}", adminUpdateAnnouncement(ad))
 				ar.Delete("/announcements/{id}", adminDeleteAnnouncement(ad))
 				ar.Get("/audit", adminListAudit(ad))
+				ar.Get("/search-insights", adminSearchInsights(ad))
 			})
 		}
 

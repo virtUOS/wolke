@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -15,12 +16,12 @@ import (
 
 // Integration: search against the seeded DB (make db && make migrate && make seed).
 func TestSearch(t *testing.T) {
-	url := os.Getenv("DATABASE_URL")
-	if url == "" {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
 		t.Skip("DATABASE_URL not set; skipping search integration test")
 	}
 	ctx := context.Background()
-	db, err := store.Open(ctx, url)
+	db, err := store.Open(ctx, dbURL)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -31,7 +32,7 @@ func TestSearch(t *testing.T) {
 	h := search(cache, db)
 
 	names := func(q string) []string {
-		req := httptest.NewRequest(http.MethodGet, "/api/search?q="+q, nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/search?q="+url.QueryEscape(q), nil)
 		rec := httptest.NewRecorder()
 		h(rec, req)
 		if rec.Code != http.StatusOK {
@@ -65,9 +66,26 @@ func TestSearch(t *testing.T) {
 	if got := names("Lehre"); !contains(got, "Stud.IP") {
 		t.Errorf("search 'Lehre' = %v, want services in the teaching category", got)
 	}
+	// Keyword enrichment: "video conference" appears in neither BigBlueButton's
+	// name nor its description, only its admin-configured keywords (dev/seed.sql).
+	if got := names("video conference"); !contains(got, "BigBlueButton") {
+		t.Errorf("search 'video conference' = %v, want to include BigBlueButton (keyword match)", got)
+	}
+	// Abbreviation keyword.
+	if got := names("bbb"); !contains(got, "BigBlueButton") {
+		t.Errorf("search 'bbb' = %v, want to include BigBlueButton (keyword match)", got)
+	}
 	// Empty query returns no services.
 	if got := names(""); len(got) != 0 {
 		t.Errorf("empty query returned %v, want none", got)
+	}
+	// LIKE metacharacters are escaped: '%' is matched literally, not as a
+	// wildcard, so it returns nothing rather than every service.
+	if got := names("%"); len(got) != 0 {
+		t.Errorf("search '%%' returned %v, want none (wildcard must be escaped)", got)
+	}
+	if got := names("_"); len(got) != 0 {
+		t.Errorf("search '_' returned %v, want none (wildcard must be escaped)", got)
 	}
 }
 

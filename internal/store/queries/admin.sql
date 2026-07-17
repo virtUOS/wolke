@@ -13,8 +13,8 @@ where sc.service_id = @service_id
 order by c.slug;
 
 -- name: CreateService :one
-insert into services (name, description, service_url, doc_url, icon, tag)
-values (@name, @description, @service_url, @doc_url, @icon, @tag)
+insert into services (name, description, service_url, doc_url, icon, tag, keywords)
+values (@name, @description, @service_url, @doc_url, @icon, @tag, @keywords)
 returning *;
 
 -- name: UpdateService :one
@@ -25,6 +25,7 @@ set name        = @name,
     doc_url     = @doc_url,
     icon        = @icon,
     tag         = @tag,
+    keywords    = @keywords,
     updated_at  = now()
 where id = @id
 returning *;

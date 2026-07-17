@@ -2,6 +2,8 @@
 select id, slug, label, sort from categories order by sort, slug;
 
 -- name: ListActiveServices :many
+-- Note: keywords are intentionally NOT selected — they are a search-only aid
+-- matched in SQL (search.sql), never exposed via /api/catalog.
 select id, name, description, service_url, doc_url, icon, tag
 from services
 where is_active = true
