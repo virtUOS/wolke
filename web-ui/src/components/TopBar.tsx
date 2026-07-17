@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { ArrowRight, Bot, Languages, MessageCircleQuestionMark, Moon, Shield, Sun, LogOut } from 'lucide-react'
-import { contactHref, type Branding } from '@/lib/branding'
+import { assistantEnabled, contactHref, type Branding } from '@/lib/branding'
 import { t, type Lang } from '@/lib/i18n'
 import type { Me } from '@/lib/api'
 import { iconButtonVariants } from '@/components/ui/icon-button'
@@ -98,10 +98,11 @@ export function TopBar({
         <div style={{ flex: 1 }} />
 
         {/* Actions. The chatbot + help buttons each appear only when their link
-            is configured (branding.bot_url / help_url). The theme toggle now
-            lives in the account menu. */}
+            is configured (branding.bot_url / help_url). The bot link is
+            superseded by the embedded assistant launcher when that is
+            configured. The theme toggle now lives in the account menu. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          {branding.bot_url && (
+          {branding.bot_url && !assistantEnabled(branding) && (
             <a
               href={branding.bot_url}
               target="_blank"

@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/virtuos/wolke/internal/config"
@@ -27,6 +28,49 @@ func TestSecurityHeaders(t *testing.T) {
 	// Plain HTTP: no HSTS.
 	if hdr.Get("Strict-Transport-Security") != "" {
 		t.Error("HSTS must not be set on plain HTTP")
+	}
+}
+
+// Without an assistant widget configured the CSP stays fully same-origin.
+func TestCSPSameOriginByDefault(t *testing.T) {
+	cfg := config.Defaults()
+	h := newTestRouter(t, &cfg, Deps{})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+
+	csp := rec.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "script-src 'self';") {
+		t.Errorf("CSP script-src not same-origin only: %q", csp)
+	}
+	if !strings.Contains(csp, "connect-src 'self';") {
+		t.Errorf("CSP connect-src not same-origin only: %q", csp)
+	}
+}
+
+// A configured assistant widget widens exactly script-src (load widget.js) and
+// connect-src (the SSE chat stream) to the assistant origin — nothing else.
+func TestCSPIncludesAssistantOrigin(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.Branding.AssistantWidgetURL = "https://assistant.example.edu/widget.js"
+	cfg.Branding.AssistantBotID = "echo"
+	h := newTestRouter(t, &cfg, Deps{})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+
+	csp := rec.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "script-src 'self' https://assistant.example.edu;") {
+		t.Errorf("CSP script-src missing assistant origin: %q", csp)
+	}
+	if !strings.Contains(csp, "connect-src 'self' https://assistant.example.edu;") {
+		t.Errorf("CSP connect-src missing assistant origin: %q", csp)
+	}
+	// The origin is scheme://host only (no /widget.js path), and no other
+	// directive is widened.
+	if strings.Contains(csp, "/widget.js") {
+		t.Errorf("CSP must carry the origin, not the full script URL: %q", csp)
+	}
+	if n := strings.Count(csp, "https://assistant.example.edu"); n != 2 {
+		t.Errorf("assistant origin appears %d times in CSP, want exactly 2 (script-src, connect-src): %q", n, csp)
 	}
 }
 

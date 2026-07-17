@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Wrench, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import type { Branding } from '@/lib/branding'
+import { assistantEnabled, type Branding } from '@/lib/branding'
 import { api, localized, type Category, type Me, type Service } from '@/lib/api'
 import { t, effectiveLocale } from '@/lib/i18n'
 import { applyFilter, filterEq, type Filter } from '@/lib/catalog-filter'
@@ -18,6 +18,7 @@ import {
 import { useAnnouncements } from '@/lib/admin-hooks'
 import { AdminView } from './admin/AdminView'
 import { AnnouncementBanner } from './AnnouncementBanner'
+import { AssistantWidget } from './AssistantWidget'
 import { CatalogView } from './CatalogView'
 import { DashboardShell } from './DashboardShell'
 import { Greeting } from './Greeting'
@@ -205,15 +206,31 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     focusKey: adminOpen ? 'admin' : 'dashboard',
   }
 
+  // The assistant launcher floats via position:fixed, so its spot in the tree is
+  // cosmetic — but it must sit at the same position in both returns so React
+  // keeps it mounted (panel state intact) when toggling the admin view.
+  const assistant = assistantEnabled(branding) && (
+    <AssistantWidget
+      widgetUrl={branding.assistant_widget_url}
+      botId={branding.assistant_bot_id}
+      locale={locale}
+      isDark={isDark}
+    />
+  )
+
   if (adminOpen && me.is_admin) {
     return (
-      <DashboardShell {...shellProps}>
-        <AdminView locale={locale} onExit={() => setAdminOpen(false)} />
-      </DashboardShell>
+      <>
+        <DashboardShell {...shellProps}>
+          <AdminView locale={locale} onExit={() => setAdminOpen(false)} />
+        </DashboardShell>
+        {assistant}
+      </>
     )
   }
 
   return (
+    <>
     <DashboardShell {...shellProps}>
       <Greeting
         firstName={firstName}
@@ -347,5 +364,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         />
       )}
     </DashboardShell>
+    {assistant}
+    </>
   )
 }

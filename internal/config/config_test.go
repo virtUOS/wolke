@@ -166,6 +166,53 @@ func TestEnvCSVParsing(t *testing.T) {
 	}
 }
 
+// The assistant widget fields follow the bot_url pattern: empty by default
+// (feature hidden), settable via file, overridable via env scalars.
+func TestAssistantWidgetConfig(t *testing.T) {
+	cfg, err := load("", envMap(nil))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Branding.AssistantWidgetURL != "" || cfg.Branding.AssistantBotID != "" {
+		t.Error("assistant widget must be unset by default (feature hidden)")
+	}
+
+	path := writeTemp(t, `
+branding:
+  assistant_widget_url: https://from-file.example.edu/widget.js
+  assistant_bot_id: file-bot
+`)
+	env := envMap(map[string]string{
+		"ASSISTANT_WIDGET_URL": "https://assistant.example.edu/widget.js",
+		"ASSISTANT_BOT_ID":     "echo",
+	})
+	cfg, err = load(path, env)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Branding.AssistantWidgetURL != "https://assistant.example.edu/widget.js" {
+		t.Errorf("AssistantWidgetURL = %q, want env to win over file", cfg.Branding.AssistantWidgetURL)
+	}
+	if cfg.Branding.AssistantBotID != "echo" {
+		t.Errorf("AssistantBotID = %q, want env to win over file", cfg.Branding.AssistantBotID)
+	}
+}
+
+// A set assistant_widget_url must be an absolute http(s) URL — its origin feeds
+// the CSP allowlist, so a malformed value must fail fast at startup.
+func TestAssistantWidgetURLValidated(t *testing.T) {
+	for _, bad := range []string{"not-a-url", "ftp://assistant.example.edu/widget.js", "/widget.js"} {
+		env := envMap(map[string]string{"ASSISTANT_WIDGET_URL": bad})
+		if _, err := load("", env); err == nil {
+			t.Errorf("load: want error for assistant_widget_url %q, got nil", bad)
+		}
+	}
+	// Empty stays valid (feature off).
+	if _, err := load("", envMap(nil)); err != nil {
+		t.Errorf("load: empty assistant_widget_url must be valid, got %v", err)
+	}
+}
+
 func TestMissingFileIsError(t *testing.T) {
 	if _, err := load("/no/such/config.yaml", envMap(nil)); err == nil {
 		t.Fatal("load: want error for missing file, got nil")

@@ -11,6 +11,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -91,7 +92,14 @@ type Branding struct {
 	// a phone number / tel: link (the dialer on a smartphone).
 	BotURL  string `yaml:"bot_url" json:"bot_url"`
 	HelpURL string `yaml:"help_url" json:"help_url"`
-	Theme   Theme  `yaml:"theme" json:"theme"`
+	// Embedded assistant chat widget (launcher mode). Enabled only when both are
+	// set; when enabled it supersedes the BotURL top-bar link. AssistantWidgetURL
+	// is the absolute http(s) URL of the widget bundle; its origin doubles as the
+	// widget's gateway base URL and is added to the CSP script-src/connect-src.
+	// The wolke origin must be in the assistant bot's embedding allowlist.
+	AssistantWidgetURL string `yaml:"assistant_widget_url" json:"assistant_widget_url"`
+	AssistantBotID     string `yaml:"assistant_bot_id" json:"assistant_bot_id"`
+	Theme              Theme  `yaml:"theme" json:"theme"`
 }
 
 // Theme carries the light/dark token sets. Tokens are a map so the variable
@@ -215,6 +223,8 @@ func applyEnv(cfg *Config, lookupEnv func(string) (string, bool)) {
 	setStr("BOT_URL", &cfg.Branding.BotURL)
 	setStr("HELP_URL", &cfg.Branding.HelpURL)
 	setStr("FEEDBACK_URL", &cfg.Branding.FeedbackURL)
+	setStr("ASSISTANT_WIDGET_URL", &cfg.Branding.AssistantWidgetURL)
+	setStr("ASSISTANT_BOT_ID", &cfg.Branding.AssistantBotID)
 	setCSV("TRUSTED_PROXIES", &cfg.TrustedProxies)
 	setInt("ANNOUNCEMENT_RETENTION_DAYS", &cfg.AnnouncementRetentionDays)
 
@@ -241,6 +251,15 @@ func (c *Config) validate() error {
 	}
 	if c.AnnouncementRetentionDays < 0 {
 		return fmt.Errorf("config: announcement_retention_days must be >= 0 (0 disables purging)")
+	}
+	// A set widget URL must yield an origin: it feeds the CSP allowlist and the
+	// widget's gateway base URL, so a malformed value must fail at startup, not
+	// silently produce a broken policy.
+	if v := c.Branding.AssistantWidgetURL; v != "" {
+		u, err := url.Parse(v)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return fmt.Errorf("config: assistant_widget_url %q must be an absolute http(s) URL", v)
+		}
 	}
 	return nil
 }
