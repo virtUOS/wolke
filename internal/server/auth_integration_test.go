@@ -129,6 +129,32 @@ func TestOIDCLoginFlow(t *testing.T) {
 		t.Errorf("display_name = %q, want Test Student", me.DisplayName)
 	}
 
+	// 3.4 Re-login with a live session must still refresh role/admin from the
+	// claims: demote the user directly in the DB, run the login flow again
+	// (the mock SSO completes it silently), and expect the claims to win. This
+	// is the regression guard for the issue-#29 revisit short-circuit — only a
+	// handshake-less revisit may skip the exchange, never a real login.
+	if _, err := db.Pool.Exec(ctx, "update users set is_admin = false where oidc_sub = 'stud-1'"); err != nil {
+		t.Fatalf("demote user: %v", err)
+	}
+	resp, err = client.Get(base + "/auth/login")
+	if err != nil {
+		t.Fatalf("re-login flow: %v", err)
+	}
+	_ = resp.Body.Close()
+	resp, err = client.Get(base + "/api/me")
+	if err != nil {
+		t.Fatalf("/api/me after re-login: %v", err)
+	}
+	var me2 meResponse
+	if err := json.NewDecoder(resp.Body).Decode(&me2); err != nil {
+		t.Fatalf("decode /api/me after re-login: %v", err)
+	}
+	_ = resp.Body.Close()
+	if !me2.IsAdmin {
+		t.Errorf("is_admin = false after re-login with live session, want true (claims must refresh)")
+	}
+
 	// 3.5 Back button (issue #29): re-requesting the consumed callback URL with
 	// a live session must redirect home, not replay the code into a 502.
 	if callbackURL == "" {

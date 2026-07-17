@@ -78,18 +78,22 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 // cookie, and bounce back to where the user started.
 func (s *Service) Callback(w http.ResponseWriter, r *http.Request) {
 	noStore(w)
-	// A revisit of the callback URL with a live session — typically the browser
-	// Back button after login (issue #29) — must not replay the consumed code
-	// into an error page. The user is signed in; send them home.
-	if c, err := r.Cookie(SessionCookieName); err == nil {
-		if _, err := s.sessions.Lookup(r.Context(), c.Value); err == nil {
-			http.Redirect(w, r, "/", http.StatusFound)
-			return
-		}
-	}
-
 	c, err := r.Cookie(handshakeCookieName)
 	if err != nil {
+		// No handshake means no login is in flight: this is a revisit of the
+		// callback URL — typically the browser Back button after login (issue
+		// #29; the handshake cookie is cleared on success). With a live session
+		// the user is signed in; send them home instead of replaying the
+		// consumed code into an error page. A real login always carries the
+		// handshake and MUST fall through to the full exchange below — that is
+		// what re-derives role/admin from the claims on every login.
+		if sc, serr := r.Cookie(SessionCookieName); serr == nil {
+			if _, lerr := s.sessions.Lookup(r.Context(), sc.Value); lerr == nil {
+				s.log.Info("callback revisit with live session; redirecting home")
+				http.Redirect(w, r, "/", http.StatusFound)
+				return
+			}
+		}
 		s.fail(w, r, "missing handshake cookie", err)
 		return
 	}
