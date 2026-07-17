@@ -57,7 +57,7 @@ func TestToolRegistration(t *testing.T) {
 		got[tool.Name] = true
 	}
 	want := []string{
-		"service.list", "service.get", "category.list",
+		"service.list", "service.get", "category.list", "search.insights",
 		"service.propose_create", "service.propose_update", "service.propose_delete",
 		"change.confirm", "change.discard",
 	}

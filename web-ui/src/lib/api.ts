@@ -151,6 +151,16 @@ export const api = {
     send<Announcement>('PATCH', `/api/admin/announcements/${id}`, a),
   deleteAnnouncement: (id: string) => send<void>('DELETE', `/api/admin/announcements/${id}`),
   audit: (signal?: AbortSignal) => getJSON<{ entries: AuditEntry[] }>('/api/admin/audit', signal),
+  searchInsights: (signal?: AbortSignal) =>
+    getJSON<{ entries: SearchInsight[] }>('/api/admin/search-insights', signal),
+}
+
+// SearchInsight is one query users ran that returned nothing — the worklist for
+// adding service keywords.
+export interface SearchInsight {
+  query: string
+  searches: number
+  last_seen: string
 }
 
 export interface AdminService {
@@ -163,6 +173,8 @@ export interface AdminService {
   is_active: boolean
   categories: string[]
   tag?: ServiceTag
+  // Search aliases (flat, language-agnostic). Search-only; not in /api/catalog.
+  keywords: string[]
 }
 
 export interface ServiceDraft {
@@ -174,6 +186,7 @@ export interface ServiceDraft {
   categories: string[]
   // '' means "no status label"; the backend treats empty as unset.
   tag: ServiceTag | ''
+  keywords: string[]
 }
 
 export type Severity = 'info' | 'warning' | 'critical'

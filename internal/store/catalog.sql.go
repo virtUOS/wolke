@@ -92,6 +92,8 @@ type ListActiveServicesRow struct {
 	Tag         pgtype.Text `json:"tag"`
 }
 
+// Note: keywords are intentionally NOT selected — they are a search-only aid
+// matched in SQL (search.sql), never exposed via /api/catalog.
 func (q *Queries) ListActiveServices(ctx context.Context) ([]ListActiveServicesRow, error) {
 	rows, err := q.db.Query(ctx, listActiveServices)
 	if err != nil {

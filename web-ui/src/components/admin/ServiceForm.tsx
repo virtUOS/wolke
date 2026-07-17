@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 import { localized, type AdminService, type Category, type Service, type ServiceDraft, type ServiceTag } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { curatedIconNames } from '@/lib/icons'
@@ -23,6 +24,24 @@ interface ServiceFormProps {
 
 const httpURL = (s: string) => /^https?:\/\/.+/.test(s)
 
+// Keyword limits mirror the service-layer validation (internal/service/admin.go).
+const MAX_KEYWORDS = 32
+const MAX_KEYWORD_LENGTH = 50
+
+// mergeKeywords folds comma/blank-separated raw input into an existing list,
+// dropping blanks and case-insensitive duplicates (the server normalizes too).
+function mergeKeywords(existing: string[], raw: string): string[] {
+  const next = [...existing]
+  const seen = new Set(existing.map((k) => k.toLowerCase()))
+  for (const p of raw.split(',').map((s) => s.trim()).filter(Boolean)) {
+    if (!seen.has(p.toLowerCase())) {
+      seen.add(p.toLowerCase())
+      next.push(p)
+    }
+  }
+  return next
+}
+
 // Admin create/edit form for a catalog service, with a live tile preview, an
 // icon picker, multi-category selection, and URL validation (docs/03 §6). The
 // server re-validates authoritatively; this gives immediate feedback.
@@ -44,6 +63,8 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
   const [iconQuery, setIconQuery] = useState('')
   const [cats, setCats] = useState<Set<string>>(new Set(initial?.categories ?? []))
   const [tag, setTag] = useState<ServiceTag | ''>(initial?.tag ?? '')
+  const [keywords, setKeywords] = useState<string[]>(initial?.keywords ?? [])
+  const [kwInput, setKwInput] = useState('')
 
   // The full lucide set loads as ONE lazy chunk only here (admin picker), so
   // searching every icon costs a single request, not one per glyph. Normal users
@@ -90,6 +111,11 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
   if (serviceUrl !== '' && !httpURL(serviceUrl)) errors.push(s.admin.errServiceUrl)
   if (docUrl !== '' && !httpURL(docUrl)) errors.push(s.admin.errDocUrl)
   if (cats.size === 0) errors.push(s.admin.errCategory)
+  // Effective keywords include a term typed but not yet committed (flushed on
+  // submit), so validation and the submitted payload agree.
+  const effectiveKeywords = mergeKeywords(keywords, kwInput)
+  if (effectiveKeywords.length > MAX_KEYWORDS) errors.push(s.admin.errKeywordCount(MAX_KEYWORDS))
+  if (effectiveKeywords.some((k) => k.length > MAX_KEYWORD_LENGTH)) errors.push(s.admin.errKeywordLength(MAX_KEYWORD_LENGTH))
   const valid = errors.length === 0
 
   const toggleCat = (slug: string) =>
@@ -103,6 +129,24 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
       return next
     })
 
+  // Add the typed term(s) as keyword chips: a comma may separate several at once;
+  // blanks and case-insensitive duplicates are dropped (the server normalizes too).
+  const addKeywords = (raw: string) => {
+    setKeywords((prev) => mergeKeywords(prev, raw))
+    setKwInput('')
+  }
+
+  const removeKeyword = (kw: string) => setKeywords((prev) => prev.filter((k) => k !== kw))
+
+  const onKeywordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      addKeywords(kwInput)
+    } else if (e.key === 'Backspace' && kwInput === '' && keywords.length > 0) {
+      removeKeyword(keywords[keywords.length - 1])
+    }
+  }
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!valid) return
@@ -114,6 +158,8 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
       icon,
       categories: [...cats],
       tag,
+      // effectiveKeywords flushes any term left in the input, comma-split like the chips.
+      keywords: effectiveKeywords,
     })
   }
 
@@ -153,6 +199,36 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
               </label>
             ))}
           </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className="mb-1 text-sm font-medium">{s.admin.fKeywords}</legend>
+          <p className="mb-1 text-xs text-text-muted">{s.admin.keywordsHint}</p>
+          {keywords.length > 0 && (
+            <ul className="mb-2 flex flex-wrap gap-1.5">
+              {keywords.map((kw) => (
+                <li key={kw} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-0.5 text-sm">
+                  <span>{kw}</span>
+                  <button
+                    type="button"
+                    aria-label={s.admin.keywordRemove(kw)}
+                    onClick={() => removeKeyword(kw)}
+                    className="grid h-4 w-4 place-items-center rounded text-text-muted hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                  >
+                    <X className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Input
+            value={kwInput}
+            onChange={(e) => setKwInput(e.target.value)}
+            onKeyDown={onKeywordKeyDown}
+            onBlur={() => addKeywords(kwInput)}
+            placeholder={s.admin.keywordsPlaceholder}
+            aria-label={s.admin.fKeywords}
+          />
         </fieldset>
 
         <fieldset>

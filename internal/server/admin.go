@@ -56,6 +56,7 @@ type serviceBody struct {
 	Icon        string            `json:"icon"`
 	Categories  []string          `json:"categories"`
 	Tag         string            `json:"tag"`
+	Keywords    []string          `json:"keywords"`
 }
 
 func (b serviceBody) draft() service.Draft {
@@ -67,6 +68,7 @@ func (b serviceBody) draft() service.Draft {
 		Icon:        b.Icon,
 		Categories:  b.Categories,
 		Tag:         b.Tag,
+		Keywords:    b.Keywords,
 	}
 }
 
@@ -210,6 +212,23 @@ type auditEntry struct {
 	TargetID  string          `json:"target_id,omitempty"`
 	Diff      json.RawMessage `json:"diff,omitempty"`
 	CreatedAt string          `json:"created_at"`
+}
+
+// adminSearchInsights lists recent searches that returned nothing — the admin
+// worklist for adding service keywords (docs/01 §4.6). Thin wrapper over the
+// service layer, which clamps days/limit (absent/invalid params become 0 → the
+// service default).
+func adminSearchInsights(d AdminDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		entries, err := service.ListSearchInsights(r.Context(), d.Store, days, limit)
+		if err != nil {
+			writeProblem(w, http.StatusInternalServerError, "insights_unavailable", "Could not load search insights.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
+	}
 }
 
 func adminListAudit(d AdminDeps) http.HandlerFunc {

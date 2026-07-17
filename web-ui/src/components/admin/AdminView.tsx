@@ -10,8 +10,9 @@ import { CategoriesAdmin } from './CategoriesAdmin'
 import { RoleDefaultsAdmin } from './RoleDefaultsAdmin'
 import { AnnouncementsAdmin } from './AnnouncementsAdmin'
 import { AuditLog } from './AuditLog'
+import { SearchInsights } from './SearchInsights'
 
-type Section = 'services' | 'categories' | 'roles' | 'announcements' | 'audit'
+type Section = 'services' | 'categories' | 'roles' | 'announcements' | 'insights' | 'audit'
 
 export function AdminView({ locale, onExit }: { locale: string; onExit: () => void }) {
   const s = t(locale)
@@ -24,6 +25,7 @@ export function AdminView({ locale, onExit }: { locale: string; onExit: () => vo
     { key: 'categories', label: s.admin.tabCategories },
     { key: 'roles', label: s.admin.tabRoles },
     { key: 'announcements', label: s.admin.tabAnnouncements },
+    { key: 'insights', label: s.admin.tabInsights },
     { key: 'audit', label: s.admin.tabAudit },
   ]
 
@@ -67,6 +69,7 @@ export function AdminView({ locale, onExit }: { locale: string; onExit: () => vo
       {section === 'categories' && <CategoriesAdmin categories={categories} locale={locale} />}
       {section === 'roles' && <RoleDefaultsAdmin locale={locale} />}
       {section === 'announcements' && <AnnouncementsAdmin locale={locale} />}
+      {section === 'insights' && <SearchInsights locale={locale} />}
       {section === 'audit' && <AuditLog locale={locale} />}
     </div>
   )

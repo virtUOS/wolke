@@ -9,6 +9,10 @@ export function useAudit() {
   return useQuery({ queryKey: ['admin', 'audit'], queryFn: ({ signal }) => api.audit(signal) })
 }
 
+export function useSearchInsights() {
+  return useQuery({ queryKey: ['admin', 'search-insights'], queryFn: ({ signal }) => api.searchInsights(signal) })
+}
+
 export function useAdminAnnouncements() {
   return useQuery({ queryKey: ['admin', 'announcements'], queryFn: ({ signal }) => api.adminAnnouncements(signal) })
 }

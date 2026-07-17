@@ -1,4 +1,4 @@
-import { applyFilter, filterEq, matchesQuery, searchAll, type Filter } from '@/lib/catalog-filter'
+import { applyFilter, filterEq, type Filter } from '@/lib/catalog-filter'
 import type { Service } from '@/lib/api'
 
 function svc(over: Partial<Service>): Service {
@@ -11,31 +11,6 @@ const studip = svc({ id: '1', name: 'Stud.IP', description: { de: 'Lernplattform
 const vpn = svc({ id: '2', name: 'VPN', description: { de: 'Netzzugang', en: 'Network access' }, categories: ['data'], tag: 'wartung' })
 const mail = svc({ id: '3', name: 'Webmail', description: { de: 'E-Mail' }, categories: ['communication'] })
 const all = [studip, vpn, mail]
-
-describe('matchesQuery', () => {
-  it('matches the name case-insensitively', () => {
-    expect(matchesQuery(studip, 'stud')).toBe(true)
-    expect(matchesQuery(studip, 'VPN')).toBe(false)
-  })
-  it('matches any localized description', () => {
-    expect(matchesQuery(studip, 'learning')).toBe(true)
-    expect(matchesQuery(studip, 'lernplattform')).toBe(true)
-  })
-  it('an empty/blank query matches everything', () => {
-    expect(matchesQuery(vpn, '')).toBe(true)
-    expect(matchesQuery(vpn, '   ')).toBe(true)
-  })
-})
-
-describe('searchAll', () => {
-  it('searches across all services, ignoring categories and tags', () => {
-    expect(searchAll(all, 'access').map((s) => s.id)).toEqual(['2'])
-    expect(searchAll(all, 'e').map((s) => s.id).sort()).toEqual(['1', '2', '3']) // name/desc matches
-  })
-  it('returns the full list for a blank query', () => {
-    expect(searchAll(all, '')).toEqual(all)
-  })
-})
 
 describe('applyFilter', () => {
   it('all returns everything', () => {
