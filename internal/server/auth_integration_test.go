@@ -74,7 +74,19 @@ func TestOIDCLoginFlow(t *testing.T) {
 	t.Cleanup(func() { _ = srv.Close() })
 
 	jar, _ := cookiejar.New(nil)
-	client := &http.Client{Jar: jar, Timeout: 15 * time.Second}
+	// Record the /auth/callback?code=…&state=… URL the flow passes through, so
+	// step 3.5 can revisit it like a browser Back button would (issue #29).
+	var callbackURL string
+	client := &http.Client{
+		Jar:     jar,
+		Timeout: 15 * time.Second,
+		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
+			if req.URL.Path == "/auth/callback" {
+				callbackURL = req.URL.String()
+			}
+			return nil
+		},
+	}
 
 	// 1. /api/me before login → 401.
 	if code := getStatus(t, client, base+"/api/me"); code != http.StatusUnauthorized {
@@ -115,6 +127,32 @@ func TestOIDCLoginFlow(t *testing.T) {
 	}
 	if me.DisplayName != "Test Student" {
 		t.Errorf("display_name = %q, want Test Student", me.DisplayName)
+	}
+
+	// 3.5 Back button (issue #29): re-requesting the consumed callback URL with
+	// a live session must redirect home, not replay the code into a 502.
+	if callbackURL == "" {
+		t.Fatal("no /auth/callback URL captured during the login flow")
+	}
+	baseU, _ := url.Parse(base)
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	revisit, _ := http.NewRequest(http.MethodGet, callbackURL, nil)
+	for _, c := range jar.Cookies(baseU) {
+		revisit.AddCookie(c)
+	}
+	resp, err = noRedirect.Do(revisit)
+	if err != nil {
+		t.Fatalf("revisit callback: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("callback revisit with session = %d, want 302 (got the auth-failed page?)", resp.StatusCode)
+	}
+	if loc := resp.Header.Get("Location"); loc != "/" {
+		t.Errorf("callback revisit Location = %q, want /", loc)
+	}
+	if got := resp.Header.Get("Cache-Control"); got != "no-store" {
+		t.Errorf("callback revisit Cache-Control = %q, want no-store", got)
 	}
 
 	// 4. Logout invalidates the session server-side. Capture the raw token, then

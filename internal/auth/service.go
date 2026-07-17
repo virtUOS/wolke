@@ -47,9 +47,17 @@ func NewService(a *Authenticator, sessions *SessionStore, users UserUpserter, cf
 	}
 }
 
+// noStore marks an auth response uncacheable: /auth/* URLs land in browser
+// history, and a cached (or bfcache-replayed) response there would replay a
+// consumed code or leak a redirect (issue #29).
+func noStore(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store")
+}
+
 // Login starts the code flow: it mints a signed handshake (state + nonce + PKCE)
 // and redirects to the IdP.
 func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
 	h := handshake{
 		State:    newRandomToken(),
 		Nonce:    newRandomToken(),
@@ -69,6 +77,17 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 // resolve identity from claims, upsert the user, create a session, set the
 // cookie, and bounce back to where the user started.
 func (s *Service) Callback(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
+	// A revisit of the callback URL with a live session — typically the browser
+	// Back button after login (issue #29) — must not replay the consumed code
+	// into an error page. The user is signed in; send them home.
+	if c, err := r.Cookie(SessionCookieName); err == nil {
+		if _, err := s.sessions.Lookup(r.Context(), c.Value); err == nil {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+	}
+
 	c, err := r.Cookie(handshakeCookieName)
 	if err != nil {
 		s.fail(w, r, "missing handshake cookie", err)
@@ -125,6 +144,7 @@ func (s *Service) Callback(w http.ResponseWriter, r *http.Request) {
 // Logout invalidates the session and, if the IdP advertises one, ends the IdP
 // session too (docs/02 §6).
 func (s *Service) Logout(w http.ResponseWriter, r *http.Request) {
+	noStore(w)
 	if c, err := r.Cookie(SessionCookieName); err == nil {
 		if err := s.sessions.Delete(r.Context(), c.Value); err != nil {
 			s.log.Warn("delete session on logout", "error", err)

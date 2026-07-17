@@ -5,6 +5,7 @@ import { assistantEnabled, type Branding } from '@/lib/branding'
 import { api, localized, type Category, type Me, type Service } from '@/lib/api'
 import { t, effectiveLocale } from '@/lib/i18n'
 import { applyFilter, filterEq, type Filter } from '@/lib/catalog-filter'
+import { useViewHistory } from '@/lib/view-history'
 import {
   useApplyTheme,
   useCatalog,
@@ -95,23 +96,16 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     document.documentElement.lang = locale
   }, [locale])
   const qc = useQueryClient()
-  const [tab, setTab] = useState<Tab>('favoriten')
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<Filter>({ kind: 'all' }) // single active facet
-  const [adminOpen, setAdminOpen] = useState(false)
+  // View state (tab, filter, admin) lives in the browser history so Back and
+  // Forward walk through views and view URLs are deep-linkable (issue #29).
+  // Search stays local and out of the URL; every navigation cancels it, and
+  // popstate does the same via onPop.
+  const { view, navigate, replace } = useViewHistory({ onPop: () => setQuery('') })
+  const { tab, filter } = view
   const searching = query.trim() !== ''
   const isMobile = useIsMobile()
   const layout = isMobile ? 'list' : 'grid'
-
-  // Mobile has no filter controls (the pills and the greeting shortcuts are
-  // desktop-only), so a filter carried across the breakpoint would be stuck
-  // with no way to clear it. Discovery on mobile is search-only — reset on
-  // entering the mobile layout (state adjusted during render, not an effect).
-  const [wasMobile, setWasMobile] = useState(isMobile)
-  if (isMobile !== wasMobile) {
-    setWasMobile(isMobile)
-    if (isMobile) setFilter({ kind: 'all' })
-  }
 
   const prefersDark = usePrefersDark()
   const isDark = me.theme === 'dark' || (me.theme === 'system' && prefersDark)
@@ -122,6 +116,26 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const catalog = useCatalog()
   const favorites = useFavorites()
   const fav = useFavoriteActions()
+
+  // View invariants, enforced during render (the repo's adjust-during-render
+  // pattern — the lint rule forbids sync setState in effects). All corrections
+  // use replace(): no history entries, and each guard fails on the corrected
+  // view, so popstate into an invalid entry is fixed once and cannot loop.
+  if (isMobile && filter.kind !== 'all') {
+    // Mobile has no filter controls (pills + greeting shortcuts are desktop-
+    // only); discovery is search-only, so a carried-over filter is unusable.
+    replace({ ...view, filter: { kind: 'all' } })
+  } else if (view.admin && !me.is_admin) {
+    // ?admin=1 deep link (or a stale history entry) without permission.
+    replace({ ...view, admin: false })
+  } else if (
+    filter.kind === 'category' &&
+    catalog.data &&
+    !catalog.data.categories.some((c) => c.slug === filter.slug)
+  ) {
+    // Unknown category slug in a deep link — validated once the catalog loads.
+    replace({ ...view, filter: { kind: 'all' } })
+  }
 
   // Search is server-side and debounced (the one search path; matching + ranking
   // live in the backend). Results stay visible while the next query loads.
@@ -143,27 +157,29 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   }
 
   // Filters are single-select: picking a facet replaces the active one, and
-  // clicking the active facet again returns to "Alle".
-  const selectFilter = (next: Filter) => setFilter((prev) => (filterEq(prev, next) ? { kind: 'all' } : next))
+  // clicking the active facet again returns to "Alle". Each pick is one
+  // history entry.
+  const selectFilter = (next: Filter) =>
+    navigate({ tab: 'dienste', admin: false, filter: filterEq(filter, next) ? { kind: 'all' } : next })
 
   // Search is global: when a query is present it matches across ALL services,
   // independent of the active tab, and any active filter is deactivated.
+  // Typing must never create history entries, so the filter clear replaces.
   const onSearch = (value: string) => {
     setQuery(value)
-    if (value.trim() && filter.kind !== 'all') setFilter({ kind: 'all' })
+    if (value.trim() && filter.kind !== 'all') replace({ ...view, filter: { kind: 'all' } })
   }
 
   // Jump to the favorites tab (shortcut from the greeting's favorites count).
   const showFavorites = () => {
-    setTab('favoriten')
     setQuery('')
+    navigate({ tab: 'favoriten', filter: { kind: 'all' }, admin: false })
   }
 
   // Jump to the Dienste tab showing only services currently in maintenance.
   const showMaintenance = () => {
-    setTab('dienste')
     setQuery('')
-    setFilter({ kind: 'maintenance' })
+    navigate({ tab: 'dienste', filter: { kind: 'maintenance' }, admin: false })
   }
 
   // Result set: a search overrides everything (global, no tab/filter); otherwise
@@ -201,6 +217,8 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const favCount = favoriteServices.length
   const firstName = me.display_name.split(' ')[0]
 
+  const adminOpen = view.admin && me.is_admin
+
   const shellProps = {
     branding,
     me,
@@ -210,11 +228,16 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     tab: searching ? null : tab,
     // Switching tab always returns to the dashboard — out of the admin view and
     // out of search mode (a tab click during a search cancels the search).
-    onTab: (next: Tab) => { setAdminOpen(false); setQuery(''); setTab(next) },
+    // Also clears the filter: filter ≠ all implies the Dienste tab, which is
+    // what keeps the view's URL unambiguous.
+    onTab: (next: Tab) => {
+      setQuery('')
+      navigate({ tab: next, filter: { kind: 'all' }, admin: false })
+    },
     isDark,
     onToggleTheme: () => prefs.mutate({ theme: isDark ? 'light' : 'dark' }),
     onSetLocale: (next: Me['locale']) => prefs.mutate({ locale: next }),
-    onAdmin: () => setAdminOpen(true),
+    onAdmin: () => navigate({ ...view, admin: true }),
     isMobile,
     focusKey: adminOpen ? 'admin' : 'dashboard',
   }
@@ -235,7 +258,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     return (
       <>
         <DashboardShell {...shellProps}>
-          <AdminView locale={locale} onExit={() => setAdminOpen(false)} />
+          <AdminView locale={locale} onExit={() => navigate({ ...view, admin: false })} />
         </DashboardShell>
         {assistant}
       </>

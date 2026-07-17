@@ -8,7 +8,10 @@ import { PillButton } from '@/components/ui/pill-button'
 import { focusFirst, trapTab } from '@/lib/focus'
 import { NotificationBell } from './NotificationBell'
 
-export type Tab = 'favoriten' | 'dienste'
+// Tab lives in the view-url lib (it is part of the URL-serialized view state);
+// re-exported here so the chrome's consumers keep importing it from TopBar.
+export type { Tab } from '@/lib/view-url'
+import type { Tab } from '@/lib/view-url'
 
 interface TopBarProps {
   branding: Branding
