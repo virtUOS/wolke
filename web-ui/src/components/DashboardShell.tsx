@@ -4,6 +4,10 @@ import { feedbackHref, type Branding } from '@/lib/branding'
 import { t, type Lang } from '@/lib/i18n'
 import { TopBar, type Tab } from './TopBar'
 
+// The centered content column: <main> and the footer share this width, and the
+// assistant launcher aligns its right edge to it (AssistantWidget).
+export const SHELL_MAX_WIDTH = 1180
+
 function initials(name: string): string {
   return name.split(' ').map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
 }
@@ -117,7 +121,7 @@ export function DashboardShell({
         style={{
           flexGrow: 1,
           width: '100%',
-          maxWidth: 1180,
+          maxWidth: SHELL_MAX_WIDTH,
           margin: '0 auto',
           boxSizing: 'border-box',
           padding: isMobile ? '20px 16px 32px' : '28px 24px 40px',
@@ -129,7 +133,7 @@ export function DashboardShell({
         <footer
           aria-label={s.footer.legal}
           style={{
-            maxWidth: 1180,
+            maxWidth: SHELL_MAX_WIDTH,
             margin: '0 auto',
             width: '100%',
             boxSizing: 'border-box',

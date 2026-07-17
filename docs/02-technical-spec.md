@@ -399,7 +399,10 @@ balancer only when an HA requirement (not raw load) forces it.
   empty/error/loading states explicitly (no silent failures).
 - **Security headers:** strict CSP (the SPA is same-origin, so this is straightforward),
   HSTS, `SameSite` cookies, CSRF protection on state-changing requests (double-submit token
-  or `SameSite=Strict` + custom header check).
+  or `SameSite=Strict` + custom header check). The one sanctioned CSP exception: when the
+  embedded assistant widget is configured (`branding.assistant_widget_url`), its origin is
+  appended to `script-src` (loads the widget bundle) and `connect-src` (the SSE chat stream) —
+  no other directive is widened.
 - **Rate limiting:** modest per-session limit on writes and search.
 - **i18n:** server stores localized fields as JSONB (`{de,en}`) and returns *both* languages; the
   SPA picks the active one client-side. Ship `de`, keep `en` wired. The active UI language is
@@ -441,6 +444,12 @@ branding:
   feedback_url: ""  # right-aligned footer feedback link (env FEEDBACK_URL): URL or email/mailto:
   bot_url:  ""   # top-bar chatbot button (env BOT_URL); empty hides it
   help_url: ""   # top-bar help button (env HELP_URL): an http(s) URL or a phone/tel: number
+  # Embedded assistant chat widget (launcher mode), e.g. eule (github.com/virtUOS/eule).
+  # Active only when BOTH are set; supersedes the bot_url top-bar link. The widget URL's
+  # origin doubles as the gateway base URL and is CSP-allowlisted (script-src/connect-src).
+  # The dashboard's own origin must be in the bot's embedding allowed_origins (CORS).
+  assistant_widget_url: ""  # env ASSISTANT_WIDGET_URL; absolute http(s) URL of the bundle
+  assistant_bot_id: ""      # env ASSISTANT_BOT_ID
   theme:
     light: { primary: "#A6093D", primary_hover: "#8A0732", accent: "#F2C879",
              surface: "#F4F4F5", text: "#18181B" }

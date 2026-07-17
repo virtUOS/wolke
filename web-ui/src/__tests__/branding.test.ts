@@ -1,4 +1,4 @@
-import { applyBrandingTokens, contactHref, feedbackHref, type Branding } from '@/lib/branding'
+import { applyBrandingTokens, assistantEnabled, contactHref, feedbackHref, type Branding } from '@/lib/branding'
 
 const branding: Branding = {
   product_name: 'IT Service',
@@ -12,6 +12,8 @@ const branding: Branding = {
   feedback_url: '',
   bot_url: '',
   help_url: '',
+  assistant_widget_url: '',
+  assistant_bot_id: '',
   theme: {
     light: { primary: '#A6093D', primary_hover: '#8A0732' },
     dark: { primary: '#C2355C' },
@@ -37,6 +39,21 @@ describe('applyBrandingTokens', () => {
     const css = document.getElementById('branding-tokens')?.textContent
     expect(css).toContain('--surface-2: #ECECEE')
     expect(css).toContain('--text-muted: #6B6B70')
+  })
+})
+
+describe('assistantEnabled', () => {
+  it('requires both the widget URL and the bot id', () => {
+    expect(assistantEnabled(branding)).toBe(false)
+    expect(assistantEnabled({ ...branding, assistant_widget_url: 'https://a.example.edu/widget.js' })).toBe(false)
+    expect(assistantEnabled({ ...branding, assistant_bot_id: 'echo' })).toBe(false)
+    expect(
+      assistantEnabled({
+        ...branding,
+        assistant_widget_url: 'https://a.example.edu/widget.js',
+        assistant_bot_id: 'echo',
+      }),
+    ).toBe(true)
   })
 })
 

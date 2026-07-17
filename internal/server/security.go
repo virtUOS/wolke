@@ -18,31 +18,45 @@ const (
 	searchRatePerMinute = 120
 )
 
-// securityHeaders sets a strict, same-origin security header set (docs/02 §10).
-// The SPA is same-origin: scripts/styles/connections are 'self'. style-src allows
-// inline because the branding tokens are applied via an injected <style> element;
-// HSTS is sent only when the effective request is HTTPS (behind Caddy).
-const contentSecurityPolicy = "default-src 'self'; base-uri 'self'; object-src 'none'; " +
-	"frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
-	"script-src 'self'; connect-src 'self'; form-action 'self'; " +
-	// PWA: the service worker and web app manifest are same-origin. Both already
-	// fall back to 'self' via default-src, but state them so a future default-src
-	// tightening can't silently break install/offline.
-	"worker-src 'self'; manifest-src 'self'"
+// buildCSP returns the strict, same-origin security policy (docs/02 §10),
+// computed once at wiring time. The SPA is same-origin: scripts/styles/
+// connections are 'self'. style-src allows inline because the branding tokens
+// are applied via an injected <style> element. The single sanctioned exception
+// is a configured assistant widget (branding.assistant_widget_url): its origin
+// is appended to script-src (loads widget.js) and connect-src (the SSE chat
+// stream) — no other directive is widened.
+func buildCSP(assistantOrigin string) string {
+	scriptSrc, connectSrc := "'self'", "'self'"
+	if assistantOrigin != "" {
+		scriptSrc += " " + assistantOrigin
+		connectSrc += " " + assistantOrigin
+	}
+	return "default-src 'self'; base-uri 'self'; object-src 'none'; " +
+		"frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
+		"script-src " + scriptSrc + "; connect-src " + connectSrc + "; form-action 'self'; " +
+		// PWA: the service worker and web app manifest are same-origin. Both already
+		// fall back to 'self' via default-src, but state them so a future default-src
+		// tightening can't silently break install/offline.
+		"worker-src 'self'; manifest-src 'self'"
+}
 
-func securityHeaders(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h := w.Header()
-		h.Set("Content-Security-Policy", contentSecurityPolicy)
-		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("X-Frame-Options", "DENY")
-		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		if ForwardedFromContext(r.Context()).Scheme == "https" {
-			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-		}
-		next.ServeHTTP(w, r)
-	})
+// securityHeaders sets the security header set on every response; HSTS is sent
+// only when the effective request is HTTPS (behind Caddy).
+func securityHeaders(csp string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h := w.Header()
+			h.Set("Content-Security-Policy", csp)
+			h.Set("X-Content-Type-Options", "nosniff")
+			h.Set("X-Frame-Options", "DENY")
+			h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+			h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+			if ForwardedFromContext(r.Context()).Scheme == "https" {
+				h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // csrfGuard rejects cross-origin state-changing requests (docs/02 §10). Combined

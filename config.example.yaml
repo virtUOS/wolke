@@ -49,6 +49,15 @@ branding:
   # a new tab, or a phone number / tel: link (opens the dialer on a phone).
   bot_url: ""
   help_url: ""
+  # Embedded assistant chat widget (launcher mode), e.g. eule
+  # (github.com/virtUOS/eule). Active only when BOTH are set; supersedes the
+  # bot_url top-bar link. The widget URL's origin doubles as the widget's
+  # gateway base URL and is added to the CSP (script-src/connect-src). The
+  # dashboard's own origin must be listed in the bot's embedding
+  # allowed_origins on the assistant side, or its API will refuse (CORS).
+  # (env: ASSISTANT_WIDGET_URL / ASSISTANT_BOT_ID)
+  assistant_widget_url: ""  # e.g. "https://assistant.example.edu/widget.js"
+  assistant_bot_id: ""      # e.g. "echo"
   theme:
     light:
       primary: "#A6093D"
