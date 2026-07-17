@@ -245,6 +245,96 @@ func (q *Queries) ListAllActiveAnnouncements(ctx context.Context) ([]Announcemen
 	return items, nil
 }
 
+const listAnnouncementHistory = `-- name: ListAnnouncementHistory :many
+select a.id, a.title, a.body, a.severity, a.audience, a.starts_at, a.ends_at, a.dismissible, a.created_by, a.created_at
+from announcements a
+where (a.starts_at is null or a.starts_at <= now())
+  and (a.audience = 'all' or a.audience = $1)
+  and (
+    (a.ends_at is not null and a.ends_at <= now())
+    or exists (
+      select 1 from announcement_dismissals d
+      where d.announcement_id = a.id and d.user_id = $2
+    )
+  )
+order by a.created_at desc
+limit $3
+`
+
+type ListAnnouncementHistoryParams struct {
+	Role   string      `json:"role"`
+	UserID pgtype.UUID `json:"user_id"`
+	Lim    int32       `json:"lim"`
+}
+
+// A user's past notices for the notification center: addressed to their role (or
+// all), already started, and no longer an active banner for them — either the
+// window has ended OR they dismissed it. Most recent first.
+func (q *Queries) ListAnnouncementHistory(ctx context.Context, arg ListAnnouncementHistoryParams) ([]Announcement, error) {
+	rows, err := q.db.Query(ctx, listAnnouncementHistory, arg.Role, arg.UserID, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Announcement{}
+	for rows.Next() {
+		var i Announcement
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Body,
+			&i.Severity,
+			&i.Audience,
+			&i.StartsAt,
+			&i.EndsAt,
+			&i.Dismissible,
+			&i.CreatedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const purgeAnnouncementsBefore = `-- name: PurgeAnnouncementsBefore :execrows
+delete from announcements
+where coalesce(starts_at, created_at) < $1
+  and ends_at is not null
+  and ends_at <= now()
+`
+
+// Permanently delete expired announcements that started before the retention
+// cutoff (history retention; dismissals cascade away). Only expired notices are
+// purged, so an active banner is never removed regardless of age. starts_at may
+// be null for notices shown immediately, so fall back to created_at.
+func (q *Queries) PurgeAnnouncementsBefore(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeAnnouncementsBefore, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const retireActiveAnnouncements = `-- name: RetireActiveAnnouncements :exec
+update announcements
+set ends_at = now()
+where (starts_at is null or starts_at <= now())
+  and (ends_at is null or ends_at > now())
+`
+
+// Close any currently-active announcement by ending its window now. Called when
+// a new announcement is created so there is at most one active notice at a time,
+// while the retired one stays in the table as history (docs/01 §4.7).
+func (q *Queries) RetireActiveAnnouncements(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, retireActiveAnnouncements)
+	return err
+}
+
 const updateAnnouncement = `-- name: UpdateAnnouncement :one
 update announcements
 set title       = $1,

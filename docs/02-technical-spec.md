@@ -180,8 +180,11 @@ create table usage_daily (
   primary key (day, service_id, user_role, target)
 );
 
--- The announcement is a singleton: at most one row may exist (enforced by a
--- one-row unique index, `((true))`). Admins create/edit/remove "the" announcement.
+-- Announcements accumulate as history: rows are retained, not destroyed on
+-- replace. "One ACTIVE notice at a time" is enforced in the service layer —
+-- creating a new announcement retires the current active one (stamps ends_at =
+-- now()). A retention sweep (announcement_retention_days, default 60) purges
+-- expired rows past the window. (Migrations 00007/00011/00012.)
 create table announcements (
   id          uuid primary key default gen_random_uuid(),
   title       jsonb not null,
@@ -416,6 +419,10 @@ institution-specific is config or mounted assets, never compiled-in.
 
 **Config sources (precedence: env > mounted file > defaults).** Secrets via env; structured maps
 (claim mapping, branding) via a small mounted file. All 12-factor, so it drops cleanly into Compose.
+
+**Scalar knobs (env-overridable).** Besides the auth/DB/branding settings, `ANNOUNCEMENT_RETENTION_DAYS`
+(`announcement_retention_days`, default `60`) controls how long an expired announcement is kept in the
+history before being purged permanently, measured from `starts_at`; `0` disables purging (keep forever).
 
 **Branding / theme — runtime, no rebuild.** The default theme is UOS (doc 03), but a deployer
 overrides it by mounting a `branding.yaml` + asset files; the server exposes them at

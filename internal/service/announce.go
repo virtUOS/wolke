@@ -54,21 +54,19 @@ func validateAnnouncement(in AnnouncementInput) error {
 	return nil
 }
 
-// CreateAnnouncement validates, inserts, and audit-logs a new announcement. The
-// announcement is a singleton: creating a second is rejected (edit or remove the
-// existing one). The count guard runs in-tx alongside the one-row DB index.
+// CreateAnnouncement validates, inserts, and audit-logs a new announcement.
+// There is at most one ACTIVE announcement at a time (docs/01 §4.7): creating a
+// new one first retires any currently-active notice (its window is ended now),
+// leaving it in the table as history rather than destroying it. The retire +
+// insert run in one tx so the invariant holds atomically.
 func CreateAnnouncement(ctx context.Context, db AdminDB, actor Actor, in AnnouncementInput) (store.Announcement, error) {
 	if err := validateAnnouncement(in); err != nil {
 		return store.Announcement{}, err
 	}
 	var out store.Announcement
 	err := inTx(ctx, db, func(q *store.Queries) error {
-		n, err := q.CountAnnouncements(ctx)
-		if err != nil {
-			return fmt.Errorf("count announcements: %w", err)
-		}
-		if n > 0 {
-			return &ValidationError{Field: "announcement", Msg: "an announcement already exists; edit or remove it first"}
+		if err := q.RetireActiveAnnouncements(ctx); err != nil {
+			return fmt.Errorf("retire active announcements: %w", err)
 		}
 		a, err := q.CreateAnnouncement(ctx, store.CreateAnnouncementParams{
 			Title:       mustJSON(in.Title),

@@ -12,6 +12,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -27,6 +28,10 @@ type Config struct {
 	MetricsToken   string   `yaml:"metrics_token"`
 	LogLevel       string   `yaml:"log_level"`
 	TrustedProxies []string `yaml:"trusted_proxies"`
+	// AnnouncementRetentionDays is how long (in days, measured from starts_at) an
+	// expired announcement is kept in the history before being permanently purged
+	// (docs/01 §4.7). 0 disables purging (keep forever).
+	AnnouncementRetentionDays int `yaml:"announcement_retention_days"`
 	// BrandingDir is the directory of mounted branding assets (logos, favicon)
 	// served under /branding/. A deployer mounts their own; the repo ships a
 	// default. The logo_* / favicon paths in Branding reference files here.
@@ -101,11 +106,12 @@ type Theme struct {
 // still TBD against the official Corporate Design manual; CLAUDE.md rule 8).
 func Defaults() Config {
 	return Config{
-		HTTPAddr:       ":8080",
-		PublicURL:      "http://localhost:8080",
-		LogLevel:       "info",
-		TrustedProxies: nil,
-		BrandingDir:    "branding",
+		HTTPAddr:                  ":8080",
+		PublicURL:                 "http://localhost:8080",
+		LogLevel:                  "info",
+		TrustedProxies:            nil,
+		BrandingDir:               "branding",
+		AnnouncementRetentionDays: 60,
 		OIDC: OIDC{
 			Scopes: []string{"openid", "profile", "email"},
 			Role: RoleMapping{
@@ -191,6 +197,13 @@ func applyEnv(cfg *Config, lookupEnv func(string) (string, bool)) {
 			*dst = splitCSV(v)
 		}
 	}
+	setInt := func(key string, dst *int) {
+		if v, ok := lookupEnv(key); ok {
+			if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+				*dst = n
+			}
+		}
+	}
 
 	setStr("HTTP_ADDR", &cfg.HTTPAddr)
 	setStr("PUBLIC_URL", &cfg.PublicURL)
@@ -203,6 +216,7 @@ func applyEnv(cfg *Config, lookupEnv func(string) (string, bool)) {
 	setStr("HELP_URL", &cfg.Branding.HelpURL)
 	setStr("FEEDBACK_URL", &cfg.Branding.FeedbackURL)
 	setCSV("TRUSTED_PROXIES", &cfg.TrustedProxies)
+	setInt("ANNOUNCEMENT_RETENTION_DAYS", &cfg.AnnouncementRetentionDays)
 
 	setStr("OIDC_ISSUER_URL", &cfg.OIDC.IssuerURL)
 	setStr("OIDC_CLIENT_ID", &cfg.OIDC.ClientID)
@@ -224,6 +238,9 @@ func (c *Config) validate() error {
 	case "debug", "info", "warn", "error":
 	default:
 		return fmt.Errorf("config: log_level %q is not one of debug|info|warn|error", c.LogLevel)
+	}
+	if c.AnnouncementRetentionDays < 0 {
+		return fmt.Errorf("config: announcement_retention_days must be >= 0 (0 disables purging)")
 	}
 	return nil
 }

@@ -131,6 +131,8 @@ export const api = {
 
   // announcements (user-facing)
   announcements: (signal?: AbortSignal) => getJSON<{ announcements: Announcement[] }>('/api/announcements', signal),
+  announcementHistory: (signal?: AbortSignal) =>
+    getJSON<{ announcements: Announcement[] }>('/api/announcements/history', signal),
   dismissAnnouncement: (id: string) => send<void>('POST', `/api/announcements/${id}/dismiss`),
 
   // admin
@@ -201,6 +203,7 @@ export interface Announcement {
   starts_at?: string
   ends_at?: string
   dismissible: boolean
+  created_at?: string
 }
 
 export interface AnnouncementInput {

@@ -25,6 +25,21 @@ func userAnnouncements(db announce.Store) http.HandlerFunc {
 	}
 }
 
+// userAnnouncementHistory serves the current user's past notices for the
+// notification center: expired or dismissed, role-scoped, newest first
+// (docs/01 §4.7).
+func userAnnouncementHistory(db announce.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, _ := userFromContext(r.Context())
+		list, err := announce.ListHistory(r.Context(), db, user.PrimaryRole, user.ID)
+		if err != nil {
+			writeProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcement history.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"announcements": list})
+	}
+}
+
 // dismissAnnouncement records a per-user dismissal (POST /api/announcements/{id}/dismiss)
 // so the banner stays gone across reloads (docs/01 §4.7).
 func dismissAnnouncement(db service.DismissStore) http.HandlerFunc {

@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Settings, Star } from 'lucide-react'
 import { expectNoAxeViolations } from '@/test/axe'
 import type { Branding } from '@/lib/branding'
@@ -172,23 +173,28 @@ describe('a11y (axe) — prop-driven views', () => {
       theme: { light: {}, dark: {} },
     } as Branding
     const me = { display_name: 'Tim B', email: 't@example.edu', is_admin: true } as Me
+    // TopBar now mounts the NotificationBell, which reads server state via
+    // TanStack Query, so it needs a QueryClient in scope.
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const { baseElement } = render(
-      <TopBar
-        branding={branding}
-        locale="de"
-        currentLocalePref="auto"
-        tab="dienste"
-        onTab={() => {}}
-        isDark={false}
-        onToggleTheme={() => {}}
-        onSetLocale={() => {}}
-        userInitials="TB"
-        userName={me.display_name}
-        userEmail={me.email}
-        isAdmin={me.is_admin}
-        onAdmin={() => {}}
-        onLogout={() => {}}
-      />,
+      <QueryClientProvider client={qc}>
+        <TopBar
+          branding={branding}
+          locale="de"
+          currentLocalePref="auto"
+          tab="dienste"
+          onTab={() => {}}
+          isDark={false}
+          onToggleTheme={() => {}}
+          onSetLocale={() => {}}
+          userInitials="TB"
+          userName={me.display_name}
+          userEmail={me.email}
+          isAdmin={me.is_admin}
+          onAdmin={() => {}}
+          onLogout={() => {}}
+        />
+      </QueryClientProvider>,
     )
     await a11y(baseElement)
   })
