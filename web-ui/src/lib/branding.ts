@@ -18,6 +18,10 @@ export interface Branding {
   feedback_url: string
   bot_url: string
   help_url: string
+  // Embedded assistant chat widget (launcher mode); active only when both are
+  // set, in which case it supersedes the bot_url top-bar link.
+  assistant_widget_url: string
+  assistant_bot_id: string
   theme: {
     light: ThemeTokens
     dark: ThemeTokens
@@ -26,6 +30,12 @@ export interface Branding {
 
 export async function fetchBranding(signal?: AbortSignal): Promise<Branding> {
   return getJSON<Branding>('/api/branding', signal)
+}
+
+// assistantEnabled reports whether the embedded assistant widget is configured
+// (both fields required). When true it supersedes the bot_url top-bar link.
+export function assistantEnabled(b: Branding): boolean {
+  return Boolean(b.assistant_widget_url && b.assistant_bot_id)
 }
 
 // contactHref resolves a help_url value to a link target. An http(s) URL opens
