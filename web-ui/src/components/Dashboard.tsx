@@ -195,9 +195,12 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     branding,
     me,
     locale,
-    tab,
-    // Switching tab always returns to the dashboard, even from the admin view.
-    onTab: (next: Tab) => { setAdminOpen(false); setTab(next) },
+    // Search results are their own view (global, across all services), so no
+    // section tab is highlighted while a query is active.
+    tab: searching ? null : tab,
+    // Switching tab always returns to the dashboard — out of the admin view and
+    // out of search mode (a tab click during a search cancels the search).
+    onTab: (next: Tab) => { setAdminOpen(false); setQuery(''); setTab(next) },
     isDark,
     onToggleTheme: () => prefs.mutate({ theme: isDark ? 'light' : 'dark' }),
     onSetLocale: (next: Me['locale']) => prefs.mutate({ locale: next }),

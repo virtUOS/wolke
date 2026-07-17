@@ -16,7 +16,9 @@ interface TopBarProps {
   locale: Lang
   /** The user's raw preference ('auto' | 'de' | 'en'), for the switcher's state. */
   currentLocalePref: Me['locale']
-  tab: Tab
+  /** The active section, or null when none is (e.g. while a search is active —
+   *  search results are their own view, so neither tab is highlighted). */
+  tab: Tab | null
   onTab: (t: Tab) => void
   isDark: boolean
   onToggleTheme: () => void

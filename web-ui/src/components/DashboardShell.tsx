@@ -31,7 +31,8 @@ interface DashboardShellProps {
   me: Me
   /** The active locale, resolved once in Dashboard and threaded down. */
   locale: Lang
-  tab: Tab
+  /** The active section; null while a search is active (no tab highlighted). */
+  tab: Tab | null
   onTab: (t: Tab) => void
   isDark: boolean
   onToggleTheme: () => void
