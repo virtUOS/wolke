@@ -59,6 +59,9 @@ That's how the form and the MCP server stay behaviorally identical.
 
 **No browser storage of tokens.** Theme/view-mode preferences persist server-side via the
 user-prefs API (so they follow the user across devices); a cookie mirror is fine for first paint.
+One documented exception: genuinely device-scoped flags (currently only the one-time PWA
+install-hint dismissal, `lib/pwa-install.ts`) live in localStorage — a server pref would hide
+the hint on the phone because it was dismissed on the desktop.
 
 ### Why not the alternatives (so the decision is on record)
 - **HTMX + Go templates (templ):** genuinely simpler — one codebase, superb caching, less JS.

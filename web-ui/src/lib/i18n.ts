@@ -126,6 +126,14 @@ const de = {
     history: 'Verlauf',
     empty: 'Keine Mitteilungen.',
   },
+  pwa: {
+    region: 'App-Installation',
+    installTitle: 'Als App installieren',
+    installBody: 'Dieses Dashboard lässt sich als App auf dem Startbildschirm installieren.',
+    installBodyIOS: 'Dieses Dashboard lässt sich als App installieren: Teilen-Menü öffnen und „Zum Home-Bildschirm" wählen.',
+    installButton: 'Installieren',
+    dismiss: 'Hinweis schließen',
+  },
   footer: {
     legal: 'Rechtliches',
     imprint: 'Impressum',
@@ -309,6 +317,14 @@ const en: Strings = {
     current: 'Current',
     history: 'History',
     empty: 'No announcements.',
+  },
+  pwa: {
+    region: 'App installation',
+    installTitle: 'Install as an app',
+    installBody: 'You can install this dashboard as an app on your home screen.',
+    installBodyIOS: 'You can install this dashboard as an app: open the share menu and choose "Add to Home Screen".',
+    installButton: 'Install',
+    dismiss: 'Dismiss hint',
   },
   footer: {
     legal: 'Legal',

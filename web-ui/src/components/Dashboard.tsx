@@ -20,6 +20,7 @@ import { useAnnouncements } from '@/lib/admin-hooks'
 import { AdminView } from './admin/AdminView'
 import { AnnouncementBanner } from './AnnouncementBanner'
 import { AssistantWidget } from './AssistantWidget'
+import { PwaInstallHint } from './PwaInstallHint'
 import { CatalogView } from './CatalogView'
 import { DashboardShell } from './DashboardShell'
 import { Greeting } from './Greeting'
@@ -277,6 +278,9 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         onShowFavorites={showFavorites}
         onShowMaintenance={showMaintenance}
       />
+
+      {/* One-time PWA install hint (smartphones only; issue #42) */}
+      <PwaInstallHint isMobile={isMobile} locale={locale} />
 
       {/* Announcements (inside max-width column, between greeting and content) */}
       {(announcements.data?.announcements ?? []).length > 0 && (
