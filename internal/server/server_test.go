@@ -48,6 +48,25 @@ func TestHealthzAlwaysOK(t *testing.T) {
 	}
 }
 
+// The PWA service worker files must be reachable without a session: the
+// browser refetches them in the background, and an auth redirect there mints
+// handshake cookies that clobber a login in flight (state mismatch loop).
+func TestServiceWorkerFilesArePublic(t *testing.T) {
+	cfg := config.Defaults()
+	h := newTestRouter(t, &cfg, Deps{})
+	for _, path := range []string{"/sw.js", "/workbox-9c191d2f.js"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("GET %s = %d, want 200 (must not be auth-gated)", path, rec.Code)
+		}
+		if loc := rec.Header().Get("Location"); loc != "" {
+			t.Errorf("GET %s redirects to %q, want no redirect", path, loc)
+		}
+	}
+}
+
 func TestReadyzReflectsProbe(t *testing.T) {
 	tests := []struct {
 		name  string

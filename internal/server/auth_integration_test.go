@@ -155,6 +155,33 @@ func TestOIDCLoginFlow(t *testing.T) {
 		t.Errorf("is_admin = false after re-login with live session, want true (claims must refresh)")
 	}
 
+	// 3.45 Concurrent login attempts must not clobber each other's handshake:
+	// the PWA service worker (or a second tab) can hit /auth/login while a
+	// login is in flight, and completing the FIRST attempt must still work.
+	// Start two logins without following, keep both handshake cookies, then
+	// complete the first one.
+	nf := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	firstU, _ := url.Parse(base)
+	var idpURLs []string
+	for i := 0; i < 2; i++ {
+		req, _ := http.NewRequest(http.MethodGet, base+"/auth/login", nil)
+		lresp, err := nf.Do(req)
+		if err != nil {
+			t.Fatalf("start login %d: %v", i, err)
+		}
+		_ = lresp.Body.Close()
+		idpURLs = append(idpURLs, lresp.Header.Get("Location"))
+		jar.SetCookies(firstU, lresp.Cookies())
+	}
+	resp, err = client.Get(idpURLs[0]) // complete the FIRST attempt
+	if err != nil {
+		t.Fatalf("complete first concurrent login: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("first concurrent login finished with %d, want 200 (handshake clobbered by the second attempt?)", resp.StatusCode)
+	}
+
 	// 3.5 Back button (issue #29): re-requesting the consumed callback URL with
 	// a live session must redirect home, not replay the code into a 502.
 	if callbackURL == "" {
