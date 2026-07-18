@@ -203,7 +203,19 @@ func run() error {
 		deps.Auth = auth.NewService(authn, sessions, db, cfg, logger)
 		deps.Users = db
 		deps.Prefs = db
-		logger.Info("OIDC auth enabled", "issuer", cfg.OIDC.IssuerURL)
+		// Spell out the effective claim mapping so a deployment can verify at a
+		// glance that its mounted config was actually loaded (a missing mount
+		// silently falls back to the built-in defaults and demotes everyone).
+		logger.Info("OIDC auth enabled",
+			"issuer", cfg.OIDC.IssuerURL,
+			"client_id", cfg.OIDC.ClientID,
+			"scopes", cfg.OIDC.Scopes,
+			"role_claim", cfg.OIDC.Role.Claim,
+			"role_values", len(cfg.OIDC.Role.Values),
+			"role_default", cfg.OIDC.Role.Default,
+			"admin_claim", cfg.OIDC.Admin.Claim,
+			"admin_match", cfg.OIDC.Admin.Match,
+		)
 	} else {
 		logger.Warn("OIDC not configured; using the login stub (no real authentication)")
 	}

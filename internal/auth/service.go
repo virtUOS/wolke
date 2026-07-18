@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -112,6 +113,19 @@ func (s *Service) Callback(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, "exchange", err)
 		return
 	}
+	// Debug aid for claim-mapping problems ("why is everyone a student?"):
+	// list what arrived and the raw values of the two mapped claims. Debug
+	// level only — group lists and affiliations are personal data.
+	if s.log.Enabled(r.Context(), slog.LevelDebug) {
+		s.log.Debug("login claims",
+			"keys", claimKeys(claims),
+			"role_claim", s.cfg.OIDC.Role.Claim,
+			"role_value", claims[s.cfg.OIDC.Role.Claim],
+			"admin_claim", s.cfg.OIDC.Admin.Claim,
+			"admin_value", claims[s.cfg.OIDC.Admin.Claim],
+		)
+	}
+
 	id := buildIdentity(claims, s.cfg.OIDC)
 	if id.Subject == "" {
 		s.fail(w, r, "no subject in claims", nil)
@@ -217,6 +231,16 @@ func firstString(claims map[string]any, keys ...string) string {
 func stringClaim(claims map[string]any, key string) string {
 	v, _ := claims[key].(string)
 	return v
+}
+
+// claimKeys lists the claim names (not values) present in a token, sorted.
+func claimKeys(claims map[string]any) []string {
+	keys := make([]string, 0, len(claims))
+	for k := range claims {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // sanitizeReturnTo blocks open redirects: only local single-slash paths pass.
