@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -55,6 +57,16 @@ func noStore(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-store")
 }
 
+// handshakeCookie names the handshake cookie for one login attempt, keyed by
+// the attempt's state. Concurrent logins (a second tab, a background request
+// racing into /auth/login) each get their own cookie instead of clobbering a
+// shared one — the callback picks the cookie matching its ?state, so whichever
+// attempt completes finds its own handshake intact. Stale ones expire (600s).
+func handshakeCookie(state string) string {
+	sum := sha256.Sum256([]byte(state))
+	return handshakeCookieName + "-" + hex.EncodeToString(sum[:6])
+}
+
 // Login starts the code flow: it mints a signed handshake (state + nonce + PKCE)
 // and redirects to the IdP.
 func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +82,7 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, "sign handshake", err)
 		return
 	}
-	http.SetCookie(w, s.cookie(handshakeCookieName, signed, "/auth", 600))
+	http.SetCookie(w, s.cookie(handshakeCookie(h.State), signed, "/auth", 600))
 	http.Redirect(w, r, s.auth.authCodeURL(h), http.StatusFound)
 }
 
@@ -79,7 +91,8 @@ func (s *Service) Login(w http.ResponseWriter, r *http.Request) {
 // cookie, and bounce back to where the user started.
 func (s *Service) Callback(w http.ResponseWriter, r *http.Request) {
 	noStore(w)
-	c, err := r.Cookie(handshakeCookieName)
+	state := r.URL.Query().Get("state")
+	c, err := r.Cookie(handshakeCookie(state))
 	if err != nil {
 		// No handshake means no login is in flight: this is a revisit of the
 		// callback URL — typically the browser Back button after login (issue
@@ -103,7 +116,9 @@ func (s *Service) Callback(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, "verify handshake", err)
 		return
 	}
-	if r.URL.Query().Get("state") != h.State {
+	// The cookie is looked up by a hash of ?state; still compare the full state
+	// inside the signed payload (integrity of the round-trip, not just routing).
+	if state == "" || state != h.State {
 		s.fail(w, r, "state mismatch", nil)
 		return
 	}
@@ -151,7 +166,7 @@ func (s *Service) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Clear the handshake; set the session cookie until session expiry.
-	http.SetCookie(w, s.cookie(handshakeCookieName, "", "/auth", -1))
+	http.SetCookie(w, s.cookie(handshakeCookie(state), "", "/auth", -1))
 	sc := s.cookie(SessionCookieName, token, "/", int(time.Until(expires).Seconds()))
 	http.SetCookie(w, sc)
 

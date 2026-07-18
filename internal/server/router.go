@@ -84,6 +84,13 @@ func New(cfg *config.Config, deps Deps) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	// PWA runtime files are public: the browser refetches the service worker
+	// in the background (also while logged out), and an auth redirect here
+	// mints handshake cookies that clobber a login in flight — the state-
+	// mismatch loop. They are hashed build artifacts of the public app shell
+	// and carry no user data.
+	r.Get("/sw.js", spaHandler.ServeHTTP)
+	r.Get("/workbox-{file}", spaHandler.ServeHTTP)
 
 	if deps.Auth != nil {
 		mountAuthenticated(r, deps, spaHandler)
