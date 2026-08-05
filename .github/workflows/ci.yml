@@ -75,7 +75,7 @@ jobs:
       OIDC_TEST_ISSUER: http://127.0.0.1:8455/default
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26"
           cache: true
