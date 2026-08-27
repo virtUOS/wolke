@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Wrench, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { assistantEnabled, type Branding } from '@/lib/branding'
@@ -67,6 +67,40 @@ function SearchBox({
       )}
     </div>
   )
+}
+
+// useResultAnnouncement returns the text for the polite live region: the result
+// count, but only for a short window after it *changes*, and never on first
+// render. Empty at rest is the point (issue #35) — a permanently populated
+// sr-only node is a stop in the screen reader's reading order with nothing on
+// the screen to match it, which on a phone is an empty box between the search
+// field and the first tile.
+const ANNOUNCEMENT_MS = 5000
+
+/**
+ * @param count the settled result count, or null while it is still arriving —
+ *   an in-flight query's count is stale, and the first settled value is the
+ *   baseline (the page just loaded), not news.
+ */
+function useResultAnnouncement(count: number | null, message: string): string {
+  const [announcement, setAnnouncement] = useState('')
+  const previous = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (count === null) return
+    if (previous.current === null || previous.current === count) {
+      previous.current = count
+      return
+    }
+    previous.current = count
+    setAnnouncement(message)
+    // Deps are unchanged by our own setState, so this timer is not reset by the
+    // re-render it causes.
+    const timer = setTimeout(() => setAnnouncement(''), ANNOUNCEMENT_MS)
+    return () => clearTimeout(timer)
+  }, [count, message])
+
+  return announcement
 }
 
 function useIsMobile(): boolean {
@@ -214,6 +248,13 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     }
     return tr.dash.allServices
   }, [searching, tab, filter, allCategories, locale, tr])
+
+  // Announce only settled numbers: see useResultAnnouncement.
+  const countSettled = !catalog.isLoading && !favorites.isLoading && !searchPending && !searchFailed
+  const resultAnnouncement = useResultAnnouncement(
+    countSettled ? results.length : null,
+    tr.dash.resultCount(results.length),
+  )
 
   const favCount = favoriteServices.length
   const firstName = me.display_name.split(' ')[0]
@@ -368,11 +409,11 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         </div>
       )}
 
-      {/* Polite live region: announces the result count to screen-reader users
-          when a search/filter/tab change alters what's shown (it stays silent on
-          first render). */}
-      <div aria-live="polite" className="sr-only">
-        {tr.dash.resultCount(results.length)}
+      {/* Polite live region: announces the result count when a search/filter/tab
+          change alters what's shown, then goes quiet again — see
+          useResultAnnouncement. Silent on first render. */}
+      <div aria-live="polite" role="status" className="sr-only">
+        {resultAnnouncement}
       </div>
 
       {/* Content: a search shows global results from the server; otherwise the
