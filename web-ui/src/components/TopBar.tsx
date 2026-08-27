@@ -214,7 +214,7 @@ function AccountMenu({ locale, currentLocalePref, onSetLocale, isDark, onToggleT
           display: 'grid', placeItems: 'center',
           width: 26, height: 26, borderRadius: '50%', border: 'none',
           background: 'color-mix(in srgb, var(--accent) 38%, var(--surface))',
-          color: 'var(--text)', fontSize: 11, fontWeight: 700, letterSpacing: '.02em',
+          color: 'var(--text)', fontSize: 12, fontWeight: 700, letterSpacing: '.02em',
           cursor: 'pointer', padding: 0,
         }}
         className="focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-1"
@@ -281,7 +281,10 @@ function AccountMenu({ locale, currentLocalePref, onSetLocale, isDark, onToggleT
               <Languages className="h-4 w-4 shrink-0" aria-hidden="true" />
               {s.topbar.language}
             </span>
-            <div role="group" aria-label={s.topbar.language} style={{ display: 'flex', gap: 4, width: '100%' }}>
+            {/* Wraps rather than forcing three equal columns: at the panel's width
+                the three German/English labels don't fit one row, and equal
+                columns made the last one overflow the panel by a few px. */}
+            <div role="group" aria-label={s.topbar.language} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, width: '100%' }}>
               {(
                 [
                   ['auto', s.topbar.langAuto],
@@ -297,7 +300,7 @@ function AccountMenu({ locale, currentLocalePref, onSetLocale, isDark, onToggleT
                     aria-pressed={active}
                     onClick={() => onSetLocale(value)}
                     style={{
-                      flex: 1, padding: '5px 6px', fontSize: 12.5, lineHeight: 1.2,
+                      flex: '1 1 auto', minWidth: 0, padding: '5px 6px', fontSize: 12.5, lineHeight: 1.2,
                       borderRadius: 'var(--radius-sm)', cursor: 'pointer',
                       border: '1px solid var(--border)',
                       background: active ? 'color-mix(in srgb, var(--accent) 38%, var(--surface))' : 'transparent',

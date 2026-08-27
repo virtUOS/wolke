@@ -206,7 +206,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
         >
           <span
             style={{
-              fontSize: 11, fontWeight: 600, letterSpacing: '.1em',
+              fontSize: 12, fontWeight: 600, letterSpacing: '.1em',
               textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap',
             }}
           >
