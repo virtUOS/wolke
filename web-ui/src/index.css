@@ -86,6 +86,16 @@ body {
   font-optical-sizing: auto;
 }
 
+/* The app canvas fills the viewport. dvh, not vh: on a mobile browser `100vh` is
+   the *large* viewport (URL bar retracted), so a canvas sized in vh is taller
+   than what is on screen — the page scrolls by the height of the URL bar and,
+   at the bottom, shows a band of bare background below the canvas. That is the
+   "unexpected empty space" of issue #33. The vh line is the fallback. */
+.app-canvas {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 /* Improved text-wrap for all paragraphs — matches reference. */
 p {
   text-wrap: pretty;

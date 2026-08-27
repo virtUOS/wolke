@@ -1,20 +1,19 @@
 // Regression spec for https://github.com/virtUOS/wolke/issues/33
 // "Unexpected empty space at the bottom of the app" — on a phone the sticky
-// footer is pinned to the bottom of the viewport while the (deliberately short)
-// mobile dashboard ends far above it, leaving a large dead band in between.
-//
-// Marked fixme until the fix lands; the fix's PR removes the annotation.
+// footer was pinned to the bottom of the viewport while the (deliberately short)
+// mobile dashboard ended far above it, leaving a large dead band in between.
 
 import { expect, test } from './fixtures'
 
 /** How much slack between the last content and the footer still reads as layout, not a hole. */
 const MAX_TRAILING_GAP = 96
+/** Rounding slack for the document-height check. */
+const TRAILING_SLACK = 2
 
 test.use({ viewportChecks: [] })
 
 test.describe('issue #33 — no dead space at the bottom', () => {
   test.skip(({ isMobile }) => isMobile !== true, 'reported for the phone layout')
-  test.fixme(true, 'https://github.com/virtUOS/wolke/issues/33')
 
   test('the footer follows the content instead of being pushed to the bottom', async ({ page }) => {
     await page.goto('/')
@@ -28,9 +27,12 @@ test.describe('issue #33 — no dead space at the bottom', () => {
         const r = el.getBoundingClientRect()
         if (r.height > 0 && r.bottom > lastContentBottom) lastContentBottom = r.bottom
       }
+      const bottomMost = footer ?? main
       return {
         lastContentBottom,
         footerTop: footer ? footer.getBoundingClientRect().top : main.getBoundingClientRect().bottom,
+        // In document coordinates, so it is comparable to scrollHeight.
+        contentBottom: bottomMost.getBoundingClientRect().bottom + window.scrollY,
         viewportHeight: document.documentElement.clientHeight,
         documentScrollHeight: document.scrollingElement!.scrollHeight,
       }
@@ -43,8 +45,16 @@ test.describe('issue #33 — no dead space at the bottom', () => {
         `and the footer (y ${Math.round(measured.footerTop)}) in a ${measured.viewportHeight}px viewport`,
     ).toBeLessThanOrEqual(MAX_TRAILING_GAP)
 
-    // A short page must not be scrollable at all: scrolling into emptiness is
-    // the other half of what the issue reports.
-    expect(measured.documentScrollHeight).toBeLessThanOrEqual(measured.viewportHeight + 1)
+    // And there is nothing to scroll *past* the content: the document may be as
+    // tall as the viewport (the canvas fills it with background, which is the
+    // point) or as tall as its content, but not taller than both. A canvas sized
+    // in `vh` rather than `dvh` fails this on a real mobile browser, where 100vh
+    // exceeds the visible viewport by the height of the URL bar.
+    const allowed = Math.max(measured.viewportHeight, measured.contentBottom) + TRAILING_SLACK
+    expect(
+      measured.documentScrollHeight,
+      `the document is ${Math.round(measured.documentScrollHeight)}px tall with content ending at ` +
+        `${Math.round(measured.contentBottom)}px in a ${measured.viewportHeight}px viewport`,
+    ).toBeLessThanOrEqual(allowed)
   })
 })
