@@ -97,6 +97,15 @@ The "review session": targeted, test-first, not a broad audit.
 > via the accessibility tree). Mark them `test.fixme` with issue links so the harness PR
 > merges green, then fix each issue in its own follow-up PR, flipping its test live.
 > Spec → tests → code; small PRs; no Claude attribution in commits.
+>
+> **Run with: opus, new session off `main`.** Keep the same session for the #23/#33/#35
+> follow-up PRs (the harness context pays off there).
+
+### Model/session routing for later milestones
+- **M2 UX bug batch:** sonnet, new session (small, well-specced, independent fixes).
+- **M3 back-channel logout + security review:** fable, new session (security-critical OIDC
+  work; the review runs in the same session after the implementation lands).
+- **M4 launch prep:** mostly supervisor + manual config; sonnet for runbook drafting if needed.
 
 ## Status tracking
 
