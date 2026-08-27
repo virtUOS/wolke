@@ -121,6 +121,28 @@ also call the helpers explicitly after opening each intermediate state (menu ope
 open, tile expanded), since only the final state is checked automatically. This keeps "every
 tested state is overflow-checked" the default, not a per-test chore.
 
+### 5.5 Narrowing the auto-check (implementation note)
+
+The fixture takes a `viewportChecks` option
+(`test.use({ viewportChecks: ['overflow'] })`). Its only sanctioned use is a spec
+that reproduces **one** known defect: without it, such a spec could not go green
+with its own fix while other, unrelated defects remain at the same width, and the
+whole point of the annotated-and-flipped workflow (§8) would be lost. Normal flow
+specs never narrow it.
+
+### 5.6 `expectNothingInvisibleAnnounced(page)` — the accessibility-tree rule
+
+`e2e/helpers/a11y.ts`. Everything the accessibility tree announces as *content*
+(text, paragraphs, headings) must also be readable on the screen at this
+viewport. The rule is deliberately one-directional: screen-reader-only text is
+legitimate (`.sr-only` is excluded from the visible corpus and from the tree scan
+where it is the accessible name of a control) — what is not legitimate is the
+converse, announcing information the responsive layout dropped on purpose so a
+phone user would have *less* to wade through (issue #35).
+
+This is not axe (still a non-goal, §2); it is the one question only a real
+browser at a real width can answer.
+
 ## 6. Flows to cover (initial suite — every one runs at all 6 viewports)
 
 1. **Dashboard**: land logged-in → default view renders; check both **list and table** view
@@ -146,7 +168,9 @@ tested state is overflow-checked" the default, not a per-test chore.
   artifact on failure. The `image` job gains `needs: [frontend, backend, e2e]` so nothing
   publishes with a red viewport suite.
 - **Local:** `make e2e` — builds the SPA + binary and runs the suite against the local
-  Postgres + mock IdP (same env as `make dev`); `make e2e-ui` for `playwright test --ui`.
+  Postgres + mock IdP (same env as `make run`); `make e2e-ui` for `playwright test --ui`;
+  `make e2e-install` once for the browser. The binary under test listens on **:8471**
+  (`E2E_PORT` overrides), so a running `make run` on :8080 is left alone.
   Document both in the README dev section.
 - Playwright is a `devDependency` of `web-ui`; e2e specs are excluded from Vitest
   (`vitest.config` exclude `e2e/**`) and from `tsc --noEmit`'s app config if needed

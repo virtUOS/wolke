@@ -17,6 +17,13 @@ coverage.*
 /web-ui/.vite/
 /web-ui/coverage/
 
+# Playwright e2e (docs/specs/responsive-viewport-testing.md): the stored login
+# state, run artifacts and the HTML report are all regenerated per run.
+/web-ui/e2e/.auth/
+/web-ui/test-results/
+/web-ui/playwright-report/
+/web-ui/blob-report/
+
 # Local config & secrets (examples ARE committed; real ones are not)
 .env
 *.local.yaml
