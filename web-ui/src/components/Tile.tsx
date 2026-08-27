@@ -95,14 +95,23 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
 
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em' }}>
+              {/* break-words + hyphens-auto: a long German compound
+                  ("Identitätsmanagement") is wider than the column at 324px and
+                  would otherwise overflow its box (CLAUDE.md, issue #23). */}
+              <span
+                className="break-words hyphens-auto"
+                style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em' }}
+              >
                 {service.name}
               </span>
               {service.tag === 'beta' && <Badge variant="info">{s.tile.beta}</Badge>}
               {service.tag === 'wartung' && <Badge variant="warning">{s.tile.maintenance}</Badge>}
               {docsOnly && <Badge variant="neutral">{s.tile.docs}</Badge>}
             </div>
-            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-muted)' }}>
+            <p
+              className="break-words hyphens-auto"
+              style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-muted)' }}
+            >
               {description}
             </p>
           </div>
@@ -185,14 +194,20 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
         {/* Body: name + badge(s) + description */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em' }}>
+            <span
+              className="break-words hyphens-auto"
+              style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em' }}
+            >
               {service.name}
             </span>
             {service.tag === 'beta' && <Badge variant="info">{s.tile.beta}</Badge>}
             {service.tag === 'wartung' && <Badge variant="warning">{s.tile.maintenance}</Badge>}
             {docsOnly && <Badge variant="neutral">{s.tile.docs}</Badge>}
           </div>
-          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-muted)' }}>
+          <p
+            className="break-words hyphens-auto"
+            style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-muted)' }}
+          >
             {description}
           </p>
         </div>

@@ -1,24 +1,17 @@
 // Regression spec for https://github.com/virtUOS/wolke/issues/23
-// "View overflows on mobile" — the top bar is wider than a narrow phone, so the
-// whole document scrolls sideways and the left edge of every screen is cut off.
+// "View overflows on mobile" — the top bar was wider than a narrow phone, so the
+// whole document scrolled sideways and the left edge of every screen was cut off.
 //
-// Marked fixme until the fix lands (the harness PR must merge green); the fix's
-// PR removes the annotation. It asserts the overflow invariant itself rather
-// than the full viewport health check, so it goes green with *this* fix and does
-// not wait on the unrelated phone-width defects at the same width.
+// It asserts the overflow invariant itself rather than the full viewport health
+// check, so it stands on its own and does not wait on the unrelated phone-width
+// defects at the same widths.
 
 import { expectNoHorizontalOverflow } from './helpers/viewport'
 import { expect, test } from './fixtures'
 
-// Where it reproduces today: the bar's own content is 364px wide, so 324 and 360
-// scroll sideways; at 390 the bar fits but the notification panel — anchored to
-// the bell and 358px wide — hangs off the left edge. All three are the same
-// defect (chrome sized for a desktop), so the block is annotated as one.
 test.use({ viewportChecks: [] })
 
 test.describe('issue #23 — the chrome fits the viewport', () => {
-  test.fixme(({ isMobile }) => isMobile === true, 'https://github.com/virtUOS/wolke/issues/23')
-
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()

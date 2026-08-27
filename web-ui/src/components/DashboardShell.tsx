@@ -113,6 +113,7 @@ export function DashboardShell({
         isAdmin={me.is_admin}
         onAdmin={onAdmin}
         onLogout={logout}
+        isMobile={isMobile}
       />
       <main
         id="main"
