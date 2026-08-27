@@ -22,6 +22,12 @@ updates:
       semver-major-days: 14
       semver-minor-days: 14
     open-pull-requests-limit: 5
+    ignore:
+      # typescript-eslint's peer range caps TypeScript at <6.1.0, so TS 7 (the
+      # native port) cannot be installed alongside our linter. Drop this once
+      # typescript-eslint ships TS 7 support. See PR #65.
+      - dependency-name: "typescript"
+        versions: [">=7"]
     groups:
       npm-prod:
         dependency-type: production
