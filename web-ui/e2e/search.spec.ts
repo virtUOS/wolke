@@ -5,13 +5,13 @@
 // stale search is what's left behind otherwise.
 
 import { expectViewportHealthy } from './helpers/viewport'
+import { gotoApp } from './helpers/session'
 import { expect, test } from './fixtures'
 
 test('typing a query opens the results panel, and launching a result clears the search', async ({ page }, testInfo) => {
   const isMobile = testInfo.project.use.isMobile === true
 
-  await page.goto('/?tab=dienste')
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await gotoApp(page, '/?tab=dienste')
 
   const search = page.getByRole('searchbox')
   await search.fill('Netzspeicher')

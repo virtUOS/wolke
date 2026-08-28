@@ -6,6 +6,7 @@
 
 import type { Page } from '@playwright/test'
 import { expectViewportHealthy } from './helpers/viewport'
+import { gotoApp } from './helpers/session'
 import { expect, test } from './fixtures'
 
 // The mock IdP maps every project onto the same test user, and prefs mutations
@@ -26,8 +27,7 @@ test('the account menu opens, survives a language switch, and closes cleanly', a
   const isMobile = testInfo.project.use.isMobile === true
 
   await stubPrefs(page)
-  await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await gotoApp(page)
 
   const trigger = page.getByRole('button', { name: /Konto-Menü|Account menu/i })
   await trigger.click()

@@ -17,9 +17,13 @@ export interface Rect {
 
 /** One visible element, as measured in the page. */
 export interface ElementProbe {
+  /** Position in this snapshot's probe list — how a violation looks up the
+   *  live element again to resolve its fallback text lazily (see viewport.ts). */
+  idx: number
   /** `tag#id.class` — enough to find the element again. */
   selector: string
-  /** Trimmed text snippet (capped), for orientation in the failure message. */
+  /** Direct text snippet (capped). Empty when the element has no text node of
+   *  its own; a violation lazily resolves the full-subtree fallback then. */
   text: string
   rect: Rect
   /** Computed font-size in px. */
@@ -30,8 +34,6 @@ export interface ElementProbe {
   overflowX: string
   /** Computed `text-overflow`. */
   textOverflow: string
-  /** Computed `position` (fixed elements are judged differently). */
-  position: string
   /** True when a direct child text node holds non-whitespace text. */
   hasDirectText: boolean
   /** True for links/buttons/form controls — the touch-target population. */

@@ -26,6 +26,7 @@ function rect(left: number, width: number, height = 20): Rect {
 function probe(over: Partial<ElementProbe> = {}): ElementProbe {
   const box = over.rect ?? rect(0, 100)
   return {
+    idx: 0,
     selector: 'div.tile',
     text: 'Netzlaufwerkverbindungsverwaltung',
     rect: box,
@@ -34,7 +35,6 @@ function probe(over: Partial<ElementProbe> = {}): ElementProbe {
     clientWidth: Math.round(box.width),
     overflowX: 'visible',
     textOverflow: 'clip',
-    position: 'static',
     hasDirectText: true,
     interactive: false,
     hitRect: box,

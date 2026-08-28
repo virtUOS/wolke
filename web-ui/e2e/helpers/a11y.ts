@@ -58,24 +58,35 @@ export async function announcedText(page: Page): Promise<string[]> {
   return announcedTextFromSnapshot(await page.locator('body').ariaSnapshot())
 }
 
-/** All text a sighted user can actually read at this viewport, as one normalized string. */
-async function visibleTextCorpus(page: Page): Promise<string> {
-  const parts = await page.evaluate(() => {
-    const collected: string[] = []
+/**
+ * Two corpora from one walk: `visible` is all text a sighted user can
+ * actually read at this viewport; `opacityZero` is text that is rendered
+ * (present, correctly laid out, just `opacity: 0`) rather than actually
+ * removed from the page — a legitimate pattern (an animation's initial
+ * state, a deliberately transparent hit target), not the responsive layout
+ * dropping content, so it is exempt from the orphan check rather than a
+ * false positive on every such element.
+ */
+async function textCorpora(page: Page): Promise<{ visible: string; opacityZero: Set<string> }> {
+  const result = await page.evaluate(() => {
+    const dom = window.__e2eDomWalk!
+    const visible: string[] = []
+    const opacityZero: string[] = []
     for (const el of Array.from(document.querySelectorAll('*'))) {
       if (el.classList.contains('sr-only')) continue
-      if (!el.checkVisibility({ contentVisibilityAuto: true, opacityProperty: true, visibilityProperty: true })) continue
-      const rect = el.getBoundingClientRect()
-      if (rect.width <= 0 || rect.height <= 0) continue
-      let direct = ''
-      for (const node of el.childNodes) {
-        if (node.nodeType === Node.TEXT_NODE) direct += node.nodeValue ?? ''
+      const direct = dom.directText(el)
+      if (!direct) continue
+      if (dom.isVisible(el)) {
+        const rect = el.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) visible.push(direct)
+        continue
       }
-      if (direct.trim()) collected.push(direct.trim())
+      const laidOut = el.checkVisibility({ contentVisibilityAuto: true, visibilityProperty: true })
+      if (laidOut && getComputedStyle(el).opacity === '0') opacityZero.push(direct)
     }
-    return collected
+    return { visible, opacityZero }
   })
-  return parts.join(' ').replace(/\s+/g, ' ')
+  return { visible: result.visible.join(' ').replace(/\s+/g, ' '), opacityZero: new Set(result.opacityZero) }
 }
 
 /**
@@ -90,8 +101,8 @@ async function visibleTextCorpus(page: Page): Promise<string> {
  * everyone else.
  */
 export async function expectNothingInvisibleAnnounced(page: Page, label = ''): Promise<void> {
-  const [announced, corpus] = await Promise.all([announcedText(page), visibleTextCorpus(page)])
-  const orphans = announced.filter((text) => !corpus.includes(text))
+  const [announced, { visible, opacityZero }] = await Promise.all([announcedText(page), textCorpora(page)])
+  const orphans = announced.filter((text) => !visible.includes(text) && !opacityZero.has(text))
   const where = label ? ` [${label}]` : ''
   expect(
     orphans,
