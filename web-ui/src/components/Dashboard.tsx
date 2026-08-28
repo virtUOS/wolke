@@ -152,9 +152,16 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const actions: TileActions = {
     favoritedIDs,
     onToggleFavorite: (s) => (favoritedIDs.has(s.id) ? fav.remove.mutate(s.id) : fav.add.mutate(s.id)),
-    onLaunch: (s, target) => {
+    // Tools open in a new tab (issue #26), so a stale search is what's left
+    // behind when the user comes back. Clear it — but only for the launch a
+    // user actually returns from: a plain left click on the service link
+    // itself, not the doc link, and not a deliberate new-tab gesture
+    // (Ctrl/Cmd/Shift/middle-click), which Tile already filters out via
+    // `plainClick` (issue #27). Click tracking fires unconditionally.
+    onLaunch: (s, target, plainClick) => {
       api.recordClick(s.id, target)
       qc.invalidateQueries({ queryKey: ['favorites'] })
+      if (searching && target === undefined && plainClick) setQuery('')
     },
   }
 

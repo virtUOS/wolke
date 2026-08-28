@@ -65,20 +65,37 @@ describe('Tile', () => {
     expect(onToggle).toHaveBeenCalledWith(service)
   })
 
-  it('fires onLaunch when the launch link is activated', async () => {
+  it('fires onLaunch with plainClick=true on an ordinary left click', async () => {
     const user = userEvent.setup()
     const onLaunch = vi.fn()
     render(<Tile service={service} categories={categories} locale="de" onLaunch={onLaunch} />)
     await user.click(screen.getByRole('link', { name: /MyShare/ }))
-    expect(onLaunch).toHaveBeenCalledWith(service)
+    expect(onLaunch).toHaveBeenCalledWith(service, undefined, true)
   })
 
-  it('fires onLaunch with the documentation target when the Doku link is activated', async () => {
+  // Issue #27: a deliberate new-tab gesture (Ctrl/Cmd/Shift-click) must still
+  // fire the launch (click tracking is unconditional) but flag plainClick as
+  // false, so Dashboard knows not to clear the search behind it.
+  it.each([
+    ['ctrlKey', '{Control>}', '{/Control}'],
+    ['metaKey', '{Meta>}', '{/Meta}'],
+    ['shiftKey', '{Shift>}', '{/Shift}'],
+  ])('fires onLaunch with plainClick=false on a %s-click', async (_name, down, up) => {
+    const user = userEvent.setup()
+    const onLaunch = vi.fn()
+    render(<Tile service={service} categories={categories} locale="de" onLaunch={onLaunch} />)
+    await user.keyboard(down)
+    await user.click(screen.getByRole('link', { name: /MyShare/ }))
+    await user.keyboard(up)
+    expect(onLaunch).toHaveBeenCalledWith(service, undefined, false)
+  })
+
+  it('fires onLaunch with plainClick=false when the Doku link is activated', async () => {
     const user = userEvent.setup()
     const onLaunch = vi.fn()
     render(<Tile service={service} categories={categories} locale="de" onLaunch={onLaunch} />)
     await user.click(screen.getByRole('link', { name: /Doku/ }))
-    expect(onLaunch).toHaveBeenCalledWith(service, 'documentation')
+    expect(onLaunch).toHaveBeenCalledWith(service, 'documentation', false)
   })
 
   it('has no axe violations with all controls', async () => {
