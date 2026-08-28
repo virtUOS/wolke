@@ -184,8 +184,8 @@ describe('a11y (axe) — prop-driven views', () => {
           currentLocalePref="auto"
           tab="dienste"
           onTab={() => {}}
-          isDark={false}
-          onToggleTheme={() => {}}
+          theme="system"
+          onSetTheme={() => {}}
           onSetLocale={() => {}}
           userInitials="TB"
           userName={me.display_name}

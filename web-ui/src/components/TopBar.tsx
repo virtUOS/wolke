@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { ArrowRight, Bot, Languages, MessageCircleQuestionMark, Moon, Shield, Sun, LogOut } from 'lucide-react'
+import { ArrowRight, Bot, Languages, MessageCircleQuestionMark, Shield, SunMoon, LogOut } from 'lucide-react'
 import { assistantEnabled, contactHref, type Branding } from '@/lib/branding'
 import { t, type Lang } from '@/lib/i18n'
 import type { Me } from '@/lib/api'
@@ -23,8 +23,8 @@ interface TopBarProps {
    *  search results are their own view, so neither tab is highlighted). */
   tab: Tab | null
   onTab: (t: Tab) => void
-  isDark: boolean
-  onToggleTheme: () => void
+  theme: Me['theme']
+  onSetTheme: (next: Me['theme']) => void
   onSetLocale: (locale: Me['locale']) => void
   userInitials: string
   userName: string
@@ -45,8 +45,8 @@ export function TopBar({
   currentLocalePref,
   tab,
   onTab,
-  isDark,
-  onToggleTheme,
+  theme,
+  onSetTheme,
   onSetLocale,
   userInitials,
   userName,
@@ -153,8 +153,8 @@ export function TopBar({
             locale={locale}
             currentLocalePref={currentLocalePref}
             onSetLocale={onSetLocale}
-            isDark={isDark}
-            onToggleTheme={onToggleTheme}
+            theme={theme}
+            onSetTheme={onSetTheme}
             initials={userInitials}
             name={userName}
             email={userEmail}
@@ -181,8 +181,8 @@ interface AccountMenuProps {
   locale: Lang
   currentLocalePref: Me['locale']
   onSetLocale: (locale: Me['locale']) => void
-  isDark: boolean
-  onToggleTheme: () => void
+  theme: Me['theme']
+  onSetTheme: (next: Me['theme']) => void
   initials: string
   name: string
   email?: string
@@ -191,7 +191,7 @@ interface AccountMenuProps {
   onLogout: () => void
 }
 
-function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, isDark, onToggleTheme, initials, name, email, isAdmin, onAdmin, onLogout }: AccountMenuProps) {
+function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, theme, onSetTheme, initials, name, email, isAdmin, onAdmin, onLogout }: AccountMenuProps) {
   const s = t(locale)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -266,6 +266,11 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, isD
           style={{
             position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 20,
             width: 'min(244px, calc(100vw - 24px))',
+            // The 44px mobile touch targets on the rows and pills (issue #28)
+            // make the panel taller than a short phone viewport can fit —
+            // scroll it internally rather than letting it clip or push past
+            // the bottom edge.
+            maxHeight: 'calc(100dvh - 88px)', overflowY: 'auto',
             background: 'var(--bg)', border: '1px solid var(--border)',
             borderRadius: 'var(--radius-md)', boxShadow: '0 12px 32px -12px rgba(0,0,0,.25)',
             padding: '12px',
@@ -292,21 +297,45 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, isD
 
           <div style={{ height: 1, background: 'var(--border)', margin: '0 0 4px' }} aria-hidden="true" />
 
-          {/* Theme toggle (moved here from the top bar). */}
-          <button
-            type="button"
-            style={itemStyle}
-            aria-pressed={isDark}
-            className="hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-            onClick={onToggleTheme}
-          >
-            {isDark ? (
-              <Sun className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
-            ) : (
-              <Moon className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
-            )}
-            <span style={{ flex: 1 }}>{isDark ? s.topbar.toLight : s.topbar.toDark}</span>
-          </button>
+          {/* Theme: a three-way group mirroring the language switcher below it
+              (issue #28) — 'auto' follows prefers-color-scheme, 'light'/'dark'
+              pin it. */}
+          <div style={{ ...itemStyle, cursor: 'default', alignItems: 'flex-start', flexDirection: 'column', gap: 6 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: 'var(--text-muted)', fontSize: 12 }}>
+              <SunMoon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {s.topbar.theme}
+            </span>
+            <div role="group" aria-label={s.topbar.theme} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, width: '100%' }}>
+              {(
+                [
+                  ['system', s.topbar.themeAuto],
+                  ['light', s.topbar.themeLight],
+                  ['dark', s.topbar.themeDark],
+                ] as const
+              ).map(([value, label]) => {
+                const active = theme === value
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => onSetTheme(value)}
+                    style={{
+                      display: 'grid', placeItems: 'center',
+                      flex: '1 1 auto', padding: '5px 6px', fontSize: 12.5, lineHeight: 1.2,
+                      borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                      border: '1px solid var(--border)',
+                      background: active ? 'color-mix(in srgb, var(--accent) 38%, var(--surface))' : 'transparent',
+                      color: 'var(--text)', fontWeight: active ? 600 : 400,
+                    }}
+                    className="min-h-11 min-w-11 hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0 md:min-w-0"
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
           {/* Language switcher: persists as a user pref (locale: auto | de | en).
               'auto' defers to the browser; de/en pin the language. */}
@@ -334,13 +363,14 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, isD
                     aria-pressed={active}
                     onClick={() => onSetLocale(value)}
                     style={{
-                      flex: '1 1 auto', minWidth: 0, padding: '5px 6px', fontSize: 12.5, lineHeight: 1.2,
+                      display: 'grid', placeItems: 'center',
+                      flex: '1 1 auto', padding: '5px 6px', fontSize: 12.5, lineHeight: 1.2,
                       borderRadius: 'var(--radius-sm)', cursor: 'pointer',
                       border: '1px solid var(--border)',
                       background: active ? 'color-mix(in srgb, var(--accent) 38%, var(--surface))' : 'transparent',
                       color: 'var(--text)', fontWeight: active ? 600 : 400,
                     }}
-                    className="hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                    className="min-h-11 min-w-11 hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0 md:min-w-0"
                   >
                     {label}
                   </button>
@@ -359,7 +389,7 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, isD
                   target="_blank"
                   rel="noopener noreferrer"
                   style={itemStyle}
-                  className="hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                  className="min-h-11 hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0"
                 >
                   <Bot className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
                   <span style={{ flex: 1 }}>{s.topbar.bot}</span>
@@ -370,7 +400,7 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, isD
                   href={help.href}
                   {...(help.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   style={itemStyle}
-                  className="hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                  className="min-h-11 hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0"
                 >
                   <MessageCircleQuestionMark className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
                   <span style={{ flex: 1 }}>{s.topbar.help}</span>
@@ -385,7 +415,7 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, isD
             <button
               type="button"
               style={itemStyle}
-              className="hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+              className="min-h-11 hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0"
               onClick={() => { setOpen(false); onAdmin() }}
             >
               <Shield className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
@@ -397,7 +427,7 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, isD
           <button
             type="button"
             style={itemStyle}
-            className="hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+            className="min-h-11 hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0"
             onClick={() => { setOpen(false); onLogout() }}
           >
             <LogOut className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
