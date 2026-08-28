@@ -15,8 +15,9 @@ touches a screen extends the e2e viewport suite in the same PR
 - **No Claude attribution in commits** (CLAUDE.md → "Commits and CI"). No `Co-Authored-By`, no
   "Generated with", nothing.
 - **Definition of done per PR:** `go test -race ./...` (unchanged here, but keep it green),
-  `npm run lint`, `tsc --noEmit`, `npm test`, `make e2e` green across the full matrix, and the
-  embedded build (`web-ui` dist → `internal/web/dist`) committed as the repo already does it.
+  `npm run lint`, `tsc --noEmit`, `npm test`, `make e2e` green across the full matrix, and
+  `make build` succeeds. `internal/web/dist` build output is never committed (CLAUDE.md
+  "Commits and CI") — `git status --porcelain` after `make build` must be empty.
 - **The viewport fixture auto-checks the final state of every test.** Intermediate states (menu
   open, results panel open) must call the helpers explicitly — see `e2e/fixtures.ts` and
   `expectViewportHealthy` in `e2e/helpers/viewport.ts`.

@@ -50,7 +50,7 @@ func TestBackchannelLogoutEndToEnd(t *testing.T) {
 	}
 	sessions := auth.NewSessionStore(db, time.Hour)
 	svc := auth.NewService(authn, sessions, db, &cfg, discardLogger())
-	h, err := New(&cfg, Deps{Logger: discardLogger(), Auth: svc, Users: db})
+	h, err := New(&cfg, Deps{Logger: discardLogger(), Auth: svc, Users: db, SPA: fakeBuiltSPA()})
 	if err != nil {
 		t.Fatalf("router: %v", err)
 	}

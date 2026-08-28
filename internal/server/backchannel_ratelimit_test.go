@@ -50,7 +50,7 @@ func TestBackchannelLogoutNotWriteRateLimited(t *testing.T) {
 		t.Fatalf("authenticator: %v", err)
 	}
 	svc := auth.NewService(authn, auth.NewSessionStore(noopSessionDB{}, time.Hour), nil, &cfg, discardLogger())
-	h, err := New(&cfg, Deps{Logger: discardLogger(), Auth: svc})
+	h, err := New(&cfg, Deps{Logger: discardLogger(), Auth: svc, SPA: fakeBuiltSPA()})
 	if err != nil {
 		t.Fatalf("router: %v", err)
 	}

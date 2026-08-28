@@ -64,7 +64,7 @@ func TestOIDCLoginFlow(t *testing.T) {
 		t.Fatalf("authenticator: %v", err)
 	}
 	svc := auth.NewService(authn, auth.NewSessionStore(db, time.Hour), db, &cfg, discardLogger())
-	h, err := New(&cfg, Deps{Logger: discardLogger(), Auth: svc, Users: db})
+	h, err := New(&cfg, Deps{Logger: discardLogger(), Auth: svc, Users: db, SPA: fakeBuiltSPA()})
 	if err != nil {
 		t.Fatalf("router: %v", err)
 	}

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"testing/fstest"
 
 	"github.com/virtuos/wolke/internal/config"
 )
@@ -18,10 +19,25 @@ func discardLogger() *slog.Logger {
 	return slog.New(slog.NewJSONHandler(io.Discard, nil))
 }
 
+// fakeBuiltSPA stands in for a real `make web-build && make embed` output, so
+// router tests never depend on whether this checkout actually has one.
+func fakeBuiltSPA() fstest.MapFS {
+	return fstest.MapFS{
+		"index.html":            {Data: []byte("<!doctype html><title>wolke</title>")},
+		"sw.js":                 {Data: []byte("// service worker")},
+		"workbox-9c191d2f.js":   {Data: []byte("// workbox runtime")},
+		"assets/app-abc123.js":  {Data: []byte("console.log('app')")},
+		"assets/app-abc123.css": {Data: []byte("body{}")},
+	}
+}
+
 func newTestRouter(t *testing.T, cfg *config.Config, deps Deps) http.Handler {
 	t.Helper()
 	if deps.Logger == nil {
 		deps.Logger = discardLogger()
+	}
+	if deps.SPA == nil {
+		deps.SPA = fakeBuiltSPA()
 	}
 	h, err := New(cfg, deps)
 	if err != nil {

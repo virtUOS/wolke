@@ -138,6 +138,6 @@ e2e-ui: build ## Same suite in Playwright's interactive UI mode
 check: lint test web-check ## Run the full local gate (Go + frontend)
 
 .PHONY: clean
-clean: ## Remove build artifacts (keeps the committed placeholder index.html)
-	rm -rf bin web-ui/dist internal/web/dist/assets
-	git checkout -- internal/web/dist/index.html 2>/dev/null || true
+clean: ## Remove build artifacts (keeps the tracked internal/web/dist/.gitkeep)
+	rm -rf bin web-ui/dist
+	find internal/web/dist -mindepth 1 ! -name '.gitkeep' -delete
