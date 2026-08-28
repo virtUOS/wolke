@@ -4,11 +4,6 @@
 
 import { expect, test } from './fixtures'
 
-// Overflow and readability now hold at every phone width (#23 is fixed); the one
-// remaining phone-width defect is the sub-44px touch targets in the tile, the
-// search field and the footer, so the guard below stays until #69 lands.
-test.fixme(({ isMobile }) => isMobile === true, 'https://github.com/virtUOS/wolke/issues/69')
-
 test('the favorites tab renders the user’s services', async ({ page }) => {
   await page.goto('/')
   // Chrome: the top bar landmark, and the salutation as the page's <h1>.
