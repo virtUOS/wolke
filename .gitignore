@@ -41,3 +41,12 @@ ds-bundle/
 .design-sync/learnings/
 .design-sync/node_modules
 .design-sync/wolke-ds.css
+
+# Local working material — never upstream. `local-archive/` holds historical
+# inputs (design handoffs, HAR captures, seed drafts); `notes` is a personal
+# scratchpad; the tool dirs are per-machine agent/editor state.
+/local-archive/
+/notes
+/.playwright-mcp/
+/.roo/
+/.design-sync/overrides/
