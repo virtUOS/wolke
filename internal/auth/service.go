@@ -35,6 +35,8 @@ type Service struct {
 	cfg      *config.Config
 	log      *slog.Logger
 	secure   bool
+	// seenJTIs refuses replayed back-channel logout tokens (backchannel.go).
+	seenJTIs *jtiCache
 }
 
 // NewService assembles the BFF auth handlers from the authenticator, session
@@ -47,6 +49,7 @@ func NewService(a *Authenticator, sessions *SessionStore, users UserUpserter, cf
 		cfg:      cfg,
 		log:      log,
 		secure:   strings.HasPrefix(cfg.PublicURL, "https://"),
+		seenJTIs: newJTICache(jtiCacheTTL),
 	}
 }
 

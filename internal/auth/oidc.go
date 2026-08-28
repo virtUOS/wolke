@@ -22,10 +22,15 @@ import (
 // code-flow config, and ID-token verification (docs/02 §6). Nothing here is
 // provider-specific — it is built entirely from the discovery document.
 type Authenticator struct {
-	provider     *oidc.Provider
-	verifier     *oidc.IDTokenVerifier
-	oauth        *oauth2.Config
-	endSessionEP string
+	provider *oidc.Provider
+	verifier *oidc.IDTokenVerifier
+	// logoutVerifier checks back-channel logout tokens: same JWKS and issuer,
+	// but exp is optional for logout tokens (spec §2.4), so expiry is checked
+	// by hand in verifyLogoutToken.
+	logoutVerifier *oidc.IDTokenVerifier
+	oauth          *oauth2.Config
+	clientID       string
+	endSessionEP   string
 }
 
 // NewAuthenticator discovers the issuer and builds the code-flow client. The
@@ -46,8 +51,13 @@ func NewAuthenticator(ctx context.Context, cfg *config.Config) (*Authenticator, 
 	endpoint.AuthStyle = oauth2.AuthStyleInParams
 
 	return &Authenticator{
-		provider:     provider,
-		verifier:     provider.Verifier(&oidc.Config{ClientID: cfg.OIDC.ClientID}),
+		provider: provider,
+		verifier: provider.Verifier(&oidc.Config{ClientID: cfg.OIDC.ClientID}),
+		logoutVerifier: provider.Verifier(&oidc.Config{
+			ClientID:        cfg.OIDC.ClientID,
+			SkipExpiryCheck: true, // exp is optional on logout tokens
+		}),
+		clientID:     cfg.OIDC.ClientID,
 		endSessionEP: extra.EndSessionEndpoint,
 		oauth: &oauth2.Config{
 			ClientID:     cfg.OIDC.ClientID,
