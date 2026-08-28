@@ -32,6 +32,9 @@ interface TopBarProps {
   isAdmin: boolean
   onAdmin: () => void
   onLogout: () => void
+  /** Phone layout (< 768px): the bar is two rows and the quick links move into
+   *  the account menu — see the layout note below. */
+  isMobile: boolean
 }
 
 // Editorial sticky top bar: translucent blur, hairline bottom, logo + tabs +
@@ -51,9 +54,42 @@ export function TopBar({
   isAdmin,
   onAdmin,
   onLogout,
+  isMobile,
 }: TopBarProps) {
   const s = t(locale)
   const help = contactHref(branding.help_url)
+  const bot = branding.bot_url && !assistantEnabled(branding) ? branding.bot_url : ''
+
+  // View switcher. These are nav controls, not an ARIA tablist (there's no
+  // tabpanel/arrow-key model behind them), so they signal state with
+  // aria-current — consistent with the admin nav. On a phone it is a full-width
+  // segmented control on its own row (docs/03 §4): the two German labels plus
+  // the logo and the actions do not fit one 324px row, and squeezing them was
+  // what pushed the whole document into horizontal scroll (issue #23).
+  const tabs = (
+    <nav
+      aria-label={s.topbar.mainNav}
+      style={{ display: 'flex', gap: 4, alignItems: 'center', width: isMobile ? '100%' : undefined }}
+    >
+      <PillButton
+        active={tab === 'favoriten'}
+        aria-current={tab === 'favoriten' ? 'page' : undefined}
+        onClick={() => onTab('favoriten')}
+        className={isMobile ? 'min-h-11 flex-1' : undefined}
+      >
+        {s.topbar.favorites}
+      </PillButton>
+      <PillButton
+        active={tab === 'dienste'}
+        aria-current={tab === 'dienste' ? 'page' : undefined}
+        onClick={() => onTab('dienste')}
+        className={isMobile ? 'min-h-11 flex-1' : undefined}
+      >
+        {s.topbar.services}
+      </PillButton>
+    </nav>
+  )
+
   return (
     <header
       style={{
@@ -79,37 +115,21 @@ export function TopBar({
           </span>
         </div>
 
-        {/* Tabs */}
-        {/* View switcher. These are nav controls, not an ARIA tablist (there's no
-            tabpanel/arrow-key model behind them), so they signal state with
-            aria-current — consistent with the admin nav. */}
-        <nav aria-label={s.topbar.mainNav} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          <PillButton
-            active={tab === 'favoriten'}
-            aria-current={tab === 'favoriten' ? 'page' : undefined}
-            onClick={() => onTab('favoriten')}
-          >
-            {s.topbar.favorites}
-          </PillButton>
-          <PillButton
-            active={tab === 'dienste'}
-            aria-current={tab === 'dienste' ? 'page' : undefined}
-            onClick={() => onTab('dienste')}
-          >
-            {s.topbar.services}
-          </PillButton>
-        </nav>
+        {!isMobile && tabs}
 
         <div style={{ flex: 1 }} />
 
-        {/* Actions. The chatbot + help buttons each appear only when their link
-            is configured (branding.bot_url / help_url). The bot link is
-            superseded by the embedded assistant launcher when that is
-            configured. The theme toggle now lives in the account menu. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          {branding.bot_url && !assistantEnabled(branding) && (
+        {/* Actions. The chatbot + help links each appear only when configured
+            (branding.bot_url / help_url); the bot link is superseded by the
+            embedded assistant launcher when that is set. On a phone both move
+            into the account menu, along with the theme toggle — the row has to
+            fit 324px. `position: relative` makes this row, not the individual
+            trigger, the anchor for the two panels below it: anchored to a
+            trigger, a 360px panel hangs off the left edge of a narrow phone. */}
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 2 }}>
+          {!isMobile && bot && (
             <a
-              href={branding.bot_url}
+              href={bot}
               target="_blank"
               rel="noopener noreferrer"
               aria-label={s.topbar.bot}
@@ -118,7 +138,7 @@ export function TopBar({
               <Bot className="h-5 w-5" aria-hidden="true" />
             </a>
           )}
-          {help && (
+          {!isMobile && help && (
             <a
               href={help.href}
               {...(help.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
@@ -141,9 +161,12 @@ export function TopBar({
             isAdmin={isAdmin}
             onAdmin={onAdmin}
             onLogout={onLogout}
+            botUrl={isMobile ? bot : ''}
+            help={isMobile ? help ?? undefined : undefined}
           />
         </div>
       </div>
+      {isMobile && <div className="px-4 pb-2.5">{tabs}</div>}
     </header>
   )
 }
@@ -151,6 +174,10 @@ export function TopBar({
 // ── Account menu ────────────────────────────────────────────────────────────
 
 interface AccountMenuProps {
+  /** Set on a phone: the top-bar chatbot link, moved in here. Empty = omit. */
+  botUrl: string
+  /** Set on a phone: the top-bar help link, moved in here. */
+  help?: { href: string; external: boolean }
   locale: Lang
   currentLocalePref: Me['locale']
   onSetLocale: (locale: Me['locale']) => void
@@ -164,7 +191,7 @@ interface AccountMenuProps {
   onLogout: () => void
 }
 
-function AccountMenu({ locale, currentLocalePref, onSetLocale, isDark, onToggleTheme, initials, name, email, isAdmin, onAdmin, onLogout }: AccountMenuProps) {
+function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, isDark, onToggleTheme, initials, name, email, isAdmin, onAdmin, onLogout }: AccountMenuProps) {
   const s = t(locale)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -201,7 +228,9 @@ function AccountMenu({ locale, currentLocalePref, onSetLocale, isDark, onToggleT
   }
 
   return (
-    <div ref={rootRef} style={{ position: 'relative' }}>
+    // Not positioned: the panel anchors to the actions row above, which is what
+    // keeps it inside the viewport on a narrow phone.
+    <div ref={rootRef}>
       <button
         ref={triggerRef}
         type="button"
@@ -210,16 +239,21 @@ function AccountMenu({ locale, currentLocalePref, onSetLocale, isDark, onToggleT
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((o) => !o)}
-        style={{
-          display: 'grid', placeItems: 'center',
-          width: 26, height: 26, borderRadius: '50%', border: 'none',
-          background: 'color-mix(in srgb, var(--accent) 38%, var(--surface))',
-          color: 'var(--text)', fontSize: 12, fontWeight: 700, letterSpacing: '.02em',
-          cursor: 'pointer', padding: 0,
-        }}
-        className="focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-1"
+        style={{ display: 'grid', placeItems: 'center', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
+        // The disc stays 26px; the button around it is a 44px touch target on a
+        // phone and collapses to the disc from `md` up (docs/03 §4).
+        className="h-11 w-11 rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-1 md:h-[26px] md:w-[26px]"
       >
-        {initials}
+        <span
+          style={{
+            display: 'grid', placeItems: 'center',
+            width: 26, height: 26, borderRadius: '50%',
+            background: 'color-mix(in srgb, var(--accent) 38%, var(--surface))',
+            color: 'var(--text)', fontSize: 12, fontWeight: 700, letterSpacing: '.02em',
+          }}
+        >
+          {initials}
+        </span>
       </button>
 
       {open && (
@@ -231,7 +265,7 @@ function AccountMenu({ locale, currentLocalePref, onSetLocale, isDark, onToggleT
           tabIndex={-1}
           style={{
             position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 20,
-            width: 244,
+            width: 'min(244px, calc(100vw - 24px))',
             background: 'var(--bg)', border: '1px solid var(--border)',
             borderRadius: 'var(--radius-md)', boxShadow: '0 12px 32px -12px rgba(0,0,0,.25)',
             padding: '12px',
@@ -314,6 +348,36 @@ function AccountMenu({ locale, currentLocalePref, onSetLocale, isDark, onToggleT
               })}
             </div>
           </div>
+
+          {/* Chatbot + help: top-bar icons on a desktop, menu items on a phone. */}
+          {(botUrl || help) && (
+            <>
+              <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} aria-hidden="true" />
+              {botUrl && (
+                <a
+                  href={botUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={itemStyle}
+                  className="hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                >
+                  <Bot className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
+                  <span style={{ flex: 1 }}>{s.topbar.bot}</span>
+                </a>
+              )}
+              {help && (
+                <a
+                  href={help.href}
+                  {...(help.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                  style={itemStyle}
+                  className="hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                >
+                  <MessageCircleQuestionMark className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
+                  <span style={{ flex: 1 }}>{s.topbar.help}</span>
+                </a>
+              )}
+            </>
+          )}
 
           <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} aria-hidden="true" />
 

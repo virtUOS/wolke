@@ -193,6 +193,7 @@ describe('a11y (axe) — prop-driven views', () => {
           isAdmin={me.is_admin}
           onAdmin={() => {}}
           onLogout={() => {}}
+          isMobile={false}
         />
       </QueryClientProvider>,
     )

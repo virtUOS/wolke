@@ -30,11 +30,15 @@ function withClient(ui: ReactNode) {
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>
 }
 
-function renderTopBar(tab: Tab | null, onTab: (t: Tab) => void = () => {}) {
+function renderTopBar(
+  tab: Tab | null,
+  onTab: (t: Tab) => void = () => {},
+  opts: { isMobile?: boolean; branding?: Branding } = {},
+) {
   return render(
     withClient(
       <TopBar
-        branding={branding}
+        branding={opts.branding ?? branding}
         locale="de"
         currentLocalePref="auto"
         tab={tab}
@@ -47,6 +51,7 @@ function renderTopBar(tab: Tab | null, onTab: (t: Tab) => void = () => {}) {
         isAdmin={false}
         onAdmin={() => {}}
         onLogout={() => {}}
+        isMobile={opts.isMobile ?? false}
       />,
     ),
   )
@@ -78,5 +83,45 @@ describe('TopBar section tabs', () => {
     expect(onTab).toHaveBeenCalledWith('dienste')
     await user.click(screen.getByRole('button', { name: 'Favoriten' }))
     expect(onTab).toHaveBeenCalledWith('favoriten')
+  })
+
+  it('reports tab clicks from the phone layout too', async () => {
+    const user = userEvent.setup()
+    const onTab = vi.fn()
+    renderTopBar('favoriten', onTab, { isMobile: true })
+    await user.click(screen.getByRole('button', { name: 'Dienste' }))
+    expect(onTab).toHaveBeenCalledWith('dienste')
+  })
+})
+
+// The 324px row cannot hold the logo, the tabs and four actions, which is what
+// pushed the whole document into horizontal scroll (issue #23). On a phone the
+// quick links move into the account menu instead of being dropped.
+describe('TopBar quick links', () => {
+  const linked = { ...branding, bot_url: 'https://bot.example.edu', help_url: 'https://help.example.edu' }
+
+  beforeEach(() => {
+    vi.spyOn(api, 'announcements').mockResolvedValue({ announcements: [] })
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  it('shows them in the bar on a desktop', () => {
+    renderTopBar('favoriten', () => {}, { branding: linked })
+    expect(screen.getByRole('banner').querySelector('a[href="https://bot.example.edu"]')).not.toBeNull()
+    expect(screen.getByRole('banner').querySelector('a[href="https://help.example.edu"]')).not.toBeNull()
+  })
+
+  it('moves them into the account menu on a phone', async () => {
+    const user = userEvent.setup()
+    renderTopBar('favoriten', () => {}, { branding: linked, isMobile: true })
+
+    // Not in the bar itself…
+    expect(screen.queryByRole('link', { name: 'Chatbot' })).toBeNull()
+
+    // …but present once the account menu is open.
+    await user.click(screen.getByRole('button', { name: /Konto-Menü/ }))
+    const menu = screen.getByRole('dialog')
+    expect(menu.querySelector('a[href="https://bot.example.edu"]')).not.toBeNull()
+    expect(menu.querySelector('a[href="https://help.example.edu"]')).not.toBeNull()
   })
 })
