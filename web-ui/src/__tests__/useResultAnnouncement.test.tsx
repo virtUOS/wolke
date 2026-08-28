@@ -9,8 +9,15 @@ import { ANNOUNCEMENT_MS, useResultAnnouncement } from '@/lib/hooks'
 
 const count = (n: number) => `${n} ${n === 1 ? 'Dienst' : 'Dienste'}`
 
-function setup(initial: { count: number | null; message: string }) {
-  return renderHook(({ count: c, message }: { count: number | null; message: string }) => useResultAnnouncement(c, message), {
+interface Props {
+  count: number | null
+  message: string
+  /** Defaults to a constant so existing cases keep exercising "same search settles again". */
+  key?: string
+}
+
+function setup(initial: Props) {
+  return renderHook(({ count: c, message, key }: Props) => useResultAnnouncement(c, message, key ?? 'q'), {
     initialProps: initial,
   })
 }
@@ -39,10 +46,18 @@ describe('useResultAnnouncement', () => {
     expect(result.current).toBe('')
   })
 
-  it('stays quiet when the count is unchanged', () => {
+  it('stays quiet when the same search settles again with the same count', () => {
     const { result, rerender } = setup({ count: 7, message: count(7) })
     rerender({ count: 7, message: count(7) })
     expect(result.current).toBe('')
+  })
+
+  // issue: a screen-reader user gets silence when a *new* search happens to
+  // turn up the same number of results as the last one.
+  it('announces a new settled search even when its count matches the previous one', () => {
+    const { result, rerender } = setup({ count: 7, message: count(7), key: 'Stud.IP' })
+    rerender({ count: 7, message: count(7), key: 'IdM' })
+    expect(result.current).toBe('7 Dienste')
   })
 
   it('does not announce on a message change alone (locale switch)', () => {

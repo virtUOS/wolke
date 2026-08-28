@@ -41,20 +41,27 @@ export const ANNOUNCEMENT_MS = 5000
  *   in-flight query's count is stale, and the first settled value is the
  *   baseline (the page just loaded), not news.
  * @param message the announcement for the current count.
+ * @param settleKey identifies *what* was searched/filtered to produce this
+ *   count (e.g. the query text) — distinct from a re-render that leaves the
+ *   same search settled, such as a locale switch (new message, same count,
+ *   same key). A settle with a new key is news even when the count happens
+ *   to match the previous one: two different searches that both turn up 3
+ *   results are still two separate results a screen-reader user typed for.
  */
-export function useResultAnnouncement(count: number | null, message: string): string {
+export function useResultAnnouncement(count: number | null, message: string, settleKey: string): string {
   const [announcement, setAnnouncement] = useState('')
-  const previous = useRef<number | null>(null)
+  const previous = useRef<{ key: string; count: number } | null>(null)
 
   useEffect(() => {
     if (count === null) return
     const last = previous.current
-    previous.current = count
-    // Nothing to announce on the first settled value, or when the count is
-    // unchanged (a locale switch re-runs this with a new message, not new news).
-    if (last === null || last === count) return
+    previous.current = { key: settleKey, count }
+    // Nothing to announce on the first settled value, or when neither the
+    // search nor its count changed (a locale switch re-runs this with a new
+    // message, not new news).
+    if (last === null || (last.key === settleKey && last.count === count)) return
     setAnnouncement(message)
-  }, [count, message])
+  }, [count, message, settleKey])
 
   // The hide timer belongs to the *announcement*, not to the count. Owned by the
   // effect above it was cleared whenever the count changed again — including

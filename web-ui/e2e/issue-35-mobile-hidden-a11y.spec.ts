@@ -37,4 +37,20 @@ test.describe('issue #35 — the accessibility tree matches what is on screen', 
     await page.getByRole('searchbox').fill('Netzspeicher')
     await expect(liveRegion).toHaveText(/1 Dienst/)
   })
+
+  // opacity:0 is a legitimate way to render content that is present and laid
+  // out but not (yet) visible — an animation's initial state, a deliberately
+  // transparent hit target — as opposed to the responsive layout dropping
+  // information on purpose. It must not trip the orphan check the way
+  // genuinely dropped content does.
+  test('an opacity-0 element does not fail the invisible-announced check', async ({ page }) => {
+    await gotoApp(page)
+    await page.evaluate(() => {
+      const el = document.createElement('p')
+      el.textContent = 'E2E opacity-zero probe'
+      el.style.opacity = '0'
+      document.querySelector('main')!.appendChild(el)
+    })
+    await expectNothingInvisibleAnnounced(page, 'opacity-0 probe')
+  })
 })

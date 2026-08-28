@@ -224,11 +224,23 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     return tr.dash.allServices
   }, [searching, tab, filter, allCategories, locale, tr])
 
-  // Announce only settled numbers: see useResultAnnouncement.
+  // Announce only settled numbers: see useResultAnnouncement. The key names
+  // *what* produced the count (search text, or the active tab/filter) so a
+  // new search that happens to match the previous result count still
+  // announces, while a re-render of the same settled search (e.g. a locale
+  // switch) does not.
   const countSettled = !catalog.isLoading && !favorites.isLoading && !searchPending && !searchFailed
+  const settleKey = searching
+    ? `search:${debouncedQuery}`
+    : tab === 'favoriten'
+      ? 'favoriten'
+      : filter.kind === 'category'
+        ? `category:${filter.slug}`
+        : filter.kind
   const resultAnnouncement = useResultAnnouncement(
     countSettled ? results.length : null,
     tr.dash.resultCount(results.length),
+    settleKey,
   )
 
   const favCount = favoriteServices.length
