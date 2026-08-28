@@ -97,13 +97,13 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           </div>
 
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
               {/* break-words + hyphens-auto: a long German compound
                   ("Identitätsmanagement") is wider than the column at 324px and
                   would otherwise overflow its box (CLAUDE.md, issue #23). */}
               <span
                 className="break-words hyphens-auto"
-                style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em' }}
+                style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em', minWidth: 0 }}
               >
                 {service.name}
               </span>

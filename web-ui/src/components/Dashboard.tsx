@@ -244,7 +244,8 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
       navigate({ tab: next, filter: { kind: 'all' }, admin: false })
     },
     isDark,
-    onToggleTheme: () => prefs.mutate({ theme: isDark ? 'light' : 'dark' }),
+    theme: me.theme,
+    onSetTheme: (next: Me['theme']) => prefs.mutate({ theme: next }),
     onSetLocale: (next: Me['locale']) => prefs.mutate({ locale: next }),
     onAdmin: () => navigate({ ...view, admin: true }),
     isMobile,

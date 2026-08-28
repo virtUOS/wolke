@@ -1,9 +1,9 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TopBar, type Tab } from '@/components/TopBar'
-import { api } from '@/lib/api'
+import { api, type Me } from '@/lib/api'
 import type { Branding } from '@/lib/branding'
 
 const branding = {
@@ -33,7 +33,7 @@ function withClient(ui: ReactNode) {
 function renderTopBar(
   tab: Tab | null,
   onTab: (t: Tab) => void = () => {},
-  opts: { isMobile?: boolean; branding?: Branding } = {},
+  opts: { isMobile?: boolean; branding?: Branding; theme?: Me['theme']; onSetTheme?: (next: Me['theme']) => void } = {},
 ) {
   return render(
     withClient(
@@ -43,8 +43,8 @@ function renderTopBar(
         currentLocalePref="auto"
         tab={tab}
         onTab={onTab}
-        isDark={false}
-        onToggleTheme={() => {}}
+        theme={opts.theme ?? 'system'}
+        onSetTheme={opts.onSetTheme ?? (() => {})}
         onSetLocale={() => {}}
         userInitials="TB"
         userName="Tim B"
@@ -123,5 +123,44 @@ describe('TopBar quick links', () => {
     const menu = screen.getByRole('dialog')
     expect(menu.querySelector('a[href="https://bot.example.edu"]')).not.toBeNull()
     expect(menu.querySelector('a[href="https://help.example.edu"]')).not.toBeNull()
+  })
+})
+
+// Issue #28: the theme control in the account menu must be a three-way group
+// (Automatisch | Hell | Dunkel) that mirrors the language switcher right below
+// it, not a single toggle button.
+describe('TopBar theme group', () => {
+  beforeEach(() => {
+    vi.spyOn(api, 'announcements').mockResolvedValue({ announcements: [] })
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  async function openMenu() {
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /Konto-Menü/ }))
+    return { user, group: screen.getByRole('group', { name: 'Farbschema' }) }
+  }
+
+  it('renders three options and marks the active one aria-pressed', async () => {
+    renderTopBar('favoriten', () => {}, { theme: 'light' })
+    const { group } = await openMenu()
+    const g = within(group)
+    expect(g.getByRole('button', { name: 'Automatisch' })).toHaveAttribute('aria-pressed', 'false')
+    expect(g.getByRole('button', { name: 'Hell' })).toHaveAttribute('aria-pressed', 'true')
+    expect(g.getByRole('button', { name: 'Dunkel' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('each option calls onSetTheme with system/light/dark', async () => {
+    const onSetTheme = vi.fn()
+    renderTopBar('favoriten', () => {}, { theme: 'system', onSetTheme })
+    const { user, group } = await openMenu()
+    const g = within(group)
+
+    await user.click(g.getByRole('button', { name: 'Hell' }))
+    expect(onSetTheme).toHaveBeenCalledWith('light')
+    await user.click(g.getByRole('button', { name: 'Dunkel' }))
+    expect(onSetTheme).toHaveBeenCalledWith('dark')
+    await user.click(g.getByRole('button', { name: 'Automatisch' }))
+    expect(onSetTheme).toHaveBeenCalledWith('system')
   })
 })
