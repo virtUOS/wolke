@@ -1,5 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import { render } from '@testing-library/react'
+import { PillButton } from '@/components/ui/pill-button'
 
 // Guards the UI-primitive convention (src/components/ui/README.md, rule #1):
 // primitives are pure presentation and must never fetch or own server state.
@@ -32,5 +34,23 @@ describe('UI primitives stay presentational', () => {
     // is allowed; `import { … } from '@/lib/api'` is not.
     const runtimeApiImport = /import\s+(?!type\b)[^;]*from\s+['"]@\/lib\/api['"]/
     expect(src).not.toMatch(runtimeApiImport)
+  })
+})
+
+// Issue #30: the section tabs (and every pill built on PillButton — category
+// filters, view-mode switches) navigate like links, so they get a pointer
+// cursor like one. A disabled pill (there aren't any today, but the variant is
+// supported) must not claim to be clickable.
+describe('PillButton cursor affordance (issue #30)', () => {
+  it('carries a pointer cursor', () => {
+    const { getByRole } = render(<PillButton>Alle</PillButton>)
+    expect(getByRole('button').className).toMatch(/\bcursor-pointer\b/)
+  })
+
+  it('a disabled pill does not get a pointer cursor', () => {
+    const { getByRole } = render(<PillButton disabled>Alle</PillButton>)
+    const el = getByRole('button')
+    expect(el.className).toMatch(/\bcursor-pointer\b/) // base class is still present…
+    expect(el.className).toMatch(/\bdisabled:cursor-default\b/) // …but overridden when disabled
   })
 })

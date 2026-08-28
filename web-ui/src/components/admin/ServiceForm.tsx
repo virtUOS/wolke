@@ -213,7 +213,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
                     type="button"
                     aria-label={s.admin.keywordRemove(kw)}
                     onClick={() => removeKeyword(kw)}
-                    className="grid h-4 w-4 place-items-center rounded text-text-muted hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                    className="grid h-4 w-4 cursor-pointer place-items-center rounded text-text-muted hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
                   >
                     <X className="h-3 w-3" aria-hidden="true" />
                   </button>
