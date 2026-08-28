@@ -32,8 +32,9 @@ interface TopBarProps {
   isAdmin: boolean
   onAdmin: () => void
   onLogout: () => void
-  /** Phone layout (< 768px): the bar is two rows and the quick links move into
-   *  the account menu — see the layout note below. */
+  /** Phone layout (below the MOBILE_BREAKPOINT_PX breakpoint, src/lib/breakpoints.ts):
+   *  the bar is two rows and the quick links move into the account menu — see
+   *  the layout note below. */
   isMobile: boolean
 }
 
@@ -191,6 +192,48 @@ interface AccountMenuProps {
   onLogout: () => void
 }
 
+// The theme and language switchers are both a labelled group of pill buttons
+// over a small set of (value, label) options, differing only in the options
+// and the setter — one component instead of two near-identical button blocks.
+function OptionGroup<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  options: readonly (readonly [T, string])[]
+  value: T
+  onChange: (next: T) => void
+}) {
+  return (
+    <div role="group" aria-label={label} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, width: '100%' }}>
+      {options.map(([optionValue, optionLabel]) => {
+        const active = value === optionValue
+        return (
+          <button
+            key={optionValue}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(optionValue)}
+            style={{
+              display: 'grid', placeItems: 'center',
+              flex: '1 1 auto', padding: '5px 6px', fontSize: 12.5, lineHeight: 1.2,
+              borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+              border: '1px solid var(--border)',
+              background: active ? 'color-mix(in srgb, var(--accent) 38%, var(--surface))' : 'transparent',
+              color: 'var(--text)', fontWeight: active ? 600 : 400,
+            }}
+            className="min-h-11 min-w-11 hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0 md:min-w-0"
+          >
+            {optionLabel}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, theme, onSetTheme, initials, name, email, isAdmin, onAdmin, onLogout }: AccountMenuProps) {
   const s = t(locale)
   const [open, setOpen] = useState(false)
@@ -305,36 +348,18 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, the
               <SunMoon className="h-4 w-4 shrink-0" aria-hidden="true" />
               {s.topbar.theme}
             </span>
-            <div role="group" aria-label={s.topbar.theme} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, width: '100%' }}>
-              {(
+            <OptionGroup
+              label={s.topbar.theme}
+              value={theme}
+              onChange={onSetTheme}
+              options={
                 [
                   ['system', s.topbar.themeAuto],
                   ['light', s.topbar.themeLight],
                   ['dark', s.topbar.themeDark],
                 ] as const
-              ).map(([value, label]) => {
-                const active = theme === value
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => onSetTheme(value)}
-                    style={{
-                      display: 'grid', placeItems: 'center',
-                      flex: '1 1 auto', padding: '5px 6px', fontSize: 12.5, lineHeight: 1.2,
-                      borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                      border: '1px solid var(--border)',
-                      background: active ? 'color-mix(in srgb, var(--accent) 38%, var(--surface))' : 'transparent',
-                      color: 'var(--text)', fontWeight: active ? 600 : 400,
-                    }}
-                    className="min-h-11 min-w-11 hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0 md:min-w-0"
-                  >
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
+              }
+            />
           </div>
 
           {/* Language switcher: persists as a user pref (locale: auto | de | en).
@@ -347,36 +372,18 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, the
             {/* Wraps rather than forcing three equal columns: at the panel's width
                 the three German/English labels don't fit one row, and equal
                 columns made the last one overflow the panel by a few px. */}
-            <div role="group" aria-label={s.topbar.language} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, width: '100%' }}>
-              {(
+            <OptionGroup
+              label={s.topbar.language}
+              value={currentLocalePref}
+              onChange={onSetLocale}
+              options={
                 [
                   ['auto', s.topbar.langAuto],
                   ['de', s.topbar.langDe],
                   ['en', s.topbar.langEn],
                 ] as const
-              ).map(([value, label]) => {
-                const active = currentLocalePref === value
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => onSetLocale(value)}
-                    style={{
-                      display: 'grid', placeItems: 'center',
-                      flex: '1 1 auto', padding: '5px 6px', fontSize: 12.5, lineHeight: 1.2,
-                      borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                      border: '1px solid var(--border)',
-                      background: active ? 'color-mix(in srgb, var(--accent) 38%, var(--surface))' : 'transparent',
-                      color: 'var(--text)', fontWeight: active ? 600 : 400,
-                    }}
-                    className="min-h-11 min-w-11 hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0 md:min-w-0"
-                  >
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
+              }
+            />
           </div>
 
           {/* Chatbot + help: top-bar icons on a desktop, menu items on a phone. */}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Wrench, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { assistantEnabled, type Branding } from '@/lib/branding'
+import { DESKTOP_MEDIA_QUERY } from '@/lib/breakpoints'
 import { api, localized, type Category, type Me, type Service } from '@/lib/api'
 import { t, effectiveLocale } from '@/lib/i18n'
 import { applyFilter, filterEq, type Filter } from '@/lib/catalog-filter'
@@ -71,9 +72,9 @@ function SearchBox({
 }
 
 function useIsMobile(): boolean {
-  const [mobile, setMobile] = useState(() => !window.matchMedia('(min-width: 768px)').matches)
+  const [mobile, setMobile] = useState(() => !window.matchMedia(DESKTOP_MEDIA_QUERY).matches)
   useEffect(() => {
-    const mql = window.matchMedia('(min-width: 768px)')
+    const mql = window.matchMedia(DESKTOP_MEDIA_QUERY)
     const on = () => setMobile(!mql.matches)
     mql.addEventListener('change', on)
     return () => mql.removeEventListener('change', on)
