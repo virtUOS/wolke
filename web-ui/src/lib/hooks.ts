@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type Announcement, type Catalog, type Me, type Service } from './api'
 
@@ -22,6 +22,51 @@ export function useDebouncedValue<T>(value: T, delayMs: number): T {
     return () => clearTimeout(id)
   }, [value, delayMs])
   return debounced
+}
+
+/** How long the result-count live region keeps its message before going quiet. */
+export const ANNOUNCEMENT_MS = 5000
+
+/**
+ * useResultAnnouncement returns the text for the dashboard's polite live region:
+ * the result count, but only for a short window after it *changes*, and never on
+ * first render.
+ *
+ * Empty at rest is the whole point (issue #35) — a permanently populated sr-only
+ * node is a stop in the screen reader's reading order with nothing on the screen
+ * to match it, which on a phone is an empty box between the search field and the
+ * first tile.
+ *
+ * @param count the settled result count, or null while it is still arriving — an
+ *   in-flight query's count is stale, and the first settled value is the
+ *   baseline (the page just loaded), not news.
+ * @param message the announcement for the current count.
+ */
+export function useResultAnnouncement(count: number | null, message: string): string {
+  const [announcement, setAnnouncement] = useState('')
+  const previous = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (count === null) return
+    const last = previous.current
+    previous.current = count
+    // Nothing to announce on the first settled value, or when the count is
+    // unchanged (a locale switch re-runs this with a new message, not new news).
+    if (last === null || last === count) return
+    setAnnouncement(message)
+  }, [count, message])
+
+  // The hide timer belongs to the *announcement*, not to the count. Owned by the
+  // effect above it was cleared whenever the count changed again — including
+  // count → null when the next keystroke put a query in flight — and the early
+  // return then set no replacement, leaving the region populated for good.
+  useEffect(() => {
+    if (announcement === '') return
+    const timer = setTimeout(() => setAnnouncement(''), ANNOUNCEMENT_MS)
+    return () => clearTimeout(timer)
+  }, [announcement])
+
+  return announcement
 }
 
 // useSearch runs the server-side search for a (trimmed) query. It's the single

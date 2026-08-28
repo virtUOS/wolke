@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Wrench, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { assistantEnabled, type Branding } from '@/lib/branding'
@@ -14,6 +14,7 @@ import {
   useFavorites,
   usePrefersDark,
   usePrefsMutation,
+  useResultAnnouncement,
   useSearch,
 } from '@/lib/hooks'
 import { useAnnouncements } from '@/lib/admin-hooks'
@@ -67,40 +68,6 @@ function SearchBox({
       )}
     </div>
   )
-}
-
-// useResultAnnouncement returns the text for the polite live region: the result
-// count, but only for a short window after it *changes*, and never on first
-// render. Empty at rest is the point (issue #35) — a permanently populated
-// sr-only node is a stop in the screen reader's reading order with nothing on
-// the screen to match it, which on a phone is an empty box between the search
-// field and the first tile.
-const ANNOUNCEMENT_MS = 5000
-
-/**
- * @param count the settled result count, or null while it is still arriving —
- *   an in-flight query's count is stale, and the first settled value is the
- *   baseline (the page just loaded), not news.
- */
-function useResultAnnouncement(count: number | null, message: string): string {
-  const [announcement, setAnnouncement] = useState('')
-  const previous = useRef<number | null>(null)
-
-  useEffect(() => {
-    if (count === null) return
-    if (previous.current === null || previous.current === count) {
-      previous.current = count
-      return
-    }
-    previous.current = count
-    setAnnouncement(message)
-    // Deps are unchanged by our own setState, so this timer is not reset by the
-    // re-render it causes.
-    const timer = setTimeout(() => setAnnouncement(''), ANNOUNCEMENT_MS)
-    return () => clearTimeout(timer)
-  }, [count, message])
-
-  return announcement
 }
 
 function useIsMobile(): boolean {

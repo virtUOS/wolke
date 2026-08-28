@@ -7,18 +7,55 @@
 
 import { expect, type Page } from '@playwright/test'
 
-/** Snapshot lines that carry announced *content* (as opposed to a control's name). */
-const CONTENT_LINE = /^\s*-\s+(?:text|paragraph|heading[^:]*|listitem|caption):\s*(\S.*)$/
+// Roles whose text is announced *content*, as opposed to a control's accessible
+// name (a link or button may legitimately be labelled differently from its
+// visible text — an icon button has no visible text at all).
+const CONTENT_ROLES = 'text|paragraph|heading|listitem|caption'
 
-/** The announced text content of the page, one entry per accessibility-tree node. */
-export async function announcedText(page: Page): Promise<string[]> {
-  const snapshot = await page.locator('body').ariaSnapshot()
+// An aria snapshot writes a node two different ways, and both carry content:
+//   - text: 4 Dienste                     ← role, then a YAML value
+//   - heading "Guten Tag, Test." [level=1] ← role, then a quoted name (+ attrs)
+// A value is quoted whenever it needs to be (a colon in the text, say), so the
+// quotes have to come off before comparing it with what is on the screen.
+const NAMED_LINE = new RegExp(`^\\s*-\\s+(?:${CONTENT_ROLES})\\s+("(?:[^"\\\\]|\\\\.)*"|'(?:[^']|'')*')`)
+const KEYED_LINE = new RegExp(`^\\s*-\\s+(?:${CONTENT_ROLES}):\\s*(.*)$`)
+
+/** A YAML block scalar header (`|`, `>-`, `|2`, …): the value is on later lines. */
+const BLOCK_SCALAR = /^[|>][-+]?\d*$|^[|>]\d*[-+]?$/
+
+/** Strips YAML quoting from a scalar, leaving the text a reader would announce. */
+export function unquoteScalar(value: string): string {
+  if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+    return value.slice(1, -1).replace(/\\(.)/g, '$1')
+  }
+  if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1).replace(/''/g, "'")
+  }
+  return value
+}
+
+/**
+ * The announced text content of an aria snapshot, one entry per node — the pure
+ * half of announcedText(), so the line grammar above can be unit-tested.
+ *
+ * Known gap: a block scalar's value lives on the following lines and is skipped
+ * (reporting the literal "|" as announced text would be a false positive).
+ */
+export function announcedTextFromSnapshot(snapshot: string): string[] {
   const out: string[] = []
   for (const line of snapshot.split('\n')) {
-    const m = CONTENT_LINE.exec(line)
-    if (m) out.push(m[1].replace(/\s+/g, ' ').trim())
+    const named = NAMED_LINE.exec(line)
+    const raw = named ? named[1] : KEYED_LINE.exec(line)?.[1]?.trim()
+    if (raw === undefined || raw === '' || BLOCK_SCALAR.test(raw)) continue
+    const text = unquoteScalar(raw).replace(/\s+/g, ' ').trim()
+    if (text !== '') out.push(text)
   }
   return out
+}
+
+/** The announced text content of the live page, one entry per accessibility-tree node. */
+export async function announcedText(page: Page): Promise<string[]> {
+  return announcedTextFromSnapshot(await page.locator('body').ariaSnapshot())
 }
 
 /** All text a sighted user can actually read at this viewport, as one normalized string. */
