@@ -105,6 +105,7 @@ func TestBackchannelLogoutEndToEnd(t *testing.T) {
 			"iss": idp.Issuer(),
 			"aud": "wolke",
 			"iat": time.Now().Unix(),
+			"exp": time.Now().Add(2 * time.Minute).Unix(),
 			"jti": jti,
 			"events": map[string]any{
 				"http://schemas.openid.net/event/backchannel-logout": map[string]any{},

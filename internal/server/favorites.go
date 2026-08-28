@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/service"
 )
 
@@ -24,7 +25,7 @@ func listFavorites(c *catalog.Cache, db service.FavoritesStore) http.HandlerFunc
 		}
 		snap, err := c.Get(r.Context())
 		if err != nil {
-			writeProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
 			return
 		}
 		services := make([]catalog.Service, 0, len(ids))
@@ -74,12 +75,12 @@ func decodeServiceID(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool)
 		ServiceID string `json:"service_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
+		httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 		return pgtype.UUID{}, false
 	}
 	id, ok := parseUUID(body.ServiceID)
 	if !ok {
-		writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid service id.")
+		httpx.WriteProblem(w, http.StatusBadRequest, "invalid_id", "Invalid service id.")
 		return pgtype.UUID{}, false
 	}
 	return id, true
@@ -91,11 +92,11 @@ func writeServiceError(w http.ResponseWriter, err error) {
 	var nf *service.NotFoundError
 	switch {
 	case errors.As(err, &ve):
-		writeProblem(w, http.StatusBadRequest, "invalid", ve.Error())
+		httpx.WriteProblem(w, http.StatusBadRequest, "invalid", ve.Error())
 	case errors.As(err, &nf):
-		writeProblem(w, http.StatusNotFound, "not_found", nf.Error())
+		httpx.WriteProblem(w, http.StatusNotFound, "not_found", nf.Error())
 	default:
-		writeProblem(w, http.StatusInternalServerError, "internal", "Unexpected error.")
+		httpx.WriteProblem(w, http.StatusInternalServerError, "internal", "Unexpected error.")
 	}
 }
 

@@ -15,15 +15,17 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 )
 
 // IDP is a fake OIDC issuer. Issuer() is the httptest base URL; tokens signed
 // with Sign verify against its JWKS.
 type IDP struct {
-	srv *httptest.Server
-	key *rsa.PrivateKey
-	kid string
+	srv      *httptest.Server
+	key      *rsa.PrivateKey
+	kid      string
+	jwksHits atomic.Int64
 }
 
 // New starts the issuer double; it is shut down via t.Cleanup.
@@ -46,6 +48,7 @@ func New(t *testing.T) *IDP {
 		})
 	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, _ *http.Request) {
+		idp.jwksHits.Add(1)
 		writeJSON(t, w, map[string]any{
 			"keys": []map[string]any{{
 				"kty": "RSA",
@@ -72,8 +75,8 @@ func (i *IDP) Sign(t *testing.T, claims map[string]any) string {
 	return signRS256(t, i.key, i.kid, claims)
 }
 
-// SignWithWrongKey signs with a fresh key the JWKS does not serve, for
-// bad-signature cases.
+// SignWithWrongKey signs with a fresh key the JWKS does not serve but keeps
+// the served kid, for bad-signature cases.
 func (i *IDP) SignWithWrongKey(t *testing.T, claims map[string]any) string {
 	t.Helper()
 	other, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -82,6 +85,21 @@ func (i *IDP) SignWithWrongKey(t *testing.T, claims map[string]any) string {
 	}
 	return signRS256(t, other, i.kid, claims)
 }
+
+// SignWithUnknownKey signs with a fresh key under a kid the JWKS does not
+// list, for cache-miss/refetch cases (a verifier must go back to the JWKS to
+// learn the kid is unknown).
+func (i *IDP) SignWithUnknownKey(t *testing.T, claims map[string]any) string {
+	t.Helper()
+	other, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate unknown-kid key: %v", err)
+	}
+	return signRS256(t, other, "unknown-kid", claims)
+}
+
+// JWKSHits reports how many times the JWKS endpoint was fetched.
+func (i *IDP) JWKSHits() int64 { return i.jwksHits.Load() }
 
 func signRS256(t *testing.T, key *rsa.PrivateKey, kid string, claims map[string]any) string {
 	t.Helper()

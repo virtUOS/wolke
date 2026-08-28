@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/auth"
+	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -46,7 +47,7 @@ func userFromContext(ctx context.Context) (store.User, bool) {
 func requireUserJSON(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := userFromContext(r.Context()); !ok {
-			writeProblem(w, http.StatusUnauthorized, "unauthenticated", "Login required.")
+			httpx.WriteProblem(w, http.StatusUnauthorized, "unauthenticated", "Login required.")
 			return
 		}
 		next.ServeHTTP(w, r)

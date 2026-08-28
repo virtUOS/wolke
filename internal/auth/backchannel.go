@@ -4,13 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"slices"
 	"sync"
 	"time"
+
+	"github.com/virtuos/wolke/internal/httpx"
 )
 
 // OIDC Back-Channel Logout 1.0 (docs/specs/m3-backchannel-logout.md): the IdP
@@ -84,23 +84,19 @@ func (c *jtiCache) remember(jti string, now time.Time) {
 }
 
 // verifyLogoutToken runs the full logout-token validation (spec §2.4–2.6):
-// signature against the provider JWKS, iss, aud, iat freshness, exp if
-// present, the events member, nonce absence, sid-or-sub, and jti replay. It
+// signature against the provider JWKS, iss, aud, iat freshness, exp
+// (required), the events member, nonce absence, sid-or-sub, and jti replay. It
 // returns the identifiers to revoke by, or the reason for rejection (safe to
 // log — it never contains the token).
 func (a *Authenticator) verifyLogoutToken(ctx context.Context, raw string, now time.Time, seen *jtiCache) (logoutToken, error) {
 	var lt logoutToken
-	// The verifier checks the JWS signature against the discovered JWKS and
-	// the issuer. aud and exp are checked by hand below: aud because logout
-	// tokens share the ID-token audience rules but we want a precise error,
-	// exp because the spec makes it optional (SkipExpiryCheck would otherwise
-	// reject tokens without one).
+	// The verifier checks the JWS signature against the provider JWKS, the
+	// issuer, and the audience. Only expiry is skipped (SkipExpiryCheck):
+	// go-oidc allows no clock skew there, so exp is re-checked by hand below
+	// with the same skew the iat checks use.
 	idt, err := a.logoutVerifier.Verify(ctx, raw)
 	if err != nil {
-		return lt, fmt.Errorf("signature/issuer rejected: %w", err)
-	}
-	if !slices.Contains(idt.Audience, a.clientID) {
-		return lt, fmt.Errorf("audience %q does not contain our client_id", idt.Audience)
+		return lt, fmt.Errorf("verify signature/issuer/audience: %w", err)
 	}
 
 	var claims map[string]any
@@ -122,17 +118,30 @@ func (a *Authenticator) verifyLogoutToken(ctx context.Context, raw string, now t
 	if _, ok := claims["iat"]; !ok || idt.IssuedAt.IsZero() {
 		return lt, fmt.Errorf("iat claim missing")
 	}
-	if age := now.Sub(idt.IssuedAt); age > logoutTokenMaxAge {
+	if age := now.Sub(idt.IssuedAt); age > logoutTokenMaxAge+logoutClockSkew {
 		return lt, fmt.Errorf("stale iat: issued %s ago", age.Round(time.Second))
 	}
 	if idt.IssuedAt.After(now.Add(logoutClockSkew)) {
 		return lt, fmt.Errorf("iat is in the future")
 	}
-	if _, ok := claims["exp"]; ok && now.After(idt.Expiry.Add(logoutClockSkew)) {
+	// exp is REQUIRED by OIDC Back-Channel Logout 1.0 (final; earlier drafts
+	// had it optional).
+	if _, ok := claims["exp"]; !ok {
+		return lt, fmt.Errorf("exp claim missing")
+	}
+	if now.After(idt.Expiry.Add(logoutClockSkew)) {
 		return lt, fmt.Errorf("exp passed")
 	}
 
-	lt.SID, _ = claims["sid"].(string)
+	// A malformed sid is a hard reject, never a silent fall-through: ignoring
+	// it would escalate a one-session logout into sub-wide revocation.
+	if v, ok := claims["sid"]; ok {
+		s, ok := v.(string)
+		if !ok || s == "" {
+			return lt, fmt.Errorf("sid claim present but not a non-empty string")
+		}
+		lt.SID = s
+	}
 	lt.Sub = idt.Subject
 	if lt.SID == "" && lt.Sub == "" {
 		return lt, fmt.Errorf("neither sid nor sub present")
@@ -157,19 +166,19 @@ func (s *Service) BackchannelLogout(w http.ResponseWriter, r *http.Request) {
 	noStore(w)
 	if err := r.ParseForm(); err != nil {
 		s.log.Warn("backchannel logout: unreadable form", "error", err)
-		writeProblem(w, http.StatusBadRequest, "invalid_request", "Malformed form body.")
+		httpx.WriteProblem(w, http.StatusBadRequest, "invalid_request", "Malformed form body.")
 		return
 	}
 	raw := r.PostForm.Get("logout_token")
 	if raw == "" {
-		writeProblem(w, http.StatusBadRequest, "invalid_request", "logout_token is required.")
+		httpx.WriteProblem(w, http.StatusBadRequest, "invalid_request", "logout_token is required.")
 		return
 	}
 	lt, err := s.auth.verifyLogoutToken(r.Context(), raw, time.Now(), s.seenJTIs)
 	if err != nil {
 		// Log the rejection reason, never the token itself.
 		s.log.Warn("backchannel logout: token rejected", "reason", err.Error())
-		writeProblem(w, http.StatusBadRequest, "invalid_logout_token", "Logout token validation failed.")
+		httpx.WriteProblem(w, http.StatusBadRequest, "invalid_logout_token", "Logout token validation failed.")
 		return
 	}
 
@@ -184,7 +193,7 @@ func (s *Service) BackchannelLogout(w http.ResponseWriter, r *http.Request) {
 		s.log.Error("backchannel logout: revoke sessions", "error", derr)
 		// 504 asks the IdP to retry the logout later (spec §2.8). The jti is
 		// not yet remembered, so the retried token passes validation again.
-		writeProblem(w, http.StatusGatewayTimeout, "logout_failed", "Could not end sessions.")
+		httpx.WriteProblem(w, http.StatusGatewayTimeout, "logout_failed", "Could not end sessions.")
 		return
 	}
 	// Consume the jti only now that revocation succeeded, so a DB failure
@@ -208,18 +217,4 @@ func shortHash(v string) string {
 	}
 	sum := sha256.Sum256([]byte(v))
 	return hex.EncodeToString(sum[:6])
-}
-
-// writeProblem emits an RFC-7807-style problem+json, mirroring the API layer's
-// format (docs/02 §10) for the auth endpoints that answer machines.
-func writeProblem(w http.ResponseWriter, status int, code, detail string) {
-	w.Header().Set("Content-Type", "application/problem+json; charset=utf-8")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(map[string]any{
-		"code":   code,
-		"detail": detail,
-		"status": status,
-	}); err != nil {
-		slog.Error("write problem response", "error", err)
-	}
 }

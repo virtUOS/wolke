@@ -29,7 +29,6 @@ type Authenticator struct {
 	// by hand in verifyLogoutToken.
 	logoutVerifier *oidc.IDTokenVerifier
 	oauth          *oauth2.Config
-	clientID       string
 	endSessionEP   string
 }
 
@@ -42,6 +41,7 @@ func NewAuthenticator(ctx context.Context, cfg *config.Config) (*Authenticator, 
 	}
 	var extra struct {
 		EndSessionEndpoint string `json:"end_session_endpoint"`
+		JWKSURI            string `json:"jwks_uri"`
 	}
 	_ = provider.Claims(&extra)
 
@@ -53,11 +53,13 @@ func NewAuthenticator(ctx context.Context, cfg *config.Config) (*Authenticator, 
 	return &Authenticator{
 		provider: provider,
 		verifier: provider.Verifier(&oidc.Config{ClientID: cfg.OIDC.ClientID}),
-		logoutVerifier: provider.Verifier(&oidc.Config{
+		// The logout verifier reads keys through cooldownKeySet: the endpoint
+		// it backs is unauthenticated, so unknown-kid junk must not drive one
+		// JWKS fetch per request (keyset.go).
+		logoutVerifier: oidc.NewVerifier(cfg.OIDC.IssuerURL, newCooldownKeySet(extra.JWKSURI), &oidc.Config{
 			ClientID:        cfg.OIDC.ClientID,
-			SkipExpiryCheck: true, // exp is optional on logout tokens
+			SkipExpiryCheck: true, // exp is re-checked with clock skew in verifyLogoutToken
 		}),
-		clientID:     cfg.OIDC.ClientID,
 		endSessionEP: extra.EndSessionEndpoint,
 		oauth: &oauth2.Config{
 			ClientID:     cfg.OIDC.ClientID,

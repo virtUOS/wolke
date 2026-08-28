@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -28,7 +29,7 @@ type meResponse struct {
 func me(w http.ResponseWriter, r *http.Request) {
 	user, ok := userFromContext(r.Context())
 	if !ok {
-		writeProblem(w, http.StatusUnauthorized, "unauthenticated", "Login required.")
+		httpx.WriteProblem(w, http.StatusUnauthorized, "unauthenticated", "Login required.")
 		return
 	}
 	writeJSON(w, http.StatusOK, toMeResponse(user))

@@ -41,7 +41,9 @@ form-encoded `logout_token=<jwt>`), `Cache-Control: no-store` on responses per t
 Validation of the logout token (OIDC Back-Channel Logout 1.0 §2.4–2.6), all in one pure-ish
 function so it's table-testable:
 1. Signature against the provider JWKS; `iss` matches the configured issuer; `aud` contains
-   our `client_id`; `iat` fresh (allow small skew; reject older than ~5 min); `exp` if present.
+   our `client_id`; `iat` fresh (allow small skew; reject older than ~5 min); `exp` required
+   and honored with the same skew (the final Back-Channel Logout 1.0 spec makes `exp`
+   REQUIRED — earlier drafts had it optional).
 2. `events` claim contains the key `http://schemas.openid.net/event/backchannel-logout`.
 3. **`nonce` must be absent** (spec requirement — distinguishes it from an ID token).
 4. At least one of `sid` / `sub` present.

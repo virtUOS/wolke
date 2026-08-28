@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/virtuos/wolke/internal/announce"
+	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/service"
 )
 
@@ -18,7 +19,7 @@ func userAnnouncements(db announce.Store) http.HandlerFunc {
 		user, _ := userFromContext(r.Context())
 		list, err := announce.ListActive(r.Context(), db, user.PrimaryRole, user.ID)
 		if err != nil {
-			writeProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcements.")
+			httpx.WriteProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcements.")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"announcements": list})
@@ -33,7 +34,7 @@ func userAnnouncementHistory(db announce.Store) http.HandlerFunc {
 		user, _ := userFromContext(r.Context())
 		list, err := announce.ListHistory(r.Context(), db, user.PrimaryRole, user.ID)
 		if err != nil {
-			writeProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcement history.")
+			httpx.WriteProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcement history.")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"announcements": list})
@@ -47,7 +48,7 @@ func dismissAnnouncement(db service.DismissStore) http.HandlerFunc {
 		user, _ := userFromContext(r.Context())
 		id, ok := parseUUID(chi.URLParam(r, "id"))
 		if !ok {
-			writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid announcement id.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_id", "Invalid announcement id.")
 			return
 		}
 		if err := service.DismissAnnouncement(r.Context(), db, user.ID, id); err != nil {
@@ -108,7 +109,7 @@ func adminListAnnouncements(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		list, err := announce.AdminList(r.Context(), d.Store, 100)
 		if err != nil {
-			writeProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcements.")
+			httpx.WriteProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcements.")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"announcements": list})
@@ -119,12 +120,12 @@ func adminCreateAnnouncement(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var b announcementBody
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
-			writeProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
 		in, err := b.input()
 		if err != nil {
-			writeProblem(w, http.StatusBadRequest, "invalid_time", "Timestamps must be RFC3339.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_time", "Timestamps must be RFC3339.")
 			return
 		}
 		a, err := service.CreateAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), in)
@@ -140,17 +141,17 @@ func adminUpdateAnnouncement(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := parseUUID(chi.URLParam(r, "id"))
 		if !ok {
-			writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid announcement id.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_id", "Invalid announcement id.")
 			return
 		}
 		var b announcementBody
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
-			writeProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
 		in, err := b.input()
 		if err != nil {
-			writeProblem(w, http.StatusBadRequest, "invalid_time", "Timestamps must be RFC3339.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_time", "Timestamps must be RFC3339.")
 			return
 		}
 		a, err := service.UpdateAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), id, in)
@@ -166,7 +167,7 @@ func adminDeleteAnnouncement(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := parseUUID(chi.URLParam(r, "id"))
 		if !ok {
-			writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid announcement id.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_id", "Invalid announcement id.")
 			return
 		}
 		if err := service.DeleteAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), id); err != nil {

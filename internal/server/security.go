@@ -9,6 +9,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/virtuos/wolke/internal/auth"
+	"github.com/virtuos/wolke/internal/httpx"
 )
 
 // Per-key rate limits (per session token, else client IP). Generous enough not
@@ -16,7 +17,17 @@ import (
 const (
 	writeRatePerMinute  = 60
 	searchRatePerMinute = 120
+	// backchannelRatePerMinute is the dedicated per-IP limit for the IdP-facing
+	// logout endpoint: ALL of an IdP's notifications come from one IP and
+	// Keycloak does not retry 429s, so the shared 60/min budget could silently
+	// drop real logouts (e.g. an IdP-side mass logout). Forged tokens die at
+	// signature validation; this only blunts abuse.
+	backchannelRatePerMinute = 600
 )
+
+// backchannelLogoutPath is exempt from the global write limiter (it carries
+// its own via backchannelRatePerMinute — see router.go).
+const backchannelLogoutPath = "/auth/backchannel-logout"
 
 // buildCSP returns the strict, same-origin security policy (docs/02 §10),
 // computed once at wiring time. The SPA is same-origin: scripts/styles/
@@ -82,7 +93,7 @@ func csrfGuard(publicOrigin string) func(http.Handler) http.Handler {
 			if origin != "" {
 				fwd := ForwardedFromContext(r.Context())
 				if origin != publicOrigin && origin != fwd.Scheme+"://"+fwd.Host {
-					writeProblem(w, http.StatusForbidden, "csrf", "Cross-origin request rejected.")
+					httpx.WriteProblem(w, http.StatusForbidden, "csrf", "Cross-origin request rejected.")
 					return
 				}
 			}
@@ -162,7 +173,7 @@ func limiterKey(r *http.Request) string {
 func (k *keyedLimiter) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !k.allow(limiterKey(r)) {
-			writeProblem(w, http.StatusTooManyRequests, "rate_limited", "Too many requests; slow down.")
+			httpx.WriteProblem(w, http.StatusTooManyRequests, "rate_limited", "Too many requests; slow down.")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -179,8 +190,12 @@ func writeRateLimit(k *keyedLimiter) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
+			if r.URL.Path == backchannelLogoutPath {
+				next.ServeHTTP(w, r) // has its own limiter (see const above)
+				return
+			}
 			if !k.allow(limiterKey(r)) {
-				writeProblem(w, http.StatusTooManyRequests, "rate_limited", "Too many requests; slow down.")
+				httpx.WriteProblem(w, http.StatusTooManyRequests, "rate_limited", "Too many requests; slow down.")
 				return
 			}
 			next.ServeHTTP(w, r)

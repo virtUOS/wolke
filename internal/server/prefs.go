@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/service"
 )
 
@@ -14,7 +15,7 @@ func updatePrefs(db service.PrefsStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := userFromContext(r.Context())
 		if !ok {
-			writeProblem(w, http.StatusUnauthorized, "unauthenticated", "Login required.")
+			httpx.WriteProblem(w, http.StatusUnauthorized, "unauthenticated", "Login required.")
 			return
 		}
 		var body struct {
@@ -25,7 +26,7 @@ func updatePrefs(db service.PrefsStore) http.HandlerFunc {
 			FavoritesSeparateTab *bool   `json:"favorites_separate_tab"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			writeProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
 
@@ -56,10 +57,10 @@ func updatePrefs(db service.PrefsStore) http.HandlerFunc {
 		if err != nil {
 			var ve *service.ValidationError
 			if errors.As(err, &ve) {
-				writeProblem(w, http.StatusBadRequest, "invalid_prefs", ve.Error())
+				httpx.WriteProblem(w, http.StatusBadRequest, "invalid_prefs", ve.Error())
 				return
 			}
-			writeProblem(w, http.StatusInternalServerError, "prefs_update_failed", "Could not save your preferences.")
+			httpx.WriteProblem(w, http.StatusInternalServerError, "prefs_update_failed", "Could not save your preferences.")
 			return
 		}
 		writeJSON(w, http.StatusOK, toMeResponse(updated))

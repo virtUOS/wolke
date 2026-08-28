@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/service"
 	"github.com/virtuos/wolke/internal/store"
 )
@@ -31,11 +32,11 @@ func requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, ok := userFromContext(r.Context())
 		if !ok {
-			writeProblem(w, http.StatusUnauthorized, "unauthenticated", "Login required.")
+			httpx.WriteProblem(w, http.StatusUnauthorized, "unauthenticated", "Login required.")
 			return
 		}
 		if !user.IsAdmin {
-			writeProblem(w, http.StatusForbidden, "forbidden", "Admin access required.")
+			httpx.WriteProblem(w, http.StatusForbidden, "forbidden", "Admin access required.")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -87,7 +88,7 @@ func adminCreateService(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var b serviceBody
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
-			writeProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
 		svc, err := service.CreateService(r.Context(), d.Store, actorFromContext(r.Context()), b.draft())
@@ -104,12 +105,12 @@ func adminUpdateService(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := parseUUID(chi.URLParam(r, "id"))
 		if !ok {
-			writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid service id.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_id", "Invalid service id.")
 			return
 		}
 		var b serviceBody
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
-			writeProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
 		svc, err := service.UpdateService(r.Context(), d.Store, actorFromContext(r.Context()), id, b.draft())
@@ -126,7 +127,7 @@ func adminDeleteService(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := parseUUID(chi.URLParam(r, "id"))
 		if !ok {
-			writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid service id.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_id", "Invalid service id.")
 			return
 		}
 		if err := service.SoftDeleteService(r.Context(), d.Store, actorFromContext(r.Context()), id); err != nil {
@@ -142,7 +143,7 @@ func adminGetRoleDefaults(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ids, err := d.Store.GetRoleDefaults(r.Context(), chi.URLParam(r, "role"))
 		if err != nil {
-			writeProblem(w, http.StatusInternalServerError, "internal", "Could not read role defaults.")
+			httpx.WriteProblem(w, http.StatusInternalServerError, "internal", "Could not read role defaults.")
 			return
 		}
 		out := make([]string, 0, len(ids))
@@ -160,14 +161,14 @@ func adminSetRoleDefaults(d AdminDeps) http.HandlerFunc {
 			ServiceIDs []string `json:"service_ids"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
-			writeProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
 		ids := make([]pgtype.UUID, 0, len(b.ServiceIDs))
 		for _, s := range b.ServiceIDs {
 			id, ok := parseUUID(s)
 			if !ok {
-				writeProblem(w, http.StatusBadRequest, "invalid_id", "Invalid service id in list.")
+				httpx.WriteProblem(w, http.StatusBadRequest, "invalid_id", "Invalid service id in list.")
 				return
 			}
 			ids = append(ids, id)
@@ -189,7 +190,7 @@ func adminCreateCategory(d AdminDeps) http.HandlerFunc {
 			Sort  int               `json:"sort"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
-			writeProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
 		cat, err := service.CreateCategory(r.Context(), d.Store, actorFromContext(r.Context()), b.Slug, b.Label, b.Sort)
@@ -224,7 +225,7 @@ func adminSearchInsights(d AdminDeps) http.HandlerFunc {
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		entries, err := service.ListSearchInsights(r.Context(), d.Store, days, limit)
 		if err != nil {
-			writeProblem(w, http.StatusInternalServerError, "insights_unavailable", "Could not load search insights.")
+			httpx.WriteProblem(w, http.StatusInternalServerError, "insights_unavailable", "Could not load search insights.")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
@@ -241,7 +242,7 @@ func adminListAudit(d AdminDeps) http.HandlerFunc {
 		}
 		rows, err := d.Audit.ListAudit(r.Context(), limit)
 		if err != nil {
-			writeProblem(w, http.StatusInternalServerError, "audit_unavailable", "Could not read the audit log.")
+			httpx.WriteProblem(w, http.StatusInternalServerError, "audit_unavailable", "Could not read the audit log.")
 			return
 		}
 		out := make([]auditEntry, 0, len(rows))

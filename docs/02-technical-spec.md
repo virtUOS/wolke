@@ -279,8 +279,10 @@ requirement for open-source reuse: nothing in the code may assume Keycloak speci
   wolke session (shared/pool computers). At login the `sid` claim of the verified ID token is
   stored on the session row (`sessions.oidc_sid`, NULL when the IdP sends none). The IdP POSTs a
   signed logout token to `POST /auth/backchannel-logout` (unauthenticated, server-to-server,
-  responses `Cache-Control: no-store`). The token is validated per spec §2.4–2.6 — JWKS
-  signature, `iss`, `aud`, `iat` freshness, `exp` if present, the
+  responses `Cache-Control: no-store`; exempt from the shared write rate limit — all IdP
+  notifications come from one IP — and throttled by its own generous per-IP limit instead).
+  The token is validated per spec §2.4–2.6 — JWKS
+  signature, `iss`, `aud`, `iat` freshness, `exp` (required per the final spec), the
   `http://schemas.openid.net/event/backchannel-logout` events member, **`nonce` must be absent**,
   `sid` or `sub` present, `jti` replay refused (in-process TTL cache; multi-instance would move
   this to shared storage, §9). Revocation: `sid` → delete the sessions with that `oidc_sid`;

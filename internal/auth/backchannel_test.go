@@ -121,9 +121,19 @@ func TestVerifyLogoutToken(t *testing.T) {
 			name: "stale iat",
 			mutate: func(c map[string]any) {
 				c["iat"] = now.Add(-10 * time.Minute).Unix()
-				delete(c, "exp") // isolate the iat check from exp
+				c["exp"] = now.Add(2 * time.Minute).Unix() // isolate the iat check from exp
 			},
 			wantErr: "iat",
+		},
+		{
+			// 6 min old: past logoutTokenMaxAge (5m) but within the clock-skew
+			// allowance (2m) — IdP/RP drift must not drop real logouts.
+			name: "iat older than max age but within skew",
+			mutate: func(c map[string]any) {
+				c["iat"] = now.Add(-6 * time.Minute).Unix()
+				c["exp"] = now.Add(2 * time.Minute).Unix()
+			},
+			wantSID: "idp-session-1",
 		},
 		{
 			name:    "missing iat",
@@ -134,6 +144,22 @@ func TestVerifyLogoutToken(t *testing.T) {
 			name:    "expired exp",
 			mutate:  func(c map[string]any) { c["exp"] = now.Add(-3 * time.Minute).Unix() },
 			wantErr: "exp",
+		},
+		{
+			// exp is REQUIRED by the final Back-Channel Logout 1.0 spec.
+			name:    "missing exp",
+			mutate:  func(c map[string]any) { delete(c, "exp") },
+			wantErr: "exp",
+		},
+		{
+			// A present-but-malformed sid must be a hard reject: silently
+			// ignoring it would escalate to sub-wide revocation.
+			name: "sid is not a string",
+			mutate: func(c map[string]any) {
+				c["sid"] = 12345
+				c["sub"] = "user-42"
+			},
+			wantErr: "sid",
 		},
 		{
 			name:    "missing jti",
@@ -194,6 +220,31 @@ func TestVerifyLogoutTokenReplayedJTI(t *testing.T) {
 		t.Fatal("replayed jti accepted, want rejection")
 	} else if !strings.Contains(err.Error(), "jti") {
 		t.Errorf("reject reason = %q, want it to mention jti", err)
+	}
+}
+
+// A burst of tokens with an unknown kid must not drive one JWKS fetch per
+// verification: after the initial (miss-triggered) fetch, further refetches
+// cool down — while tokens signed with the already-cached key keep verifying.
+func TestLogoutTokenJWKSRefetchCooldown(t *testing.T) {
+	idp := authtest.New(t)
+	a := testAuthenticator(t, idp)
+	now := time.Now()
+	seen := newJTICache(10 * time.Minute)
+
+	for i := range 5 {
+		raw := idp.SignWithUnknownKey(t, logoutClaims(idp, now, "jti-cool-"+string(rune('a'+i))))
+		if _, err := a.verifyLogoutToken(context.Background(), raw, now, seen); err == nil {
+			t.Fatal("unknown-kid token accepted")
+		}
+	}
+	if hits := idp.JWKSHits(); hits > 1 {
+		t.Errorf("JWKS fetched %d times for a serial burst of unknown-kid tokens, want at most 1", hits)
+	}
+	// Cached keys are unaffected by the cooldown: a genuine token still works.
+	raw := idp.Sign(t, logoutClaims(idp, now, "jti-cool-ok"))
+	if _, err := a.verifyLogoutToken(context.Background(), raw, now, seen); err != nil {
+		t.Fatalf("valid token rejected during refetch cooldown: %v", err)
 	}
 }
 
