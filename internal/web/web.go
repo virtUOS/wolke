@@ -4,6 +4,7 @@ package web
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -14,7 +15,11 @@ import (
 //go:embed all:dist
 var distFS embed.FS
 
-// FS returns the embedded SPA rooted at dist/.
+// FS returns the embedded SPA rooted at dist/. The directory always compiles
+// (a tracked .gitkeep satisfies go:embed's all:dist pattern on a fresh clone),
+// but it only holds a real app after `make web-build && make embed` (or the
+// Docker/CI build, which always runs both) — see SPAHandler for the fallback
+// when it doesn't.
 func FS() (fs.FS, error) {
 	sub, err := fs.Sub(distFS, "dist")
 	if err != nil {
@@ -23,13 +28,43 @@ func FS() (fs.FS, error) {
 	return sub, nil
 }
 
+// notBuiltHTML is served for every path when the embedded dist/ has no
+// index.html — a fresh clone that hasn't run `make web-build`/`make embed` (or
+// the equivalent Docker build stage) yet. It never panics or fails router
+// construction; it degrades to a plain, explanatory response instead.
+const notBuiltHTML = `<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>wolke</title></head>
+<body>
+<h1>SPA not built</h1>
+<p>The embedded frontend hasn't been built into this binary yet. Run
+<code>make web-build &amp;&amp; make embed</code> (or <code>make build</code>,
+which does both) and restart the server.</p>
+</body>
+</html>
+`
+
+func notBuiltHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(notBuiltHTML))
+	})
+}
+
 // SPAHandler serves files from fsys and falls back to index.html for unknown
 // paths, so client-side routes deep-link correctly. Unknown /api/ paths return
 // 404 rather than index.html, so a missing API endpoint never masquerades as the
-// app shell.
+// app shell. If fsys has no index.html (the SPA hasn't been built into this
+// binary), it returns a handler that serves a graceful "not built" response
+// instead of failing — this keeps `go build`/`go test` and router construction
+// working on a fresh clone with no npm step.
 func SPAHandler(fsys fs.FS) (http.Handler, error) {
 	index, err := fs.ReadFile(fsys, "index.html")
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return notBuiltHandler(), nil
+		}
 		return nil, fmt.Errorf("read embedded index.html: %w", err)
 	}
 	fileServer := http.FileServer(http.FS(fsys))

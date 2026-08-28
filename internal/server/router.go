@@ -5,6 +5,7 @@ package server
 
 import (
 	"context"
+	"io/fs"
 	"log/slog"
 	"net/http"
 
@@ -45,6 +46,11 @@ type Deps struct {
 	AnnounceDismiss service.DismissStore
 	// Admin enables the admin write API + audit read (mounted behind requireAdmin).
 	Admin *AdminDeps
+	// SPA overrides the embedded SPA filesystem; nil uses the real embedded
+	// build (web.FS()). Tests inject a fake filesystem here so they never
+	// depend on whether `make web-build && make embed` has actually run in
+	// this checkout.
+	SPA fs.FS
 }
 
 // New builds the HTTP handler for the app: middleware stack, operational
@@ -80,7 +86,7 @@ func New(cfg *config.Config, deps Deps) (http.Handler, error) {
 		r.Handle("/metrics", deps.Metrics.Handler(cfg.MetricsToken))
 	}
 
-	spaHandler, err := buildSPA()
+	spaHandler, err := buildSPA(deps.SPA)
 	if err != nil {
 		return nil, err
 	}
@@ -101,10 +107,14 @@ func New(cfg *config.Config, deps Deps) (http.Handler, error) {
 	return r, nil
 }
 
-func buildSPA() (http.Handler, error) {
-	spa, err := web.FS()
-	if err != nil {
-		return nil, err
+func buildSPA(override fs.FS) (http.Handler, error) {
+	spa := override
+	if spa == nil {
+		embedded, err := web.FS()
+		if err != nil {
+			return nil, err
+		}
+		spa = embedded
 	}
 	return web.SPAHandler(spa)
 }

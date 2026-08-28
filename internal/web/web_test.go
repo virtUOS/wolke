@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -14,14 +15,46 @@ func testFS() fstest.MapFS {
 	}
 }
 
-func TestEmbeddedFSHasIndex(t *testing.T) {
-	// The committed placeholder guarantees go:embed always has an index.html.
+func TestEmbeddedFSCompilesAndDegradesGracefully(t *testing.T) {
+	// The tracked internal/web/dist/.gitkeep guarantees go:embed's all:dist
+	// pattern always compiles, even on a fresh clone with no npm step — build
+	// output (index.html, hashed assets) is never committed (CLAUDE.md
+	// "Commits and CI"). Depending on whether this checkout has run
+	// `make web-build && make embed` (CI and Docker always do; a bare local
+	// clone hasn't), SPAHandler must either serve the real app or degrade
+	// gracefully — it must never fail to construct.
 	fsys, err := FS()
 	if err != nil {
 		t.Fatalf("FS: %v", err)
 	}
-	if _, err := fsys.Open("index.html"); err != nil {
-		t.Fatalf("embedded index.html missing: %v", err)
+	h, err := SPAHandler(fsys)
+	if err != nil {
+		t.Fatalf("SPAHandler must degrade gracefully instead of erroring: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rec.Code != http.StatusOK && rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 200 (SPA built) or 503 (not built)", rec.Code)
+	}
+}
+
+func TestSPAHandlerNotBuiltIsGraceful(t *testing.T) {
+	// An empty dist/ (fresh clone, no `make web-build`/`make embed` yet) must
+	// not fail SPAHandler construction or panic — it serves an explanatory
+	// response instead, so the server still starts.
+	h, err := SPAHandler(fstest.MapFS{})
+	if err != nil {
+		t.Fatalf("SPAHandler: %v", err)
+	}
+	for _, p := range []string{"/", "/favorites", "/assets/app.js"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("path %s: status = %d, want 503", p, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "make web-build") {
+			t.Errorf("path %s: body should explain how to build the SPA, got %q", p, rec.Body.String())
+		}
 	}
 }
 
