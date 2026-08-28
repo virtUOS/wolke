@@ -147,8 +147,11 @@ export function DashboardShell({
         >
           <div
             style={{
-              display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 20,
-              borderTop: '1px solid var(--border)', paddingTop: 16,
+              // The 44px-tall phone links carry their own vertical rhythm, so the
+              // row's gap and top padding shrink to keep the footer compact.
+              display: 'flex', flexWrap: 'wrap', alignItems: 'center',
+              gap: isMobile ? '0 20px' : 20,
+              borderTop: '1px solid var(--border)', paddingTop: isMobile ? 4 : 16,
             }}
           >
             {branding.imprint_url && (
@@ -156,7 +159,7 @@ export function DashboardShell({
                 href={branding.imprint_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded text-sm text-text-muted no-underline transition-colors hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                className="inline-flex min-h-11 items-center rounded text-sm text-text-muted no-underline transition-colors hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0"
               >
                 {s.footer.imprint}
               </a>
@@ -166,7 +169,7 @@ export function DashboardShell({
                 href={branding.privacy_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded text-sm text-text-muted no-underline transition-colors hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                className="inline-flex min-h-11 items-center rounded text-sm text-text-muted no-underline transition-colors hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0"
               >
                 {s.footer.privacy}
               </a>
@@ -176,7 +179,7 @@ export function DashboardShell({
                 href={feedback.href}
                 {...(feedback.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 style={{ marginLeft: 'auto' }}
-                className="rounded text-sm text-text-muted no-underline transition-colors hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                className="inline-flex min-h-11 items-center rounded text-sm text-text-muted no-underline transition-colors hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0"
               >
                 {s.footer.feedback}
               </a>

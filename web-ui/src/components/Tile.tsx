@@ -47,6 +47,9 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
     <IconButton
       variant="ghost"
       size="sm"
+      // The icon stays 20px; the button around it is a 44px touch target on a
+      // phone and collapses back to the icon's own box from `md` up (docs/03 §4).
+      className="h-11 w-11 md:h-7 md:w-7"
       aria-label={favorited ? s.tile.removeFav(service.name) : s.tile.addFav(service.name)}
       aria-pressed={favorited}
       style={{ color: favorited ? 'var(--accent)' : 'var(--text-muted)', pointerEvents: 'auto', flexShrink: 0 }}
@@ -77,8 +80,8 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
             position: 'relative',
             display: 'flex',
             alignItems: 'center',
-            gap: 14,
-            padding: '12px 14px',
+            gap: 12,
+            padding: '10px 8px 10px 14px',
             pointerEvents: 'none',
           }}
         >
@@ -116,7 +119,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, pointerEvents: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'auto' }}>
             {!docsOnly && service.doc_url && (
               <a
                 href={service.doc_url}
@@ -127,7 +130,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
                   e.stopPropagation()
                   onLaunch?.(service, 'documentation')
                 }}
-                className="inline-flex items-center justify-center rounded-md border border-border bg-surface-2 p-1.5 text-text-muted transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-border bg-surface-2 p-1.5 text-text-muted transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:h-auto md:w-auto"
               >
                 <FileText className="h-4 w-4" aria-hidden="true" />
               </a>
