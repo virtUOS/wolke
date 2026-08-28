@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -182,6 +183,13 @@ func TestVerifyLogoutTokenReplayedJTI(t *testing.T) {
 	if _, err := a.verifyLogoutToken(context.Background(), raw, now, seen); err != nil {
 		t.Fatalf("first presentation rejected: %v", err)
 	}
+	// Validation itself must not consume the jti — only a processed logout does
+	// (the handler remembers it after revocation succeeds), so a 504-retry of
+	// the same token can still pass.
+	if _, err := a.verifyLogoutToken(context.Background(), raw, now, seen); err != nil {
+		t.Fatalf("re-validation before processing rejected: %v", err)
+	}
+	seen.remember("jti-replay", now)
 	if _, err := a.verifyLogoutToken(context.Background(), raw, now, seen); err == nil {
 		t.Fatal("replayed jti accepted, want rejection")
 	} else if !strings.Contains(err.Error(), "jti") {
@@ -195,6 +203,8 @@ type fakeSessionDB struct {
 	deletedSub string
 	bySIDRows  int64
 	bySubRows  int64
+	// failDeletes simulates a transient DB error on the revocation calls.
+	failDeletes error
 }
 
 func (f *fakeSessionDB) CreateSession(context.Context, store.CreateSessionParams) error {
@@ -205,10 +215,16 @@ func (f *fakeSessionDB) GetSession(context.Context, string) (store.Session, erro
 }
 func (f *fakeSessionDB) DeleteSession(context.Context, string) error { return nil }
 func (f *fakeSessionDB) DeleteSessionsBySID(_ context.Context, sid pgtype.Text) (int64, error) {
+	if f.failDeletes != nil {
+		return 0, f.failDeletes
+	}
 	f.deletedSID = sid.String
 	return f.bySIDRows, nil
 }
 func (f *fakeSessionDB) DeleteSessionsByOIDCSub(_ context.Context, sub string) (int64, error) {
+	if f.failDeletes != nil {
+		return 0, f.failDeletes
+	}
 	f.deletedSub = sub
 	return f.bySubRows, nil
 }
@@ -276,6 +292,43 @@ func TestBackchannelLogoutEndpointSubOnly(t *testing.T) {
 	}
 	if db.deletedSub != "user-42" {
 		t.Errorf("revoked sub = %q, want user-42", db.deletedSub)
+	}
+}
+
+// A replayed logout token (same jti POSTed twice) is processed once and then
+// rejected.
+func TestBackchannelLogoutEndpointReplay(t *testing.T) {
+	idp := authtest.New(t)
+	db := &fakeSessionDB{bySIDRows: 1}
+	s := newBackchannelService(t, idp, db)
+	token := idp.Sign(t, logoutClaims(idp, time.Now(), "jti-ep-replay"))
+
+	if rec := postLogoutToken(t, s, token); rec.Code != http.StatusOK {
+		t.Fatalf("first POST = %d, want 200", rec.Code)
+	}
+	if rec := postLogoutToken(t, s, token); rec.Code != http.StatusBadRequest {
+		t.Errorf("replayed POST = %d, want 400", rec.Code)
+	}
+}
+
+// A transient DB failure answers 504 and must NOT consume the jti: the IdP's
+// retry of the very same token has to succeed, or an IdP-initiated logout is
+// silently dropped and the session survives.
+func TestBackchannelLogoutEndpointRetryAfterDBFailure(t *testing.T) {
+	idp := authtest.New(t)
+	db := &fakeSessionDB{bySIDRows: 1, failDeletes: errors.New("db down")}
+	s := newBackchannelService(t, idp, db)
+	token := idp.Sign(t, logoutClaims(idp, time.Now(), "jti-ep-retry"))
+
+	if rec := postLogoutToken(t, s, token); rec.Code != http.StatusGatewayTimeout {
+		t.Fatalf("POST during DB failure = %d, want 504", rec.Code)
+	}
+	db.failDeletes = nil
+	if rec := postLogoutToken(t, s, token); rec.Code != http.StatusOK {
+		t.Fatalf("retried POST = %d, want 200 (jti must not be consumed by a failed attempt)", rec.Code)
+	}
+	if db.deletedSID != "idp-session-1" {
+		t.Errorf("retry did not revoke: deleted sid = %q", db.deletedSID)
 	}
 }
 

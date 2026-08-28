@@ -58,9 +58,9 @@ func newJTICache(ttl time.Duration) *jtiCache {
 	return &jtiCache{ttl: ttl, seen: map[string]time.Time{}}
 }
 
-// remember records the jti and reports whether it was new; false is a replay.
-// Expired entries are pruned in passing (the map stays tiny at logout rates).
-func (c *jtiCache) remember(jti string, now time.Time) bool {
+// contains reports whether the jti was already processed. Expired entries are
+// pruned in passing (the map stays tiny at logout rates).
+func (c *jtiCache) contains(jti string, now time.Time) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for k, exp := range c.seen {
@@ -68,11 +68,19 @@ func (c *jtiCache) remember(jti string, now time.Time) bool {
 			delete(c.seen, k)
 		}
 	}
-	if _, dup := c.seen[jti]; dup {
-		return false
-	}
+	_, dup := c.seen[jti]
+	return dup
+}
+
+// remember marks the jti as processed. Deliberately separate from contains:
+// only a logout that actually revoked sessions consumes its jti — a failed
+// attempt (answered 504) must leave the IdP's retry of the same token able to
+// pass. The check/mark pair is not atomic; two concurrent copies of one token
+// at worst both delete the same rows, which is idempotent.
+func (c *jtiCache) remember(jti string, now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.seen[jti] = now.Add(c.ttl)
-	return true
 }
 
 // verifyLogoutToken runs the full logout-token validation (spec §2.4–2.6):
@@ -133,7 +141,7 @@ func (a *Authenticator) verifyLogoutToken(ctx context.Context, raw string, now t
 	if jti == "" {
 		return lt, fmt.Errorf("jti claim missing")
 	}
-	if !seen.remember(jti, now) {
+	if seen.contains(jti, now) {
 		return lt, fmt.Errorf("replayed jti")
 	}
 	lt.JTI = jti
@@ -174,10 +182,14 @@ func (s *Service) BackchannelLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	if derr != nil {
 		s.log.Error("backchannel logout: revoke sessions", "error", derr)
-		// 504 asks the IdP to retry the logout later (spec §2.8).
+		// 504 asks the IdP to retry the logout later (spec §2.8). The jti is
+		// not yet remembered, so the retried token passes validation again.
 		writeProblem(w, http.StatusGatewayTimeout, "logout_failed", "Could not end sessions.")
 		return
 	}
+	// Consume the jti only now that revocation succeeded, so a DB failure
+	// above never turns the IdP's retry into a rejected "replay".
+	s.seenJTIs.remember(lt.JTI, time.Now())
 
 	// Security-relevant event stream (not an admin write — no audit_log row);
 	// sid/sub are hashed so logs identify without recording identifiers.

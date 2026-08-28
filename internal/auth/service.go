@@ -266,9 +266,17 @@ func claimKeys(claims map[string]any) []string {
 }
 
 // sanitizeReturnTo blocks open redirects: only local single-slash paths pass.
+// Control characters are rejected outright — the WHATWG URL parser strips
+// tab/newline before parsing, so a Location of "/\t/evil.com" reaches the
+// browser as the protocol-relative "//evil.com".
 func sanitizeReturnTo(p string) string {
-	if strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "//") && !strings.HasPrefix(p, "/\\") {
-		return p
+	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.HasPrefix(p, "/\\") {
+		return "/"
 	}
-	return "/"
+	for i := 0; i < len(p); i++ {
+		if p[i] < 0x20 || p[i] == 0x7f {
+			return "/"
+		}
+	}
+	return p
 }
