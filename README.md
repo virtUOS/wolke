@@ -340,6 +340,18 @@ For **Claude Desktop**, add to `claude_desktop_config.json`:
 
 ---
 
+## Operations
+
+Step-by-step runbooks for common operator tasks, grounded in what the code
+actually does (not just what the spec aspires to):
+
+- [Post / retire an outage announcement](docs/runbooks/outage-announcement.md)
+- [Add / edit / remove a catalog service (form + MCP)](docs/runbooks/manage-service.md)
+- [Restore PostgreSQL from backup](docs/runbooks/restore-postgres.md)
+- [Revoke a compromised admin](docs/runbooks/revoke-admin.md)
+
+---
+
 ## License
 
 Apache 2.0

@@ -148,9 +148,11 @@ Caddy, take `PUBLIC_URL` from config for OIDC redirects and `Secure` cookies.
 - **Backups:** regular Postgres backups + a tested restore. The catalog and favorites are the
   irreplaceable data.
 - **Dependencies:** Dependabot/Renovate for Go modules and npm; pin and review. Keep Go and Node LTS current.
-- **Runbooks:** (1) post an outage announcement; (2) add/remove a service via form and via MCP;
-  (3) restore from backup; (4) revoke a compromised admin (remove the Keycloak group). Write these
-  as the features land, not after.
+- **Runbooks:** (1) [post an outage announcement](runbooks/outage-announcement.md);
+  (2) [add/remove a service via form and via MCP](runbooks/manage-service.md);
+  (3) [restore from backup](runbooks/restore-postgres.md); (4) [revoke a compromised admin](runbooks/revoke-admin.md)
+  (remove the admin-granting IdP group/role — Keycloak is one example provider, not the only
+  supported one). Write these as the features land, not after.
 
 ## 6. Definition of done (whole product)
 - Logged-in users of all three roles get a sensible default view and can find, launch, favorite,
