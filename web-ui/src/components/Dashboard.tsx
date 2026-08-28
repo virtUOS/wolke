@@ -61,7 +61,7 @@ function SearchBox({
           type="button"
           aria-label={clearLabel}
           onClick={() => onChange('')}
-          className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded text-text-muted transition-colors hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:right-1 md:h-7 md:w-7"
+          className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 cursor-pointer place-items-center rounded text-text-muted transition-colors hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:right-1 md:h-7 md:w-7"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -152,9 +152,16 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const actions: TileActions = {
     favoritedIDs,
     onToggleFavorite: (s) => (favoritedIDs.has(s.id) ? fav.remove.mutate(s.id) : fav.add.mutate(s.id)),
-    onLaunch: (s, target) => {
+    // Tools open in a new tab (issue #26), so a stale search is what's left
+    // behind when the user comes back. Clear it — but only for the launch a
+    // user actually returns from: a plain left click on the service link
+    // itself, not the doc link, and not a deliberate new-tab gesture
+    // (Ctrl/Cmd/Shift/middle-click), which Tile already filters out via
+    // `plainClick` (issue #27). Click tracking fires unconditionally.
+    onLaunch: (s, target, plainClick) => {
       api.recordClick(s.id, target)
       qc.invalidateQueries({ queryKey: ['favorites'] })
+      if (searching && target === undefined && plainClick) setQuery('')
     },
   }
 
@@ -244,7 +251,8 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
       navigate({ tab: next, filter: { kind: 'all' }, admin: false })
     },
     isDark,
-    onToggleTheme: () => prefs.mutate({ theme: isDark ? 'light' : 'dark' }),
+    theme: me.theme,
+    onSetTheme: (next: Me['theme']) => prefs.mutate({ theme: next }),
     onSetLocale: (next: Me['locale']) => prefs.mutate({ locale: next }),
     onAdmin: () => navigate({ ...view, admin: true }),
     isMobile,

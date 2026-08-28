@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react'
 import { FileText, Star } from 'lucide-react'
 import { localized, type Category, type ClickTarget, type Service } from '@/lib/api'
 import { t } from '@/lib/i18n'
@@ -11,7 +12,23 @@ import { IconButton } from '@/components/ui/icon-button'
 export interface TileActions {
   favoritedIDs: Set<string>
   onToggleFavorite: (s: Service) => void
-  onLaunch: (s: Service, target?: ClickTarget) => void
+  /**
+   * `plainClick` is true only for the primary launch link (never the doc
+   * link) activated by an ordinary left click — not Ctrl/Cmd/Shift-click, not
+   * a middle click. It's the caller's signal for launch-triggered side
+   * effects that a deliberate new-tab gesture should skip (issue #27:
+   * clearing an active search). Click tracking itself must fire regardless.
+   */
+  onLaunch: (s: Service, target: ClickTarget | undefined, plainClick: boolean) => void
+}
+
+// True only for a click that would open the link in the current context the
+// way a plain click does — not a modifier-driven "open in new tab/window"
+// gesture (Ctrl/Cmd/Shift-click) and not a middle click (button !== 0;
+// middle-click fires `auxclick`, not `click`, so this is here for completeness
+// rather than because it's reachable).
+function isPlainClick(e: MouseEvent): boolean {
+  return e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey
 }
 
 interface TileProps {
@@ -23,7 +40,7 @@ interface TileProps {
   onToggleFavorite?: (service: Service) => void
   /** Fired when a tile link is activated; target distinguishes the launch link
    *  from the secondary documentation link. */
-  onLaunch?: (service: Service, target?: ClickTarget) => void
+  onLaunch?: (service: Service, target: ClickTarget | undefined, plainClick: boolean) => void
   /** Desktop = grid (default); mobile = list. */
   layout?: 'grid' | 'list'
 }
@@ -71,7 +88,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           target="_blank"
           rel="noopener noreferrer"
           aria-label={accessibleLabel}
-          onClick={() => onLaunch?.(service)}
+          onClick={(e) => onLaunch?.(service, undefined, isPlainClick(e))}
           style={{ position: 'absolute', inset: 0 }}
           className="tile-focus-link"
         />
@@ -97,13 +114,13 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           </div>
 
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
               {/* break-words + hyphens-auto: a long German compound
                   ("Identitätsmanagement") is wider than the column at 324px and
                   would otherwise overflow its box (CLAUDE.md, issue #23). */}
               <span
                 className="break-words hyphens-auto"
-                style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em' }}
+                style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em', minWidth: 0 }}
               >
                 {service.name}
               </span>
@@ -128,7 +145,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
                 aria-label={s.tile.docsLink + s.tile.newTab}
                 onClick={(e) => {
                   e.stopPropagation()
-                  onLaunch?.(service, 'documentation')
+                  onLaunch?.(service, 'documentation', false)
                 }}
                 className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-border bg-surface-2 p-1.5 text-text-muted transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:h-auto md:w-auto"
               >
@@ -160,7 +177,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
         target="_blank"
         rel="noopener noreferrer"
         aria-label={accessibleLabel}
-        onClick={() => onLaunch?.(service)}
+        onClick={(e) => onLaunch?.(service, undefined, isPlainClick(e))}
         style={{ position: 'absolute', inset: 0, borderRadius: 'var(--radius-md)' }}
         className="tile-focus-link"
       />
@@ -240,7 +257,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
               aria-label={s.tile.docsLink + s.tile.newTab}
               onClick={(e) => {
                 e.stopPropagation()
-                onLaunch?.(service, 'documentation')
+                onLaunch?.(service, 'documentation', false)
               }}
               style={{ pointerEvents: 'auto' }}
               className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface-2 px-2 py-1 text-xs font-semibold text-text-muted no-underline transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"

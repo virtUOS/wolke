@@ -34,8 +34,12 @@ interface DashboardShellProps {
   /** The active section; null while a search is active (no tab highlighted). */
   tab: Tab | null
   onTab: (t: Tab) => void
+  /** Derived, effective dark-mode state — still needed for the canvas
+   *  background and the assistant widget even though the top bar now takes
+   *  the raw `theme` pref (issue #28). */
   isDark: boolean
-  onToggleTheme: () => void
+  theme: Me['theme']
+  onSetTheme: (next: Me['theme']) => void
   onSetLocale: (locale: Me['locale']) => void
   onAdmin: () => void
   isMobile: boolean
@@ -55,7 +59,8 @@ export function DashboardShell({
   tab,
   onTab,
   isDark,
-  onToggleTheme,
+  theme,
+  onSetTheme,
   onSetLocale,
   onAdmin,
   isMobile,
@@ -107,8 +112,8 @@ export function DashboardShell({
         currentLocalePref={me.locale}
         tab={tab}
         onTab={onTab}
-        isDark={isDark}
-        onToggleTheme={onToggleTheme}
+        theme={theme}
+        onSetTheme={onSetTheme}
         onSetLocale={onSetLocale}
         userInitials={initials(me.display_name)}
         userName={me.display_name}
