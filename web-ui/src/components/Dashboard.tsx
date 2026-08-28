@@ -61,7 +61,7 @@ function SearchBox({
           type="button"
           aria-label={clearLabel}
           onClick={() => onChange('')}
-          className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded text-text-muted transition-colors hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:right-1 md:h-7 md:w-7"
+          className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 cursor-pointer place-items-center rounded text-text-muted transition-colors hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:right-1 md:h-7 md:w-7"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
