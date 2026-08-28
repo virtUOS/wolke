@@ -9,13 +9,12 @@ import { ApiError } from './lib/api'
 import '@fontsource-variable/hanken-grotesk/wght.css'
 import '@fontsource-variable/newsreader/opsz.css'
 import './index.css'
-import { registerSW } from 'virtual:pwa-register'
 import { initInstallCapture } from './lib/pwa-install'
 
-// Register the service worker (PWA install + shell precache). autoUpdate +
-// immediate: a new deploy's worker takes over and reloads on the next nav.
-// Bundled here (not an inline script) so it satisfies script-src 'self'.
-registerSW({ immediate: true })
+// The service worker is registered by <UpdateNotice> (components/UpdateNotice)
+// via useRegisterSW, not here: registration is now in *prompt* mode, so whoever
+// registers must also own the "new version available" state (issue #42). It is
+// bundled, never an inline script, so script-src 'self' holds.
 
 // Capture the install prompt from startup — the event can fire before React
 // mounts, and a missed event means no install hint (issue #42).

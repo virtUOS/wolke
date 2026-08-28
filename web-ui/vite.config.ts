@@ -12,11 +12,13 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      // Auto-update: a new deploy's SW activates and the page reloads on the next
-      // controllerchange (the user opted for silent updates).
-      registerType: 'autoUpdate',
-      // We register manually in main.tsx via virtual:pwa-register — an *inline*
-      // registration script would violate the strict CSP (script-src 'self').
+      // Prompt mode: a new deploy's worker installs and then waits. The app asks
+      // before applying it (components/UpdateNotice) — a reload nobody asked for
+      // can eat a half-filled admin form (issue #42, docs/02 §11.1).
+      registerType: 'prompt',
+      // We register from the app (UpdateNotice, via virtual:pwa-register/react) —
+      // an *inline* registration script would violate the strict CSP
+      // (script-src 'self').
       injectRegister: null,
       // The manifest is served dynamically by the Go backend from runtime branding
       // (/manifest.webmanifest), so the SPA build must not emit/inject its own.

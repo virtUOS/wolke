@@ -136,6 +136,11 @@ const de = {
     installButton: 'Installieren',
     dismiss: 'Hinweis schließen',
   },
+  update: {
+    available: 'Neue Version verfügbar.',
+    reload: 'Neu laden',
+    dismiss: 'Hinweis schließen',
+  },
   footer: {
     legal: 'Rechtliches',
     imprint: 'Impressum',
@@ -328,6 +333,11 @@ const en: Strings = {
     installBody: 'You can install this dashboard as an app on your home screen.',
     installBodyIOS: 'You can install this dashboard as an app: open the share menu and choose "Add to Home Screen".',
     installButton: 'Install',
+    dismiss: 'Dismiss hint',
+  },
+  update: {
+    available: 'New version available.',
+    reload: 'Reload',
     dismiss: 'Dismiss hint',
   },
   footer: {

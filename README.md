@@ -126,6 +126,8 @@ Caddy serves HTTPS on :443 (its internal CA for `localhost`; real certificates f
 
 **Branding and OIDC claim mapping** live in `config.yaml` (copy from `config.example.yaml`). This is the one file you edit to reskin for a different institution — colors, logo paths, product name, and which OIDC claim maps to which role. OIDC is provider-agnostic (Keycloak, Authentik, Zitadel, Entra, …); for a step-by-step Keycloak setup see **[docs/oidc-keycloak.md](docs/oidc-keycloak.md)**. wolke also implements **OIDC back-channel logout** — logging out at the IdP ends the wolke session too. Register `PUBLIC_URL` + `/auth/backchannel-logout` as the client's back-channel logout URL at your IdP (with "session required" enabled where offered); that registration is the only knob, the endpoint is always on. `TRUSTED_PROXIES` must cover the proxy's network so `X-Forwarded-For` is trusted (it's preset to the compose `edge` subnet).
 
+**PWA updates reach open clients.** The app is an installable PWA whose service worker updates in *prompt* mode: a deploy never reloads anyone's tab by surprise, but every running client — a long-lived desktop tab or the installed app on a phone — checks for a new version hourly and on every resume, then offers an in-app "Neue Version verfügbar. / Reload" notice. So a fix ships to open clients within an hour, or on the next app resume, whichever comes first. See [docs/02 §11.1](docs/02-technical-spec.md).
+
 **Migrations** are forward-only (goose) and applied by the app on startup (see above). Rolling back requires an explicit `make migrate-down` in dev.
 
 ---
