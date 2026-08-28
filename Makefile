@@ -120,6 +120,20 @@ catalog-mcp: ## Build the public read-only catalog MCP server (stdio) -> bin/cat
 	go build -o bin/catalog-mcp ./cmd/catalog-mcp
 	@echo "built bin/catalog-mcp — point an MCP client at it (see README → Public catalog MCP server)"
 
+## --- End-to-end (Playwright viewport suite) ---
+
+.PHONY: e2e-install
+e2e-install: ## One-time: install the Chromium build Playwright drives
+	cd web-ui && npx playwright install chromium
+
+.PHONY: e2e
+e2e: build ## Run the viewport e2e suite against the embedded binary (needs `make db idp seed`)
+	cd web-ui && npx playwright test
+
+.PHONY: e2e-ui
+e2e-ui: build ## Same suite in Playwright's interactive UI mode
+	cd web-ui && npx playwright test --ui
+
 .PHONY: check
 check: lint test web-check ## Run the full local gate (Go + frontend)
 

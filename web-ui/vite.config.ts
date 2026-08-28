@@ -71,6 +71,9 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './vitest.setup.ts',
+    // Playwright owns e2e/**/*.spec.ts (a real browser at fixed viewports);
+    // e2e/helpers/*.test.ts are plain unit tests and stay with Vitest.
+    exclude: ['node_modules/**', 'dist/**', 'e2e/**/*.spec.ts'],
     coverage: {
       provider: 'v8',
       reportsDirectory: 'coverage',

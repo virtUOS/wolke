@@ -37,10 +37,32 @@ Docker. Usability and simplicity are the product goals — prefer the boring, si
 - **i18n:** localized strings as `{de,en}`; ship `de`, keep `en` wired. Never break layout on long
   German compounds.
 
+## Responsive & viewport discipline
+
+Real-device testing showed mobile UX regressions (especially viewport overflows) slipping
+through. Treat responsive correctness like a11y: a floor, not a polish phase.
+
+- **Mobile-first, always.** Any UI change is designed and verified at the phone layout before
+  the desktop one. Long German compounds and real content lengths, not lorem ipsum.
+- **The viewport matrix is fixed.** Playwright e2e runs every UI-relevant flow at these
+  resolutions (see `docs/specs/responsive-viewport-testing.md` for the harness):
+  - Mobile: **324×756** (Galaxy Fold cover display — the narrowest we support), **360×800**
+    (small Android), **390×844** (iPhone-class)
+  - Tablet: **768×1024**
+  - Desktop: **1280×720**, **1920×1080**
+- **Overflow is a test failure, not a review nit.** The shared viewport assertions check, on
+  every tested page/state: no horizontal document scroll, no element extending past the
+  viewport width, no unintended clipped/overlapping text, touch targets ≥ 44px at mobile
+  sizes, and computed body text ≥ 12px.
+- **New UI ships with viewport coverage.** A feature that adds or changes a screen, dialog,
+  or layout state adds it to the e2e viewport suite (all matrix sizes) in the same PR.
+
 ## Definition of done for any change
 - Tests written and passing (unit + integration where it touches the DB or auth).
 - `go test -race ./...`, `tsc --noEmit`, lints, and the embedded build all green.
 - a11y checked (axe + keyboard) for any UI.
+- Playwright viewport suite green across the full matrix for any UI change; new screens/states
+  added to it (see "Responsive & viewport discipline").
 - New write paths are audited and, if admin-relevant, exposed through both form and MCP via the
   shared service layer.
 - Docs updated if behavior or the data model changed.
@@ -51,3 +73,8 @@ Docker. Usability and simplicity are the product goals — prefer the boring, si
 - Don't expose `/metrics` publicly.
 - Don't let an MCP tool write without a confirmed, unexpired change token.
 - Don't invent brand hex values — use the tokens file; flag if the official values are still TBD.
+
+## Commits and CI
+
+- **Commit messages carry no Claude co-authorship.** No `Co-Authored-By: Claude`, no "Generated with Claude Code", no tool attribution of any kind. This is not negotiable and applies to every commit.
+- **Container images build in GitHub Actions and publish to ghcr.io.** Never build or push images from a local machine — local podman and production docker must not diverge in what they run. amd64 only; there is no GPU story on arm here.

@@ -39,7 +39,7 @@ export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCou
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
         <span
           style={{
-            fontSize: 11.5, fontWeight: 600, letterSpacing: '.12em',
+            fontSize: 12, fontWeight: 600, letterSpacing: '.12em',
             textTransform: 'uppercase', color: 'var(--text-muted)',
           }}
         >

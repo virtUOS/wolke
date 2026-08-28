@@ -44,6 +44,36 @@ Open **http://localhost:5173** in your browser. The mock IdP lets you log in wit
 
 > **Note:** after any schema change (`migrations/` gets a new file), run `make migrate` before restarting the server.
 
+### End-to-end viewport tests
+
+Layout correctness on real phone widths is a gate, not a polish pass
+(CLAUDE.md → "Responsive & viewport discipline"). The Playwright suite drives the
+**embedded binary** — the artifact we ship — against the local Postgres and mock
+IdP, and runs every covered screen at six fixed resolutions (324×756, 360×800,
+390×844, 768×1024, 1280×720, 1920×1080), failing on horizontal overflow, text
+under 12px and phone touch targets under 44px.
+
+```bash
+make e2e-install   # once: download the Chromium build Playwright drives
+make db idp seed   # the suite needs the same stack as `make run`
+make e2e           # build the SPA + binary, then run the whole matrix
+make e2e-ui        # the same suite in Playwright's interactive UI mode
+```
+
+A single project or spec:
+
+```bash
+cd web-ui
+npx playwright test --project=mobile-324
+npx playwright test e2e/dashboard.spec.ts
+npx playwright show-report
+```
+
+The specs live in `web-ui/e2e/`; `docs/specs/responsive-viewport-testing.md` is
+the design, including what the shared assertions check and how to add a screen.
+Specs named `issue-<n>-*.spec.ts` reproduce an open layout bug and are annotated
+`test.fixme` with a link to it — the PR that fixes the bug removes the annotation.
+
 ### Other useful targets
 
 ```
@@ -51,6 +81,7 @@ make test         Run Go tests with the race detector
 make lint         Run golangci-lint
 make web-check    Frontend typecheck + lint + tests
 make check        Run the full local gate (Go + frontend combined)
+make e2e          Playwright viewport suite (see above)
 make migrate-down Roll back the last migration
 make sqlc         Regenerate type-safe queries from SQL (after editing *.sql)
 make build        Build a single binary with the SPA embedded → bin/server
