@@ -10,6 +10,12 @@
    the v3 `colors: { primary: 'var(--primary)' }` config did. The variable values
    themselves are defined below in :root/.dark and overridden by the payload. */
 @theme inline {
+  /* Tailwind's own default for `md:` — written out explicitly (not just relied
+     on) so it stays the one place the value lives on the CSS side; keep it in
+     sync with MOBILE_BREAKPOINT_PX in src/lib/breakpoints.ts, the JS side's
+     matchMedia query (docs/03 §4). */
+  --breakpoint-md: 768px;
+
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);

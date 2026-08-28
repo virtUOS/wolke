@@ -31,6 +31,31 @@ function isPlainClick(e: MouseEvent): boolean {
   return e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey
 }
 
+// Shared by both layouts below (grid card + mobile list row): break-words +
+// hyphens-auto so a long German compound ("Identitätsmanagement") wraps
+// instead of overflowing its box (CLAUDE.md, issue #23).
+function TileName({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <span
+      className="break-words hyphens-auto"
+      style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em', ...style }}
+    >
+      {children}
+    </span>
+  )
+}
+
+function TileDescription({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      className="break-words hyphens-auto"
+      style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-muted)' }}
+    >
+      {children}
+    </p>
+  )
+}
+
 interface TileProps {
   service: Service
   locale: string
@@ -115,25 +140,12 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
 
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
-              {/* break-words + hyphens-auto: a long German compound
-                  ("Identitätsmanagement") is wider than the column at 324px and
-                  would otherwise overflow its box (CLAUDE.md, issue #23). */}
-              <span
-                className="break-words hyphens-auto"
-                style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em', minWidth: 0 }}
-              >
-                {service.name}
-              </span>
+              <TileName style={{ minWidth: 0 }}>{service.name}</TileName>
               {service.tag === 'beta' && <Badge variant="info">{s.tile.beta}</Badge>}
               {service.tag === 'wartung' && <Badge variant="warning">{s.tile.maintenance}</Badge>}
               {docsOnly && <Badge variant="neutral">{s.tile.docs}</Badge>}
             </div>
-            <p
-              className="break-words hyphens-auto"
-              style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-muted)' }}
-            >
-              {description}
-            </p>
+            <TileDescription>{description}</TileDescription>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'auto' }}>
@@ -214,22 +226,12 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
         {/* Body: name + badge(s) + description */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span
-              className="break-words hyphens-auto"
-              style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em' }}
-            >
-              {service.name}
-            </span>
+            <TileName>{service.name}</TileName>
             {service.tag === 'beta' && <Badge variant="info">{s.tile.beta}</Badge>}
             {service.tag === 'wartung' && <Badge variant="warning">{s.tile.maintenance}</Badge>}
             {docsOnly && <Badge variant="neutral">{s.tile.docs}</Badge>}
           </div>
-          <p
-            className="break-words hyphens-auto"
-            style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-muted)' }}
-          >
-            {description}
-          </p>
+          <TileDescription>{description}</TileDescription>
         </div>
 
         {/* Footer: category label + docs link */}
@@ -240,8 +242,9 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           }}
         >
           <span
+            className="text-xs"
             style={{
-              fontSize: 12, fontWeight: 600, letterSpacing: '.1em',
+              fontWeight: 600, letterSpacing: '.1em',
               textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap',
             }}
           >
