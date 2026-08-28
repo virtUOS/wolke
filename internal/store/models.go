@@ -98,6 +98,7 @@ type Session struct {
 	Data      []byte             `json:"data"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	OidcSid   pgtype.Text        `json:"oidc_sid"`
 }
 
 type UsageDaily struct {

@@ -23,6 +23,8 @@ type SessionDB interface {
 	CreateSession(ctx context.Context, arg store.CreateSessionParams) error
 	GetSession(ctx context.Context, id string) (store.Session, error)
 	DeleteSession(ctx context.Context, id string) error
+	DeleteSessionsBySID(ctx context.Context, oidcSid pgtype.Text) (int64, error)
+	DeleteSessionsByOIDCSub(ctx context.Context, oidcSub string) (int64, error)
 }
 
 // SessionStore issues and validates server-side sessions (BFF pattern, docs/02
@@ -39,8 +41,10 @@ func NewSessionStore(db SessionDB, ttl time.Duration) *SessionStore {
 }
 
 // New creates a session for the user and returns the raw token to set in the
-// cookie, plus its expiry.
-func (s *SessionStore) New(ctx context.Context, userID pgtype.UUID) (token string, expires time.Time, err error) {
+// cookie, plus its expiry. oidcSID is the IdP session id (`sid` ID-token claim)
+// the session belongs to; empty (stored as NULL) when the IdP sends none —
+// back-channel logout then can't target it by sid, only by sub.
+func (s *SessionStore) New(ctx context.Context, userID pgtype.UUID, oidcSID string) (token string, expires time.Time, err error) {
 	token, err = newSessionToken()
 	if err != nil {
 		return "", time.Time{}, err
@@ -50,6 +54,7 @@ func (s *SessionStore) New(ctx context.Context, userID pgtype.UUID) (token strin
 		ID:        hashToken(token),
 		UserID:    userID,
 		ExpiresAt: pgtype.Timestamptz{Time: expires, Valid: true},
+		OidcSid:   pgText(oidcSID),
 	})
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("create session: %w", err)
@@ -65,6 +70,21 @@ func (s *SessionStore) Lookup(ctx context.Context, token string) (store.Session,
 // Delete invalidates the session for a raw cookie token (logout).
 func (s *SessionStore) Delete(ctx context.Context, token string) error {
 	return s.db.DeleteSession(ctx, hashToken(token))
+}
+
+// DeleteBySID ends every session created from the given IdP session id
+// (back-channel logout with a sid claim) and reports how many were ended.
+func (s *SessionStore) DeleteBySID(ctx context.Context, oidcSID string) (int64, error) {
+	if oidcSID == "" {
+		return 0, nil // never match the NULL rows of sid-less logins
+	}
+	return s.db.DeleteSessionsBySID(ctx, pgText(oidcSID))
+}
+
+// DeleteByOIDCSub ends every session of the user with the given OIDC subject
+// (back-channel logout with only a sub claim) and reports how many were ended.
+func (s *SessionStore) DeleteByOIDCSub(ctx context.Context, oidcSub string) (int64, error) {
+	return s.db.DeleteSessionsByOIDCSub(ctx, oidcSub)
 }
 
 func newSessionToken() (string, error) {

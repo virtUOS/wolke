@@ -159,7 +159,11 @@ func (s *Service) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, expires, err := s.sessions.New(r.Context(), user.ID)
+	// Bind the session to the IdP session (`sid` claim, verified above) so a
+	// back-channel logout can end it; absent sid (IdP without back-channel
+	// support) just stores NULL and login proceeds unchanged.
+	sid, _ := claims["sid"].(string)
+	token, expires, err := s.sessions.New(r.Context(), user.ID, sid)
 	if err != nil {
 		s.fail(w, r, "create session", err)
 		return
