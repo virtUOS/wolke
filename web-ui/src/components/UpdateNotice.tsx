@@ -26,27 +26,23 @@ export function UpdateNotice({ locale }: { locale: Lang }) {
   })
 
   // The e2e seam (lib/pwa-update): the same notice, without a waiting worker.
-  const [seamFired, setSeamFired] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
+  const [seamCount, setSeamCount] = useState(0)
+  const [dismissedAt, setDismissedAt] = useState(0)
 
   useEffect(() => {
-    const onSeam = () => {
-      setSeamFired(true)
-      setDismissed(false)
-    }
+    const onSeam = () => setSeamCount((n) => n + 1)
     window.addEventListener(SW_NEED_REFRESH_EVENT, onSeam)
     return () => window.removeEventListener(SW_NEED_REFRESH_EVENT, onSeam)
   }, [])
 
-  // A dismissal lasts for this page load only — nothing is persisted, because
-  // the next load already runs the new version. A tab that lives on and detects
-  // a *later* update should see the notice again, so the flag clears whenever
-  // needRefresh rises.
-  useEffect(() => {
-    if (needRefresh) setDismissed(false)
-  }, [needRefresh])
-
-  if (dismissed || !(needRefresh || seamFired)) return null
+  // How many updates this page load has been told about. A dismissal just
+  // records the count it was made at — nothing is persisted, because the next
+  // load already runs the new version, and a tab that lives on and hears about
+  // a *later* update raises the count and so shows the notice again. Derived
+  // rather than synced through an effect, so there is no render-then-correct
+  // pass and no state to keep consistent.
+  const updates = (needRefresh ? 1 : 0) + seamCount
+  if (updates === 0 || updates === dismissedAt) return null
 
   const reload = () => {
     // With a worker waiting, updateServiceWorker(true) activates it and reloads.
@@ -93,7 +89,7 @@ export function UpdateNotice({ locale }: { locale: Lang }) {
         variant="plain"
         aria-label={s.update.dismiss}
         className="h-11 w-11 shrink-0 md:h-9 md:w-9"
-        onClick={() => setDismissed(true)}
+        onClick={() => setDismissedAt(updates)}
       >
         <X className="h-4 w-4" aria-hidden="true" />
       </IconButton>
