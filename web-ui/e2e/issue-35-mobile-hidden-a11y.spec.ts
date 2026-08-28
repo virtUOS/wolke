@@ -10,20 +10,19 @@
 // became obvious.
 
 import { expectNothingInvisibleAnnounced } from './helpers/a11y'
+import { gotoApp } from './helpers/session'
 import { expect, test } from './fixtures'
 
 test.use({ viewportChecks: [] })
 
 test.describe('issue #35 — the accessibility tree matches what is on screen', () => {
   test('the dashboard announces nothing it does not show', async ({ page }) => {
-    await page.goto('/')
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await gotoApp(page)
     await expectNothingInvisibleAnnounced(page, 'dashboard')
   })
 
   test('the services tab announces nothing it does not show', async ({ page }) => {
-    await page.goto('/?tab=dienste')
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await gotoApp(page, '/?tab=dienste')
     await expectNothingInvisibleAnnounced(page, 'services')
   })
 
@@ -31,8 +30,7 @@ test.describe('issue #35 — the accessibility tree matches what is on screen', 
     // Quiet at rest is only correct if the region still does its job when the
     // result set changes. The announcement clears itself after a few seconds, so
     // this assertion has to land inside that window — toHaveText retries.
-    await page.goto('/?tab=dienste')
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await gotoApp(page, '/?tab=dienste')
     const liveRegion = page.locator('[aria-live="polite"]')
     await expect(liveRegion).toHaveText('')
 

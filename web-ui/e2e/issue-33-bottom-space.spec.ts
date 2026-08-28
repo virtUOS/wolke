@@ -3,6 +3,7 @@
 // footer was pinned to the bottom of the viewport while the (deliberately short)
 // mobile dashboard ended far above it, leaving a large dead band in between.
 
+import { gotoApp } from './helpers/session'
 import { expect, test } from './fixtures'
 
 /** How much slack between the last content and the footer still reads as layout, not a hole. */
@@ -16,8 +17,7 @@ test.describe('issue #33 — no dead space at the bottom', () => {
   test.skip(({ isMobile }) => isMobile !== true, 'reported for the phone layout')
 
   test('the footer follows the content instead of being pushed to the bottom', async ({ page }) => {
-    await page.goto('/')
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await gotoApp(page)
 
     const measured = await page.evaluate(() => {
       const main = document.querySelector('main')!

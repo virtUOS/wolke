@@ -7,30 +7,29 @@
 // defects at the same widths.
 
 import { expectNoHorizontalOverflow } from './helpers/viewport'
+import { gotoApp } from './helpers/session'
 import { expect, test } from './fixtures'
 
 test.use({ viewportChecks: [] })
 
 test.describe('issue #23 — the chrome fits the viewport', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await gotoApp(page)
   })
 
   test('the top bar does not push the document into horizontal scroll', async ({ page }) => {
-    const measured = await page.evaluate(() => {
-      const bar = document.querySelector('header > div') as HTMLElement
-      return {
-        viewportWidth: document.documentElement.clientWidth,
-        barContentWidth: bar.scrollWidth,
-        documentScrollWidth: document.scrollingElement!.scrollWidth,
-      }
-    })
+    const bar = page.locator('header > div').first()
+    await expect(bar).toBeVisible()
+    const barContentWidth = await bar.evaluate((el) => el.scrollWidth)
+    const { viewportWidth, documentScrollWidth } = await page.evaluate(() => ({
+      viewportWidth: document.documentElement.clientWidth,
+      documentScrollWidth: document.scrollingElement!.scrollWidth,
+    }))
     expect(
-      measured.barContentWidth,
-      `the top bar's content is ${measured.barContentWidth}px wide in a ${measured.viewportWidth}px viewport`,
-    ).toBeLessThanOrEqual(measured.viewportWidth + 1)
-    expect(measured.documentScrollWidth).toBeLessThanOrEqual(measured.viewportWidth + 1)
+      barContentWidth,
+      `the top bar's content is ${barContentWidth}px wide in a ${viewportWidth}px viewport`,
+    ).toBeLessThanOrEqual(viewportWidth + 1)
+    expect(documentScrollWidth).toBeLessThanOrEqual(viewportWidth + 1)
   })
 
   test('the account menu opens without overflowing', async ({ page }) => {

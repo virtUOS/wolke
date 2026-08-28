@@ -7,6 +7,7 @@
 // reached mid-test, so specs still call the helpers explicitly there.
 
 import { test as base, expect } from '@playwright/test'
+import { installDomWalkHelpers } from './helpers/dom-walk'
 import { type ViewportCheck, expectViewportHealthy } from './helpers/viewport'
 
 interface ViewportOptions {
@@ -24,6 +25,14 @@ interface ViewportOptions {
 
 export const test = base.extend<ViewportOptions & { viewportGuard: void }>({
   viewportChecks: [undefined, { option: true }],
+
+  // Every spec's page gets the shared visibility/direct-text helper (see
+  // helpers/dom-walk.ts) before its own goto — both viewport.ts and a11y.ts
+  // rely on it being there.
+  page: async ({ page }, use) => {
+    await installDomWalkHelpers(page)
+    await use(page)
+  },
 
   viewportGuard: [
     async ({ page, viewportChecks }, use, testInfo) => {
