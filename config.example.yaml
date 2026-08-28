@@ -96,3 +96,16 @@ branding:
       accent: "#F2C879"
       surface: "#1E1E21"
       text: "#F4F4F5"
+
+# Backups are NOT configured here. The restic/S3 backup sidecar in
+# compose.prod.yaml is a separate process that never reads this file — its
+# settings are all scalars and secrets, so they live in the environment:
+#
+#   RESTIC_REPOSITORY, RESTIC_PASSWORD, AWS_ACCESS_KEY_ID,
+#   AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION,
+#   BACKUP_INTERVAL_SECONDS (default 86400), BACKUP_RUN_ON_START (true),
+#   BACKUP_KEEP_DAILY (7), BACKUP_KEEP_WEEKLY (4), BACKUP_KEEP_MONTHLY (6),
+#   BACKUP_TAG (wolke-db), BACKUP_INIT_REPO (true), BACKUP_PROBE_TIMEOUT (45)
+#
+# See .env.example for the annotated block, README → "Backups" for the how, and
+# docs/runbooks/restore-postgres.md for getting the data back.

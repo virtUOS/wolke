@@ -98,6 +98,73 @@ services:
       start_period: 10s
       retries: 3
 
+  # Scheduled Postgres backups to an S3 bucket via restic. OPT-IN: this service
+  # only starts with `--profile backup`, so a deployment that hasn't configured
+  # a repository runs exactly as before. When it IS enabled it fails closed and
+  # loudly — missing configuration, an unreachable bucket or an unreachable
+  # database all log at ERROR and exit non-zero, so the container crash-loops
+  # visibly instead of silently skipping backups. See README → Backups.
+  #
+  # postgres:*-alpine is the base so pg_dump matches the server's major version
+  # exactly (an older pg_dump refuses to dump a newer server); restic is added
+  # from the matching Alpine community repo on start-up, which is why this is
+  # the one service without a read-only root filesystem.
+  backup:
+    image: docker.io/library/postgres:17-alpine
+    profiles: ["backup"]
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    environment:
+      # --- Where backups go (no defaults; all institution-specific) ---
+      # NOTE: these use `:-`, not the `:?` fail-closed form used elsewhere in
+      # this file. Compose interpolates the whole file before it applies
+      # profiles, so a `:?` here would abort `compose up` for deployments that
+      # never enable backups. The check moved into backup.sh instead: it refuses
+      # to start and logs at ERROR when these are empty.
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      # --- What to dump ---
+      PGHOST: postgres
+      PGUSER: wolke
+      PGDATABASE: wolke
+      PGPASSWORD: ${POSTGRES_PASSWORD:-}
+      # --- Schedule and retention (defaults: daily, 7/4/6) ---
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RUN_ON_START: ${BACKUP_RUN_ON_START:-true}
+      BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-7}
+      BACKUP_KEEP_WEEKLY: ${BACKUP_KEEP_WEEKLY:-4}
+      BACKUP_KEEP_MONTHLY: ${BACKUP_KEEP_MONTHLY:-6}
+      BACKUP_TAG: ${BACKUP_TAG:-wolke-db}
+      # Create the repository on first run. Set false if you'd rather run
+      # `restic init` yourself (then a typo'd repository fails instead of
+      # quietly starting a second, empty one).
+      BACKUP_INIT_REPO: ${BACKUP_INIT_REPO:-true}
+      # How long to wait for the repository to answer before declaring it
+      # unreachable (restic's own backoff would otherwise retry for ~15 min).
+      BACKUP_PROBE_TIMEOUT: ${BACKUP_PROBE_TIMEOUT:-45}
+      # Pin restic itself if you need reproducibility, e.g. "0.18.1-r7".
+      BACKUP_RESTIC_VERSION: ${BACKUP_RESTIC_VERSION:-}
+    volumes:
+      - ./deploy/backup/backup.sh:/backup.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # `backend` reaches Postgres; `egress` is the only route out to S3. It is a
+    # separate network from `edge` on purpose — the backup job must not sit in
+    # the subnet the app trusts for X-Forwarded-* headers.
+    networks:
+      - backend
+      - egress
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
+
   caddy:
     image: docker.io/library/caddy:2
     ports:
@@ -138,3 +205,9 @@ networks:
     ipam:
       config:
         - subnet: 172.29.0.0/16
+  # Outbound-only network for the backup job (S3). Not `internal`, and
+  # deliberately not `edge` — see the backup service.
+  egress:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
