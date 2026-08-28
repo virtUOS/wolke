@@ -132,6 +132,17 @@ p {
   background: color-mix(in srgb, var(--accent) 8%, transparent) !important;
 }
 
+/* The update notice (issue #42) slides in once, gently — it interrupts nothing,
+   so it should not arrive abruptly either. Neutralised by the reduced-motion
+   block below. */
+.update-notice {
+  animation: update-notice-in .18s ease-out;
+}
+@keyframes update-notice-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
 /* Respect reduced-motion globally (docs/03 §8). */
 @media (prefers-reduced-motion: reduce) {
   *,

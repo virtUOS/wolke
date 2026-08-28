@@ -3,6 +3,7 @@ import type { Me } from '@/lib/api'
 import { feedbackHref, type Branding } from '@/lib/branding'
 import { t, type Lang } from '@/lib/i18n'
 import { TopBar, type Tab } from './TopBar'
+import { UpdateNotice } from './UpdateNotice'
 
 // The centered content column: <main> and the footer share this width, and the
 // assistant launcher aligns its right edge to it (AssistantWidget).
@@ -192,6 +193,10 @@ export function DashboardShell({
           </div>
         </footer>
       )}
+      {/* The in-app "new version available" prompt (issue #42). Mounted here,
+          once, for every dashboard view — it also owns the service-worker
+          registration and its periodic update checks. */}
+      <UpdateNotice locale={locale} />
     </div>
   )
 }

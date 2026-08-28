@@ -498,12 +498,28 @@ The app is an installable PWA. Like the rest of branding, this stays white-label
 - **Icons** live in the branding dir (`/branding/icon-192.png`, `icon-512.png`,
   `icon-maskable-512.png`, `apple-touch-icon.png`) and are overridden by mounting replacements,
   exactly like the logo. Defaults ship with the bundled placeholder mark.
-- **Service worker** (Workbox via `vite-plugin-pwa`) precaches only the static shell and
-  auto-updates. It is deliberately **auth-safe**: `/api`, `/auth`, `/branding`, and `/metrics` are
-  never cached and never answered from the shell (a `navigateFallback` denylist), so per-user/
-  role-aware data can't leak on a shared device and the OIDC redirect flow is untouched. The app
-  needs a connection to do anything beyond the shell, so there is no offline catalog — just an
-  installable, standalone window. `sw.js` is served `Cache-Control: no-cache` so deploys land.
+- **Service worker** (Workbox via `vite-plugin-pwa`) precaches only the static shell. It is
+  deliberately **auth-safe**: `/api`, `/auth`, `/branding`, and `/metrics` are never cached and
+  never answered from the shell (a `navigateFallback` denylist), so per-user/role-aware data can't
+  leak on a shared device and the OIDC redirect flow is untouched. The app needs a connection to do
+  anything beyond the shell, so there is no offline catalog — just an installable, standalone
+  window. `sw.js` is served `Cache-Control: no-cache` so deploys land.
+- **Updates are prompted, never silent** (`registerType: 'prompt'`, issue #42). A new deploy's
+  worker installs and then *waits*; the app shows a small, polite `role="status"` notice — "Neue
+  Version verfügbar." + a Reload button — and only that click activates the waiting worker and
+  reloads. Nothing reloads on its own: admin forms exist, and an unrequested reload eats input. A
+  dismissal lasts for the current page load only; nothing is persisted (the next load already runs
+  the new version), and a later update re-shows the notice.
+- **Open tabs learn about deploys.** A page that is never navigated would otherwise run a
+  superseded bundle forever, which is exactly the case that breaks iterating in production. So the
+  registration is re-checked (`registration.update()`) **every 60 minutes** — a constant, not a
+  knob — and **whenever the document becomes visible again**, which is the installed-PWA "phone
+  unlocks, app resumes" case. A failed check (offline, server restarting) is ignored; the next
+  interval or resume retries.
+- The notice component (`web-ui/src/components/UpdateNotice.tsx`) also shows on a
+  `wolke:sw-need-refresh` window CustomEvent. That is the documented seam the e2e suite triggers —
+  Playwright cannot build a second worker version against one embedded binary — and it is ordinary
+  production code: with no worker waiting, its Reload falls back to a plain navigation.
 
 **Other config (env):** `DATABASE_URL`, `PUBLIC_URL`, `SESSION_SECRET`, `OIDC_*` (issuer, client
 id/secret, scopes) + the claim-mapping file from §6, `METRICS_TOKEN`, `LOG_LEVEL`. Ship a
