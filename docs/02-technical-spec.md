@@ -271,6 +271,29 @@ requirement for open-source reuse: nothing in the code may assume Keycloak speci
 5. API calls are authorized from the session. Logout clears the session and uses the discovered
    `end_session_endpoint` if present.
 
+**Logout — both directions**
+- *RP-initiated* (the wolke logout button): the server deletes the session row, clears the cookie,
+  and redirects to the discovered `end_session_endpoint` (with `client_id` +
+  `post_logout_redirect_uri`) so the IdP session ends too.
+- *IdP-initiated* (**OIDC Back-Channel Logout 1.0**): logging out at the SSO must also end the
+  wolke session (shared/pool computers). At login the `sid` claim of the verified ID token is
+  stored on the session row (`sessions.oidc_sid`, NULL when the IdP sends none). The IdP POSTs a
+  signed logout token to `POST /auth/backchannel-logout` (unauthenticated, server-to-server,
+  responses `Cache-Control: no-store`; exempt from the shared write rate limit — all IdP
+  notifications come from one IP — and throttled by its own generous per-IP limit instead).
+  The token is validated per spec §2.4–2.6 — JWKS
+  signature, `iss`, `aud`, `iat` freshness, `exp` (required per the final spec), the
+  `http://schemas.openid.net/event/backchannel-logout` events member, **`nonce` must be absent**,
+  `sid` or `sub` present, `jti` replay refused (in-process TTL cache; multi-instance would move
+  this to shared storage, §9). Revocation: `sid` → delete the sessions with that `oidc_sid`;
+  `sub` only → delete all sessions of that user. The endpoint answers `200` even when nothing
+  matched (an expired session is a successful logout; anything else is a live-sid oracle) and
+  `400` problem+json for invalid tokens. Accepted logouts are logged via slog (issuer, hashed
+  sid/sub, sessions ended) — a security event stream, not an `audit_log` write. The endpoint is
+  provider-agnostic and always registered; a deployment enables the feature purely by
+  registering the URL at its IdP (see `docs/oidc-keycloak.md`). Front-channel logout is out of
+  scope (third-party-cookie dependent).
+
 **Configurable claim mapping (no rebuild to re-deploy elsewhere).** Every deployment differs in how
 it represents roles and admins, so the mapping is data, supplied via config (env or a mounted
 `auth.yaml`), not code:

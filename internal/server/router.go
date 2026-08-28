@@ -115,6 +115,13 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 	r.Get("/auth/login", deps.Auth.Login)
 	r.Get("/auth/callback", deps.Auth.Callback)
 	r.Post("/auth/logout", deps.Auth.Logout)
+	// IdP-facing, unauthenticated like /auth/callback. The csrfGuard stays in
+	// front but never blocks it: the IdP's server-to-server POST carries no
+	// Origin header. The body limit applies as everywhere; the write rate
+	// limit deliberately doesn't — every IdP logout arrives from one IP and a
+	// 429 is never retried, so the route carries its own generous limit.
+	backchannelLimiter := newKeyedLimiter(backchannelRatePerMinute)
+	r.With(backchannelLimiter.middleware).Post(backchannelLogoutPath, deps.Auth.BackchannelLogout)
 
 	searchLimiter := newKeyedLimiter(searchRatePerMinute)
 	r.Group(func(pr chi.Router) {

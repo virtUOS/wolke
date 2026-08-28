@@ -22,10 +22,14 @@ import (
 // code-flow config, and ID-token verification (docs/02 §6). Nothing here is
 // provider-specific — it is built entirely from the discovery document.
 type Authenticator struct {
-	provider     *oidc.Provider
-	verifier     *oidc.IDTokenVerifier
-	oauth        *oauth2.Config
-	endSessionEP string
+	provider *oidc.Provider
+	verifier *oidc.IDTokenVerifier
+	// logoutVerifier checks back-channel logout tokens: same JWKS and issuer,
+	// but exp is optional for logout tokens (spec §2.4), so expiry is checked
+	// by hand in verifyLogoutToken.
+	logoutVerifier *oidc.IDTokenVerifier
+	oauth          *oauth2.Config
+	endSessionEP   string
 }
 
 // NewAuthenticator discovers the issuer and builds the code-flow client. The
@@ -37,6 +41,7 @@ func NewAuthenticator(ctx context.Context, cfg *config.Config) (*Authenticator, 
 	}
 	var extra struct {
 		EndSessionEndpoint string `json:"end_session_endpoint"`
+		JWKSURI            string `json:"jwks_uri"`
 	}
 	_ = provider.Claims(&extra)
 
@@ -46,8 +51,15 @@ func NewAuthenticator(ctx context.Context, cfg *config.Config) (*Authenticator, 
 	endpoint.AuthStyle = oauth2.AuthStyleInParams
 
 	return &Authenticator{
-		provider:     provider,
-		verifier:     provider.Verifier(&oidc.Config{ClientID: cfg.OIDC.ClientID}),
+		provider: provider,
+		verifier: provider.Verifier(&oidc.Config{ClientID: cfg.OIDC.ClientID}),
+		// The logout verifier reads keys through cooldownKeySet: the endpoint
+		// it backs is unauthenticated, so unknown-kid junk must not drive one
+		// JWKS fetch per request (keyset.go).
+		logoutVerifier: oidc.NewVerifier(cfg.OIDC.IssuerURL, newCooldownKeySet(extra.JWKSURI), &oidc.Config{
+			ClientID:        cfg.OIDC.ClientID,
+			SkipExpiryCheck: true, // exp is re-checked with clock skew in verifyLogoutToken
+		}),
 		endSessionEP: extra.EndSessionEndpoint,
 		oauth: &oauth2.Config{
 			ClientID:     cfg.OIDC.ClientID,

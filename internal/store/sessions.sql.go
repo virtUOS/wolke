@@ -12,19 +12,26 @@ import (
 )
 
 const createSession = `-- name: CreateSession :exec
-insert into sessions (id, user_id, expires_at) values ($1, $2, $3)
+insert into sessions (id, user_id, expires_at, oidc_sid) values ($1, $2, $3, $4)
 `
 
 type CreateSessionParams struct {
 	ID        string             `json:"id"`
 	UserID    pgtype.UUID        `json:"user_id"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	OidcSid   pgtype.Text        `json:"oidc_sid"`
 }
 
 // id is sha256(token); the raw token lives only in the cookie, so a DB read
-// never yields a usable session credential.
+// never yields a usable session credential. oidc_sid is the IdP session id
+// (NULL when the IdP sends no sid claim) — back-channel logout revokes by it.
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
-	_, err := q.db.Exec(ctx, createSession, arg.ID, arg.UserID, arg.ExpiresAt)
+	_, err := q.db.Exec(ctx, createSession,
+		arg.ID,
+		arg.UserID,
+		arg.ExpiresAt,
+		arg.OidcSid,
+	)
 	return err
 }
 
@@ -46,8 +53,36 @@ func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 	return err
 }
 
+const deleteSessionsByOIDCSub = `-- name: DeleteSessionsByOIDCSub :execrows
+delete from sessions using users
+where sessions.user_id = users.id and users.oidc_sub = $1
+`
+
+// Back-channel logout with only a sub: the IdP couldn't say which session, so
+// end every session of that user (OIDC Back-Channel Logout 1.0 §2.4 semantics).
+func (q *Queries) DeleteSessionsByOIDCSub(ctx context.Context, oidcSub string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSessionsByOIDCSub, oidcSub)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteSessionsBySID = `-- name: DeleteSessionsBySID :execrows
+delete from sessions where oidc_sid = $1
+`
+
+// Back-channel logout with a sid: end exactly the sessions of that IdP session.
+func (q *Queries) DeleteSessionsBySID(ctx context.Context, oidcSid pgtype.Text) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSessionsBySID, oidcSid)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getSession = `-- name: GetSession :one
-select id, user_id, data, created_at, expires_at
+select id, user_id, data, created_at, expires_at, oidc_sid
 from sessions
 where id = $1 and expires_at > now()
 `
@@ -61,6 +96,7 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 		&i.Data,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.OidcSid,
 	)
 	return i, err
 }

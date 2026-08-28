@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/httpx"
 )
 
 // RoleDefaultsStore is the capability the defaults endpoint needs: the
@@ -21,7 +22,7 @@ func catalogList(c *catalog.Cache) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		snap, err := c.Get(r.Context())
 		if err != nil {
-			writeProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
 			return
 		}
 		writeJSON(w, http.StatusOK, snap)
@@ -34,17 +35,17 @@ func catalogDefaults(c *catalog.Cache, defaults RoleDefaultsStore) http.HandlerF
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := userFromContext(r.Context())
 		if !ok {
-			writeProblem(w, http.StatusUnauthorized, "unauthenticated", "Login required.")
+			httpx.WriteProblem(w, http.StatusUnauthorized, "unauthenticated", "Login required.")
 			return
 		}
 		snap, err := c.Get(r.Context())
 		if err != nil {
-			writeProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
 			return
 		}
 		ids, err := defaults.GetRoleDefaults(r.Context(), user.PrimaryRole)
 		if err != nil {
-			writeProblem(w, http.StatusInternalServerError, "defaults_unavailable", "Could not load your default view.")
+			httpx.WriteProblem(w, http.StatusInternalServerError, "defaults_unavailable", "Could not load your default view.")
 			return
 		}
 		services := make([]catalog.Service, 0, len(ids))

@@ -28,7 +28,8 @@ type Querier interface {
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	CreateService(ctx context.Context, arg CreateServiceParams) (Service, error)
 	// id is sha256(token); the raw token lives only in the cookie, so a DB read
-	// never yields a usable session credential.
+	// never yields a usable session credential. oidc_sid is the IdP session id
+	// (NULL when the IdP sends no sid claim) — back-channel logout revokes by it.
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
 	DeleteAnnouncement(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) error
@@ -37,6 +38,11 @@ type Querier interface {
 	DeleteSearchEventsBefore(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
 	DeleteServiceCategories(ctx context.Context, serviceID pgtype.UUID) error
 	DeleteSession(ctx context.Context, id string) error
+	// Back-channel logout with only a sub: the IdP couldn't say which session, so
+	// end every session of that user (OIDC Back-Channel Logout 1.0 §2.4 semantics).
+	DeleteSessionsByOIDCSub(ctx context.Context, oidcSub string) (int64, error)
+	// Back-channel logout with a sid: end exactly the sessions of that IdP session.
+	DeleteSessionsBySID(ctx context.Context, oidcSid pgtype.Text) (int64, error)
 	// Record a per-user dismissal. Idempotent: dismissing twice is a no-op.
 	DismissAnnouncement(ctx context.Context, arg DismissAnnouncementParams) error
 	// The user's most-clicked active services within a rolling window, most-used

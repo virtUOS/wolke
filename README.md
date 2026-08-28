@@ -124,7 +124,7 @@ Caddy serves HTTPS on :443 (its internal CA for `localhost`; real certificates f
 
 ### Notes
 
-**Branding and OIDC claim mapping** live in `config.yaml` (copy from `config.example.yaml`). This is the one file you edit to reskin for a different institution — colors, logo paths, product name, and which OIDC claim maps to which role. OIDC is provider-agnostic (Keycloak, Authentik, Zitadel, Entra, …); for a step-by-step Keycloak setup see **[docs/oidc-keycloak.md](docs/oidc-keycloak.md)**. `TRUSTED_PROXIES` must cover the proxy's network so `X-Forwarded-For` is trusted (it's preset to the compose `edge` subnet).
+**Branding and OIDC claim mapping** live in `config.yaml` (copy from `config.example.yaml`). This is the one file you edit to reskin for a different institution — colors, logo paths, product name, and which OIDC claim maps to which role. OIDC is provider-agnostic (Keycloak, Authentik, Zitadel, Entra, …); for a step-by-step Keycloak setup see **[docs/oidc-keycloak.md](docs/oidc-keycloak.md)**. wolke also implements **OIDC back-channel logout** — logging out at the IdP ends the wolke session too. Register `PUBLIC_URL` + `/auth/backchannel-logout` as the client's back-channel logout URL at your IdP (with "session required" enabled where offered); that registration is the only knob, the endpoint is always on. `TRUSTED_PROXIES` must cover the proxy's network so `X-Forwarded-For` is trusted (it's preset to the compose `edge` subnet).
 
 **Migrations** are forward-only (goose) and applied by the app on startup (see above). Rolling back requires an explicit `make migrate-down` in dev.
 

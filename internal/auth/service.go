@@ -35,6 +35,8 @@ type Service struct {
 	cfg      *config.Config
 	log      *slog.Logger
 	secure   bool
+	// seenJTIs refuses replayed back-channel logout tokens (backchannel.go).
+	seenJTIs *jtiCache
 }
 
 // NewService assembles the BFF auth handlers from the authenticator, session
@@ -47,6 +49,7 @@ func NewService(a *Authenticator, sessions *SessionStore, users UserUpserter, cf
 		cfg:      cfg,
 		log:      log,
 		secure:   strings.HasPrefix(cfg.PublicURL, "https://"),
+		seenJTIs: newJTICache(jtiCacheTTL),
 	}
 }
 
@@ -159,7 +162,11 @@ func (s *Service) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, expires, err := s.sessions.New(r.Context(), user.ID)
+	// Bind the session to the IdP session (`sid` claim, verified above) so a
+	// back-channel logout can end it; absent sid (IdP without back-channel
+	// support) just stores NULL and login proceeds unchanged.
+	sid, _ := claims["sid"].(string)
+	token, expires, err := s.sessions.New(r.Context(), user.ID, sid)
 	if err != nil {
 		s.fail(w, r, "create session", err)
 		return
@@ -259,9 +266,17 @@ func claimKeys(claims map[string]any) []string {
 }
 
 // sanitizeReturnTo blocks open redirects: only local single-slash paths pass.
+// Control characters are rejected outright — the WHATWG URL parser strips
+// tab/newline before parsing, so a Location of "/\t/evil.com" reaches the
+// browser as the protocol-relative "//evil.com".
 func sanitizeReturnTo(p string) string {
-	if strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "//") && !strings.HasPrefix(p, "/\\") {
-		return p
+	if !strings.HasPrefix(p, "/") || strings.HasPrefix(p, "//") || strings.HasPrefix(p, "/\\") {
+		return "/"
 	}
-	return "/"
+	for i := 0; i < len(p); i++ {
+		if p[i] < 0x20 || p[i] == 0x7f {
+			return "/"
+		}
+	}
+	return p
 }

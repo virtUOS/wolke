@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -55,12 +56,12 @@ func search(c *catalog.Cache, s SearchStore) http.HandlerFunc {
 			if errors.Is(err, context.Canceled) {
 				return
 			}
-			writeProblem(w, http.StatusInternalServerError, "search_failed", "Search is temporarily unavailable.")
+			httpx.WriteProblem(w, http.StatusInternalServerError, "search_failed", "Search is temporarily unavailable.")
 			return
 		}
 		snap, err := c.Get(r.Context())
 		if err != nil {
-			writeProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
 			return
 		}
 		services := make([]catalog.Service, 0, len(ids))
