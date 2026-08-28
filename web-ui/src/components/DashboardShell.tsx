@@ -77,10 +77,13 @@ export function DashboardShell({
     }
   }, [focusKey])
 
-  // Flex column so the footer is pushed to the bottom of the viewport when the
-  // content is short (sticky-footer pattern); <main> takes the slack.
+  // Flex column. On a desktop <main> takes the slack so the footer sits at the
+  // bottom of the viewport (sticky-footer pattern). On a phone it must NOT: the
+  // mobile dashboard is deliberately short, and stretching it left a 175–267px
+  // dead band between the last tile and a footer pinned to the bottom edge —
+  // issue #33. There the footer simply follows the content. The canvas height
+  // itself comes from .app-canvas (dvh, see index.css).
   const canvasStyle: CSSProperties = {
-    minHeight: '100vh',
     display: 'flex',
     flexDirection: 'column',
     background: isDark
@@ -90,7 +93,7 @@ export function DashboardShell({
   }
 
   return (
-    <div style={canvasStyle}>
+    <div className="app-canvas" style={canvasStyle}>
       {/* Skip link: first focusable element, visible only when focused. */}
       <a
         href="#main"
@@ -113,6 +116,7 @@ export function DashboardShell({
         isAdmin={me.is_admin}
         onAdmin={onAdmin}
         onLogout={logout}
+        isMobile={isMobile}
       />
       <main
         id="main"
@@ -120,7 +124,7 @@ export function DashboardShell({
         tabIndex={-1}
         className="focus:outline-hidden"
         style={{
-          flexGrow: 1,
+          flexGrow: isMobile ? 0 : 1,
           width: '100%',
           maxWidth: SHELL_MAX_WIDTH,
           margin: '0 auto',

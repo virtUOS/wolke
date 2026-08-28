@@ -4,15 +4,10 @@
 
 import { expect, test } from './fixtures'
 
-// The phone layout has open viewport defects that this suite exists to surface;
-// each is tracked by its own spec in this directory, and the guard below comes
-// off as they land:
-//   #23 the top bar overflows the viewport (issue-23-header-overflow.spec.ts)
-//   #56 phone touch targets are under 44px (see the spec's §5.3 rule)
-test.fixme(
-  ({ isMobile }) => isMobile === true,
-  'https://github.com/virtUOS/wolke/issues/23 + phone touch targets',
-)
+// Overflow and readability now hold at every phone width (#23 is fixed); the one
+// remaining phone-width defect is the sub-44px touch targets in the tile, the
+// search field and the footer, so the guard below stays until #69 lands.
+test.fixme(({ isMobile }) => isMobile === true, 'https://github.com/virtUOS/wolke/issues/69')
 
 test('the favorites tab renders the user’s services', async ({ page }) => {
   await page.goto('/')

@@ -14,6 +14,7 @@ import {
   useFavorites,
   usePrefersDark,
   usePrefsMutation,
+  useResultAnnouncement,
   useSearch,
 } from '@/lib/hooks'
 import { useAnnouncements } from '@/lib/admin-hooks'
@@ -215,6 +216,13 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     return tr.dash.allServices
   }, [searching, tab, filter, allCategories, locale, tr])
 
+  // Announce only settled numbers: see useResultAnnouncement.
+  const countSettled = !catalog.isLoading && !favorites.isLoading && !searchPending && !searchFailed
+  const resultAnnouncement = useResultAnnouncement(
+    countSettled ? results.length : null,
+    tr.dash.resultCount(results.length),
+  )
+
   const favCount = favoriteServices.length
   const firstName = me.display_name.split(' ')[0]
 
@@ -368,11 +376,11 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         </div>
       )}
 
-      {/* Polite live region: announces the result count to screen-reader users
-          when a search/filter/tab change alters what's shown (it stays silent on
-          first render). */}
-      <div aria-live="polite" className="sr-only">
-        {tr.dash.resultCount(results.length)}
+      {/* Polite live region: announces the result count when a search/filter/tab
+          change alters what's shown, then goes quiet again — see
+          useResultAnnouncement. Silent on first render. */}
+      <div aria-live="polite" role="status" className="sr-only">
+        {resultAnnouncement}
       </div>
 
       {/* Content: a search shows global results from the server; otherwise the

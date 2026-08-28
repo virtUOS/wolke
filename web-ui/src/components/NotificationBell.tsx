@@ -62,7 +62,9 @@ export function NotificationBell({ locale }: { locale: Lang }) {
   }
 
   return (
-    <div ref={rootRef} style={{ position: 'relative' }}>
+    // Not positioned: the panel anchors to the top bar's actions row, which is
+    // what keeps a 360px panel inside a 324px viewport (issue #23).
+    <div ref={rootRef}>
       <IconButton
         ref={triggerRef}
         aria-label={s.announce.bell(unread)}
@@ -70,7 +72,8 @@ export function NotificationBell({ locale }: { locale: Lang }) {
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((o) => !o)}
-        className="relative"
+        // 44px touch target on a phone, the compact icon button from `md` up.
+        className="relative h-11 w-11 md:h-9 md:w-9"
       >
         <Bell className="h-5 w-5" aria-hidden="true" />
         {unread > 0 && (
@@ -88,7 +91,7 @@ export function NotificationBell({ locale }: { locale: Lang }) {
           role="dialog"
           aria-label={s.announce.center}
           tabIndex={-1}
-          className="absolute right-0 z-20 w-[min(360px,calc(100vw-2rem))] rounded-md border border-border bg-bg p-3 shadow-[0_12px_32px_-12px_rgba(0,0,0,.25)]"
+          className="absolute right-0 z-20 w-[min(360px,calc(100vw-1.5rem))] rounded-md border border-border bg-bg p-3 shadow-[0_12px_32px_-12px_rgba(0,0,0,.25)]"
           style={{ top: 'calc(100% + 8px)' }}
         >
           <h2 className="px-1 pb-2 text-sm font-semibold text-text">{s.announce.center}</h2>
