@@ -50,6 +50,19 @@ In the Keycloak admin console, select your realm → **Clients** → **Create cl
 - **Web origins:** leave empty. wolke is server-side; the browser never calls
   Keycloak directly, so no CORS origin is needed.
 
+**Logout settings** (below Login settings; makes SSO logout end wolke sessions too)
+- **Backchannel logout URL:** `https://wolke.example.edu/auth/backchannel-logout`
+  — always `PUBLIC_URL` + `/auth/backchannel-logout`; this URL is the only
+  wolke-side knob, the endpoint itself is always on.
+- **Backchannel logout session required: On** — Keycloak then includes the `sid`
+  claim, so wolke ends exactly the browser session that logged out (instead of
+  all of the user's sessions).
+
+This is standard **OIDC Back-Channel Logout 1.0**, not a Keycloak special:
+Authentik, Zitadel, Entra ID, and others offer the equivalent setting — register
+the same URL there. Without it, logging out at the IdP leaves existing wolke
+sessions alive until they expire.
+
 Save, then open the **Credentials** tab and copy the **Client secret** — that's
 `OIDC_CLIENT_SECRET`.
 
@@ -162,6 +175,10 @@ The admin check can use realm roles the same way (`admin.claim: realm_access.rol
 2. `GET /api/me` (with the session cookie) shows your resolved `primary_role` and
    `is_admin`. An admin also sees the **Administration** entry in the account menu.
 3. The server logs one structured line per login: `{"msg":"login","sub":…,"role":…,"admin":…}`.
+4. Back-channel logout: while logged in to wolke, log out at the Keycloak account
+   console (`https://id.example.edu/realms/uni/account`) — the next wolke request
+   is unauthenticated within seconds, and the server logs
+   `{"msg":"backchannel logout accepted", …, "sessions_ended":1}`.
 
 > The **admin MCP server** identifies its admin by OIDC `sub` (`MCP_ADMIN_SUB`).
 > That user must have logged into the web UI at least once so their record exists
@@ -179,6 +196,8 @@ The admin check can use realm roles the same way (`admin.claim: realm_access.rol
 | Login loops / "id_token nonce mismatch" or issuer errors | `OIDC_ISSUER_URL` must equal the `iss` in the token byte-for-byte (mind the `/realms/<realm>` path and `http` vs `https`). Check the discovery URL (step 2). |
 | Session cookie not set / immediately logged out | `PUBLIC_URL` must match the browser origin and be `https://…` in production (the `Secure` cookie flag is derived from its scheme). Make sure Caddy/your proxy forwards `X-Forwarded-Proto`. |
 | Role/admin change at Keycloak doesn't take effect | They're re-derived per login — the user must log out and back in. |
+| Logging out at Keycloak doesn't log wolke out | The client's **Backchannel logout URL** isn't set (or Keycloak can't reach it server-to-server — check network/firewall from the Keycloak host to `PUBLIC_URL`). The wolke log shows a `backchannel logout` warn/info line for every attempt that arrived. |
+| Back-channel logout ends *all* of a user's sessions instead of one | **Backchannel logout session required** is off, so the logout token carries only `sub`, no `sid`. Turn it on. |
 
 For the full auth model and the config precedence (env > file > defaults), see
 `docs/02-technical-spec.md` §6 and §11.

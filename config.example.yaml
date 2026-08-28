@@ -8,6 +8,10 @@
 
 # OIDC is provider-agnostic: discovery does the rest, so the same code works with
 # Keycloak, Authentik, Zitadel, Auth0, Entra, etc. (docs/02 §6).
+#
+# Back-channel logout (logout at the IdP ends wolke sessions) needs no config
+# here: register PUBLIC_URL + /auth/backchannel-logout as the client's
+# back-channel logout URL at the IdP — see docs/oidc-keycloak.md.
 oidc:
   # issuer_url / client_id / client_secret / scopes are scalars — set via env
   # (OIDC_ISSUER_URL, …) in deployments. Shown here for reference.
