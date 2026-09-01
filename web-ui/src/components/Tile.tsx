@@ -234,7 +234,12 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           <TileDescription>{description}</TileDescription>
         </div>
 
-        {/* Footer: category label + docs link */}
+        {/* Footer: category label + docs link. The label is the flexible half
+            (min-width:0 + break-words): a long German compound wraps inside its
+            own column instead of pushing the docs pill out of the corner —
+            uppercase + letter-spacing makes even a 31-character category wider
+            than the narrowest grid column (issue #97). The pill never shrinks,
+            so it stays anchored at the trailing edge at every viewport. */}
         <div
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -242,10 +247,11 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           }}
         >
           <span
-            className="text-xs"
+            className="text-xs break-words hyphens-auto"
             style={{
               fontWeight: 600, letterSpacing: '.1em',
-              textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap',
+              textTransform: 'uppercase', color: 'var(--text-muted)',
+              flex: '1 1 auto', minWidth: 0,
             }}
           >
             {categoryLabel}
