@@ -8,8 +8,9 @@ import { cn } from '@/lib/utils'
 // nav tab, aria-pressed for a toggle) by spreading the matching ARIA prop.
 const pillButtonVariants = cva(
   // min-h-11 is the 44px touch floor (CLAUDE.md "Responsive & viewport
-  // discipline"); from sm: up a pointer is precise enough for the denser pill.
-  'min-h-11 cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] disabled:cursor-default sm:min-h-0',
+  // discipline"); from md: up — the app's one mobile/desktop breakpoint — a
+  // pointer is precise enough for the denser pill.
+  'min-h-11 cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] disabled:cursor-default md:min-h-0 md:py-1.5',
   {
     variants: {
       active: {

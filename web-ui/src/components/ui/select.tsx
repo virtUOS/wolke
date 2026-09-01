@@ -13,8 +13,9 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({ classN
     ref={ref}
     className={cn(
       // h-11 is the 44px touch floor at phone widths (CLAUDE.md "Responsive &
-      // viewport discipline"); denser from sm: up, where a pointer is precise.
-      'h-11 rounded-md border border-border bg-surface px-2 text-sm text-text sm:h-9',
+      // viewport discipline"); denser from md: up — the app's one mobile/desktop
+      // breakpoint — where a pointer is precise.
+      'h-11 rounded-md border border-border bg-surface px-3 text-sm text-text md:h-9 md:px-2',
       'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]',
       'disabled:cursor-not-allowed disabled:opacity-50',
       'aria-[invalid=true]:border-danger aria-[invalid=true]:focus-visible:ring-danger',

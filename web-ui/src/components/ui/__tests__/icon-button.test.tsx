@@ -17,13 +17,18 @@ describe('IconButton', () => {
     expect(onClick).toHaveBeenCalledOnce()
   })
 
-  it('applies size and variant classes', () => {
+  it('applies size and variant classes, with the phone touch floor', () => {
     render(
       <IconButton aria-label="x" size="sm" variant="plain">
         <X />
       </IconButton>,
     )
-    expect(screen.getByRole('button').className).toContain('p-1')
+    const className = screen.getByRole('button').className
+    // 44px at phone widths, the icon's own box from md: up (issue #101).
+    expect(className).toContain('h-11 w-11')
+    expect(className).toContain('md:h-7 md:w-7')
+    expect(className).toContain('md:p-1')
+    expect(className).toContain('hover:text-text')
   })
 
   it('is keyboard-operable and forwards disabled', () => {

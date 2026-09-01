@@ -14,10 +14,14 @@ const buttonVariants = cva(
         outline: 'border border-surface hover:bg-surface',
         ghost: 'hover:bg-surface',
       },
+      // Every size meets the 44px touch floor at phone widths and falls back to
+      // the pointer density from `md:` up — the shared convention across the
+      // primitives (docs/03 §4, issue #101). `md:` is the app's one
+      // mobile/desktop breakpoint (src/lib/breakpoints.ts).
       size: {
-        default: 'h-10 px-4 py-2',
-        sm: 'h-9 px-3',
-        icon: 'h-10 w-10',
+        default: 'h-11 px-4 py-2 md:h-10',
+        sm: 'h-11 px-3 md:h-9',
+        icon: 'h-11 w-11 md:h-10 md:w-10',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

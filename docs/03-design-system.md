@@ -95,6 +95,30 @@ structural device — keep it as the page-title motif.
 - Touch targets ≥ 44px. The tile's two zones must each be an easily-tappable region with a clear
   divider so nobody mis-taps launch when they meant expand.
 
+### Control sizing: phone floor, pointer density from `md:`
+
+One convention across every shared primitive (`web-ui/src/components/ui/`), so no screen has to
+restate it and no screen can forget it:
+
+- **Phone is the default.** A control's base classes carry the 44px floor — `h-11` / `min-h-11`
+  (plus `w-11` for a square, icon-only control) and the roomier padding that goes with it. Users
+  reported the phone UI as cramped (issue #99); the answer is better defaults, **not** a
+  user-facing size setting.
+- **`md:` hands back to pointer density.** `md:` (768px, the app's single mobile/desktop
+  breakpoint — `web-ui/src/lib/breakpoints.ts`) restores the compact box: `md:h-10` for a button,
+  `md:h-9` for a select, `md:min-h-0` for a pill, the icon's own box for an icon button. Never
+  `sm:` — that is a fourth breakpoint the layout does not otherwise use, and it leaves the
+  640–767px band with desktop density under a phone layout.
+- **A control too small to be its own target puts the floor on its label.** A checkbox box stays a
+  box; the `<label>` around it is the 44px hit area (see the `checkbox` primitive). The viewport
+  suite measures exactly that shape — a padded click-target parent around one small control.
+- **Row heights follow.** A list row is ≥ 56px on a phone (`min-h-14`, `List`/`ListItem`) and the
+  service list row ~72px, so the controls inside it clear each other.
+
+Both directions are tested: `e2e/admin-viewport.spec.ts` and `e2e/issue-99-mobile-sizing.spec.ts`
+assert the phone floor across the matrix *and* upper bounds on the desktop densities, so a future
+change cannot inflate the pointer layout either.
+
 ## 5. The signature component — the two-zone tile
 
 States to implement (light + dark, every one):

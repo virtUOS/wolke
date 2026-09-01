@@ -8,7 +8,7 @@ Claude Design later. An enforcement test (`src/__tests__/ui-primitives.test.ts`)
 honest.
 
 The set: `button`, `icon-button`, `pill-button`, `card`, `badge`, `input`, `label`, `field`,
-`select`, `alert`, `list` (List/ListItem), `dialog`, `popover`. The interactive overlays
+`checkbox`, `select`, `alert`, `list` (List/ListItem), `dialog`, `popover`. The interactive overlays
 (`dialog`, `popover`) are hand-rolled but implement the Radix behaviour set (focus trap/return,
 Escape + outside-click dismiss, ARIA) behind Radix-shaped APIs, so Radix can be swapped in later
 without touching callers. `select` is a styled native `<select>` and `list` is a styled `<ul>`
@@ -34,11 +34,17 @@ actually needs them.
    Brand red (`primary`) is for brand + interaction only; use the feedback tokens
    (`info`/`warning`/`success`/`danger`) for state.
 
-4. **Accessible by construction** (CLAUDE.md #7, docs/03 §8). Keyboard-operable, a visible
+4. **Sized for a finger first.** A control's base classes meet the 44px touch floor (`h-11` /
+   `min-h-11`, `w-11` when it is square) and `md:` hands back to the compact pointer density —
+   never `sm:`, which would leave the 640–767px band dense under a phone layout. See docs/03 §4
+   "Control sizing"; `src/__tests__/ui-primitives.test.tsx` pins the convention and
+   `e2e/admin-viewport.spec.ts` measures the geometry at every matrix resolution.
+
+5. **Accessible by construction** (CLAUDE.md #7, docs/03 §8). Keyboard-operable, a visible
    `focus-visible` ring, correct ARIA/roles. This is not a Phase-5 afterthought — it ships with the
    primitive. New primitives get an axe + keyboard check.
 
-5. **Localised strings stay out.** Primitives render the labels they're given; `{de,en}` selection
+6. **Localised strings stay out.** Primitives render the labels they're given; `{de,en}` selection
    happens in the calling feature component, not here.
 
 ## Adding one (Phase C cadence)
