@@ -78,6 +78,11 @@ branding:
   # (env: ASSISTANT_WIDGET_URL / ASSISTANT_BOT_ID)
   assistant_widget_url: ""  # e.g. "https://assistant.example.edu/widget.js"
   assistant_bot_id: ""      # e.g. "echo"
+  # Any token from the docs/03 §2 table may be set in either map — the five
+  # shown are just the ones most skins change. The rest (surface_2, border,
+  # text_muted, info, warning, success, danger) fall back to the bundled
+  # defaults when omitted. Payload keys use `_`; they become --kebab-case CSS
+  # variables (primary_hover → --primary-hover).
   theme:
     light:
       primary: "#A6093D"
