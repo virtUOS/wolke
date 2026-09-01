@@ -9,14 +9,6 @@
 
 import { expect, test } from './fixtures'
 
-// The page-wide touch-target check is off here, and only here: the rest of the
-// admin surface (text inputs, the dismissible checkbox, the ghost icon buttons,
-// the form buttons) sits below the 44px floor at phone widths — pre-existing
-// debt across shared primitives, tracked in #101, not something the role set
-// introduced. The controls this feature owns are asserted explicitly instead
-// (expectTouchTarget below), so nothing new slips under the floor.
-test.use({ viewportChecks: ['overflow', 'readability'] })
-
 /** Asserts one control meets the 44px touch floor; a no-op off the phone projects. */
 async function expectTouchTarget(
   locator: import('@playwright/test').Locator,
