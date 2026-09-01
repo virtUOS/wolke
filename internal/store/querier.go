@@ -98,6 +98,11 @@ type Querier interface {
 	// be null for notices shown immediately, so fall back to created_at.
 	PurgeAnnouncementsBefore(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
 	PurgeOldClicks(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
+	// Deletes the default-view rows of every role outside the configured set and
+	// reports which roles those were (for the audit diff). One statement, so the
+	// read and the delete cannot disagree. The role set is config, not schema —
+	// see internal/service/roles.go.
+	PurgeRoleDefaultsNotIn(ctx context.Context, roles []string) ([]string, error)
 	// A lightweight click event (docs/01 §5.4). user_role is denormalized so
 	// aggregate metrics (Phase 4) need no join. target distinguishes a launch
 	// ('service') from a documentation-link click ('documentation'). NULLs on

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -66,8 +67,6 @@ type AdminService struct {
 	Tag         string            `json:"tag,omitempty"`
 	Keywords    []string          `json:"keywords"`
 }
-
-var validRoles = map[string]bool{"student": true, "teacher": true, "staff": true}
 
 // normalizeKeywords trims, drops blanks, and de-dupes case-insensitively while
 // preserving the first occurrence's original casing and order. Always returns a
@@ -259,12 +258,26 @@ func SoftDeleteService(ctx context.Context, db AdminDB, actor Actor, id pgtype.U
 	})
 }
 
-// SetRoleDefaults replaces the ordered default services for a role.
-func SetRoleDefaults(ctx context.Context, db AdminDB, actor Actor, role string, serviceIDs []pgtype.UUID) error {
-	if !validRoles[role] {
-		return &ValidationError{Field: "role", Msg: "must be one of student, teacher, staff"}
+// SetRoleDefaults replaces the ordered default services for a role. The role
+// must be one this deployment configures (roles.go); saving a list also purges
+// rows left behind by roles the claim mapping no longer defines, which is the
+// one moment we know it is safe to (spec §2.2).
+func SetRoleDefaults(ctx context.Context, db AdminDB, actor Actor, roles config.RoleSet, role string, serviceIDs []pgtype.UUID) error {
+	if err := ValidateRole(roles, role); err != nil {
+		return err
 	}
 	return inTx(ctx, db, func(q *store.Queries) error {
+		// Purge first, in one statement, so the delete and the roles it reports
+		// cannot disagree. Guarded on a non-empty set: `<> all('{}')` matches
+		// every row, and an empty set means a misconfigured caller, not "purge
+		// everything".
+		var purged []string
+		if slugs := roles.Slugs(); len(slugs) > 0 {
+			var err error
+			if purged, err = q.PurgeRoleDefaultsNotIn(ctx, slugs); err != nil {
+				return fmt.Errorf("purge stale role defaults: %w", err)
+			}
+		}
 		if err := q.DeleteRoleDefaults(ctx, role); err != nil {
 			return fmt.Errorf("clear role defaults: %w", err)
 		}
@@ -275,7 +288,11 @@ func SetRoleDefaults(ctx context.Context, db AdminDB, actor Actor, role string, 
 			}
 			ids = append(ids, uuidStr(sid))
 		}
-		return audit(ctx, q, actor, "role_defaults.set", pgtype.UUID{}, map[string]any{"role": role, "service_ids": ids})
+		diff := map[string]any{"role": role, "service_ids": ids}
+		if len(purged) > 0 {
+			diff["purged_roles"] = purged
+		}
+		return audit(ctx, q, actor, "role_defaults.set", pgtype.UUID{}, diff)
 	})
 }
 

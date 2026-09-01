@@ -34,6 +34,7 @@ func TestValidateAnnouncement(t *testing.T) {
 		{"missing de body", func(in *AnnouncementInput) { in.Body = map[string]string{} }, "body"},
 		{"bad severity", func(in *AnnouncementInput) { in.Severity = "urgent" }, "severity"},
 		{"bad audience", func(in *AnnouncementInput) { in.Audience = "faculty" }, "audience"},
+		{"a configured role is a valid audience", func(in *AnnouncementInput) { in.Audience = "staff" }, ""},
 		{"ends before starts", func(in *AnnouncementInput) { in.StartsAt = &future; in.EndsAt = &past }, "ends_at"},
 		{"valid window", func(in *AnnouncementInput) { in.StartsAt = &past; in.EndsAt = &future }, ""},
 	}
@@ -41,7 +42,7 @@ func TestValidateAnnouncement(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			in := validAnnouncement()
 			tt.mutate(&in)
-			err := validateAnnouncement(in)
+			err := validateAnnouncement(twoRoles(), in)
 			if tt.field == "" {
 				if err != nil {
 					t.Fatalf("want valid, got %v", err)

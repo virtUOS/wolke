@@ -302,6 +302,37 @@ func (q *Queries) ListServiceCategorySlugs(ctx context.Context, serviceID pgtype
 	return items, nil
 }
 
+const purgeRoleDefaultsNotIn = `-- name: PurgeRoleDefaultsNotIn :many
+with purged as (
+    delete from role_defaults where role <> all($1::text[]) returning role
+)
+select distinct role from purged
+`
+
+// Deletes the default-view rows of every role outside the configured set and
+// reports which roles those were (for the audit diff). One statement, so the
+// read and the delete cannot disagree. The role set is config, not schema —
+// see internal/service/roles.go.
+func (q *Queries) PurgeRoleDefaultsNotIn(ctx context.Context, roles []string) ([]string, error) {
+	rows, err := q.db.Query(ctx, purgeRoleDefaultsNotIn, roles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var role string
+		if err := rows.Scan(&role); err != nil {
+			return nil, err
+		}
+		items = append(items, role)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const softDeleteService = `-- name: SoftDeleteService :execrows
 update services set is_active = false, updated_at = now() where id = $1 and is_active = true
 `

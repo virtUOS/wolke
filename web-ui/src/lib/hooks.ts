@@ -9,6 +9,13 @@ export function useMe() {
   return useQuery({ queryKey: ['me'], queryFn: ({ signal }) => api.me(signal) })
 }
 
+// useRoles is the deployment's configured role set, in precedence order. The
+// admin screens render from it rather than from a hardcoded list, so a two-role
+// deployment shows two roles (docs/specs/configurable-roles.md §2.4).
+export function useRoles() {
+  return useQuery({ queryKey: ['roles'], queryFn: ({ signal }) => api.roles(signal) })
+}
+
 export function useCatalog() {
   return useQuery({ queryKey: ['catalog'], queryFn: ({ signal }) => api.catalog(signal) })
 }

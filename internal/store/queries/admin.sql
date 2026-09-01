@@ -50,6 +50,16 @@ insert into categories (slug, label, sort) values (@slug, @label, @sort) returni
 -- name: DeleteRoleDefaults :exec
 delete from role_defaults where role = @role;
 
+-- name: PurgeRoleDefaultsNotIn :many
+-- Deletes the default-view rows of every role outside the configured set and
+-- reports which roles those were (for the audit diff). One statement, so the
+-- read and the delete cannot disagree. The role set is config, not schema —
+-- see internal/service/roles.go.
+with purged as (
+    delete from role_defaults where role <> all(@roles::text[]) returning role
+)
+select distinct role from purged;
+
 -- name: AddRoleDefault :exec
 insert into role_defaults (role, service_id, sort) values (@role, @service_id, @sort);
 

@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/service"
 	"github.com/virtuos/wolke/internal/store"
@@ -17,6 +18,8 @@ import (
 // AdminDeps are what the admin endpoints need: the use-case store, the catalog
 // cache (invalidated after writes), and an audit reader.
 type AdminDeps struct {
+	// Roles is the configured role set; the router fills it from Deps.Roles.
+	Roles      config.RoleSet
 	Store      service.AdminDB
 	Invalidate func() // catalog cache invalidation; nil = no-op
 	Audit      AuditStore
@@ -141,7 +144,12 @@ func adminDeleteService(d AdminDeps) http.HandlerFunc {
 
 func adminGetRoleDefaults(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ids, err := d.Store.GetRoleDefaults(r.Context(), chi.URLParam(r, "role"))
+		role := chi.URLParam(r, "role")
+		if err := service.ValidateRole(d.Roles, role); err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		ids, err := d.Store.GetRoleDefaults(r.Context(), role)
 		if err != nil {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "internal", "Could not read role defaults.")
 			return
@@ -173,7 +181,7 @@ func adminSetRoleDefaults(d AdminDeps) http.HandlerFunc {
 			}
 			ids = append(ids, id)
 		}
-		if err := service.SetRoleDefaults(r.Context(), d.Store, actorFromContext(r.Context()), role, ids); err != nil {
+		if err := service.SetRoleDefaults(r.Context(), d.Store, actorFromContext(r.Context()), d.Roles, role, ids); err != nil {
 			writeServiceError(w, err)
 			return
 		}

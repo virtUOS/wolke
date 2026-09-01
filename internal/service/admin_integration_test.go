@@ -121,14 +121,14 @@ func TestAdminServiceLifecycleAudited(t *testing.T) {
 	}
 
 	// Role defaults set → audited.
-	if err := SetRoleDefaults(ctx, db, actor, "staff", []pgtype.UUID{id}); err != nil {
+	if err := SetRoleDefaults(ctx, db, actor, exampleRoles(), "staff", []pgtype.UUID{id}); err != nil {
 		t.Fatalf("SetRoleDefaults: %v", err)
 	}
 	if auditCount("role_defaults.set") != 1 {
 		t.Errorf("role_defaults.set audit rows = %d, want 1", auditCount("role_defaults.set"))
 	}
 	// Restore the seeded staff defaults so the seed stays intact.
-	if err := SetRoleDefaults(ctx, db, actor, "staff", origStaff); err != nil {
+	if err := SetRoleDefaults(ctx, db, actor, exampleRoles(), "staff", origStaff); err != nil {
 		t.Fatalf("restore staff defaults: %v", err)
 	}
 }

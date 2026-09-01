@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/service"
 	"github.com/virtuos/wolke/internal/store"
 )
@@ -84,7 +85,8 @@ func TestReadServerActiveOnly(t *testing.T) {
 	cache := catalog.NewCache(0, func(ctx context.Context) (*catalog.Snapshot, error) {
 		return catalog.Load(ctx, db)
 	})
-	mgr := New(cache, db)
+	cfg := config.Defaults()
+	mgr := New(cache, db, cfg.Roles())
 
 	inCat := func(list []catalog.Service) []catalog.Service {
 		out := []catalog.Service{}

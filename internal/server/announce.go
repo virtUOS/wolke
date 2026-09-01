@@ -8,16 +8,17 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/virtuos/wolke/internal/announce"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/service"
 )
 
 // userAnnouncements serves the active announcements scoped to the current user's
 // role (docs/01 §4.7, docs/02 §12).
-func userAnnouncements(db announce.Store) http.HandlerFunc {
+func userAnnouncements(db announce.Store, roles config.RoleSet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
-		list, err := announce.ListActive(r.Context(), db, user.PrimaryRole, user.ID)
+		list, err := announce.ListActive(r.Context(), db, roles, user.PrimaryRole, user.ID)
 		if err != nil {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcements.")
 			return
@@ -29,10 +30,10 @@ func userAnnouncements(db announce.Store) http.HandlerFunc {
 // userAnnouncementHistory serves the current user's past notices for the
 // notification center: expired or dismissed, role-scoped, newest first
 // (docs/01 §4.7).
-func userAnnouncementHistory(db announce.Store) http.HandlerFunc {
+func userAnnouncementHistory(db announce.Store, roles config.RoleSet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
-		list, err := announce.ListHistory(r.Context(), db, user.PrimaryRole, user.ID)
+		list, err := announce.ListHistory(r.Context(), db, roles, user.PrimaryRole, user.ID)
 		if err != nil {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcement history.")
 			return
@@ -107,7 +108,7 @@ func parseTimePtr(s *string) (*time.Time, error) {
 
 func adminListAnnouncements(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		list, err := announce.AdminList(r.Context(), d.Store, 100)
+		list, err := announce.AdminList(r.Context(), d.Store, d.Roles, 100)
 		if err != nil {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcements.")
 			return
@@ -128,12 +129,12 @@ func adminCreateAnnouncement(d AdminDeps) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_time", "Timestamps must be RFC3339.")
 			return
 		}
-		a, err := service.CreateAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), in)
+		a, err := service.CreateAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), d.Roles, in)
 		if err != nil {
 			writeServiceError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, announce.View(a))
+		writeJSON(w, http.StatusCreated, announce.View(a, d.Roles))
 	}
 }
 
@@ -154,12 +155,12 @@ func adminUpdateAnnouncement(d AdminDeps) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_time", "Timestamps must be RFC3339.")
 			return
 		}
-		a, err := service.UpdateAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), id, in)
+		a, err := service.UpdateAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), d.Roles, id, in)
 		if err != nil {
 			writeServiceError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, announce.View(a))
+		writeJSON(w, http.StatusOK, announce.View(a, d.Roles))
 	}
 }
 

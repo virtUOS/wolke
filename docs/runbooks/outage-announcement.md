@@ -33,7 +33,8 @@ deleted). Source: `internal/service/announce.go` (`CreateAnnouncement`),
      outage: critical announcements cannot be dismissed by users (the
      dismiss button is suppressed, and the server also refuses a dismiss
      call for a critical notice even if someone forges one).
-   - **Audience** — `all` / `student` / `teacher` / `staff`. Defaults to `all`.
+   - **Audience** — `all`, or one of this deployment's configured roles (the picker
+     lists exactly those — docs/02 §6). Defaults to `all`.
    - **Ends At** — optional. Leave blank for "until manually retired/edited".
      If set, the banner stops showing itself automatically once that time
      passes (still visible in history). There is no "Starts At" field in the

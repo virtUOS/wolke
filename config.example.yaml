@@ -3,8 +3,10 @@
 # mapping and the branding theme — which environment variables intentionally
 # CANNOT override (env overrides only top-level scalars). Secrets stay in env.
 #
-# Everything below shows the built-in defaults (the UOS skin). A fork re-skins
-# and re-points by editing this one file and restarting — no recompile.
+# Everything below shows the built-in defaults (the UOS skin), except the OIDC
+# role block, which shows the UOS launch deployment's two-role mapping (the
+# built-in default is a three-role example). A fork re-skins and re-points by
+# editing this one file and restarting — no recompile.
 
 # OIDC is provider-agnostic: discovery does the rest, so the same code works with
 # Keycloak, Authentik, Zitadel, Auth0, Entra, etc. (docs/02 §6).
@@ -16,16 +18,30 @@ oidc:
   # issuer_url / client_id / client_secret / scopes are scalars — set via env
   # (OIDC_ISSUER_URL, …) in deployments. Shown here for reference.
   scopes: [openid, profile, email]
-  # Which claim carries affiliation, and how its values map to the 3 roles.
+  # Which claim carries affiliation, and how its values map to roles.
+  #
+  # THIS BLOCK DEFINES THE ROLE SET. The roles are the distinct slugs in
+  # values ∪ precedence ∪ {default} — there is no separate role list. Slugs
+  # match [a-z0-9-]{1,32}; `all` is reserved (the announcement audience meaning
+  # everyone); a violation fails startup. More than five roles works but logs a
+  # warning: the per-role admin screens are designed for a handful.
+  #
+  # Shown here: the UOS deployment, whose IdM can only distinguish students from
+  # employees. (The *built-in* defaults are a three-role example —
+  # faculty→teacher, employee/member→staff, student→student — so an unmounted
+  # config still runs.) Supplying this block replaces the built-in one WHOLE —
+  # claim, values, precedence, default and labels together — so set all of it,
+  # not just the keys you want to change.
   role:
     claim: eduPersonAffiliation
-    values:
-      faculty: teacher
-      employee: staff
-      member: staff
+    values:                                 # claim value -> role slug
       student: student
-    precedence: [teacher, staff, student]   # if several match, first wins
-    default: student                          # if none match
+      employee: staff
+    precedence: [staff, student]            # if several match, first wins
+    default: student                        # if none match
+    labels:                                 # optional; default = capitalized slug
+      student: { de: "Studierende", en: "Students" }
+      staff:   { de: "Mitarbeitende", en: "Staff" }
   # How to detect a dashboard admin (supports a nested claim path).
   admin:
     claim: groups

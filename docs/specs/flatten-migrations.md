@@ -7,7 +7,7 @@ Run with: **sonnet, new session off `main`.**
 ## Why (and why the timing is rigid)
 
 No production database exists yet — only test systems that reseed from empty. That makes
-this the last free moment to flatten the 15-step migration history (00001–00015) into one
+this the last free moment to flatten the 16-step migration history (00001–00016) into one
 canonical schema: the instant a production database exists, history becomes immutable
 forever. Fresh installs are this repo's audience (open-source reuse, golden rule 8); an
 adopter bootstrapping an empty database should read one clean schema, not replay internal
@@ -23,6 +23,11 @@ keywords bolted on). Git keeps the history; it just stops executing.
    `services`/`service_categories`/`categories`/`role_defaults` (and `announcements` if
    wanted) BEFORE the wipe — that curation is exactly the "irreplaceable data" of docs/04 §5.
 3. Every test/staging deployment gets reset (dropped volume) when this lands — announce it.
+4. Migration 00016 (`configurable_roles`, docs/specs/configurable-roles.md) is part of the
+   flatten: it only *drops* the three role check constraints, so the flattened baseline
+   simply declares `users.primary_role`, `role_defaults.role` and `announcements.audience`
+   as plain `text` with a comment pointing at the service-layer validation — there is
+   nothing to replay.
 
 ## The handoff prompt (paste verbatim into the coding session)
 

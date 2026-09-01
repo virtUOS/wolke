@@ -1,22 +1,29 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
-import { api, type Service } from '@/lib/api'
+import { api, localized, type Service } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { useAdminActions } from '@/lib/admin-hooks'
-import { useCatalog } from '@/lib/hooks'
+import { useCatalog, useRoles } from '@/lib/hooks'
 import { Button } from '@/components/ui/button'
 import { PillButton } from '@/components/ui/pill-button'
 import { Select } from '@/components/ui/select'
 
-const ROLES = ['student', 'teacher', 'staff'] as const
-
 // Per-role ordered default view editor (docs/01 §3): pick services and order
-// them; Save replaces the role's defaults.
+// them; Save replaces the role's defaults. The roles come from /api/roles —
+// they are whatever this deployment's claim mapping defines, so the tab strip
+// wraps rather than assuming a fixed number of them.
 export function RoleDefaultsAdmin({ locale }: { locale: string }) {
   const s = t(locale)
   const catalog = useCatalog()
+  const roles = useRoles()
   const actions = useAdminActions()
-  const [role, setRole] = useState<(typeof ROLES)[number]>('student')
+  const roleList = roles.data ?? []
+  // Empty until /api/roles resolves; the first role in precedence order is the
+  // one an admin lands on. A selection that the configured set no longer
+  // contains (the roles query refetched after a config change) falls back to
+  // that first role, so the editor never saves under a role that is gone.
+  const [selected, setSelected] = useState('')
+  const role = roleList.some((r) => r.slug === selected) ? selected : roleList[0]?.slug ?? ''
   const [ordered, setOrdered] = useState<string[]>([])
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | undefined>()
@@ -26,6 +33,7 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
   const name = (id: string) => byID.get(id)?.name ?? id
 
   useEffect(() => {
+    if (!role) return
     let active = true
     api.roleDefaults(role).then((r) => active && setOrdered(r.service_ids.filter((id) => byID.has(id))))
     return () => {
@@ -49,15 +57,15 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
   return (
     <div className="space-y-4">
       <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.rolesHeading}</h2>
-      <div className="flex gap-1">
-        {ROLES.map((r) => (
+      <div className="flex flex-wrap gap-1">
+        {roleList.map((r) => (
           <PillButton
-            key={r}
-            active={role === r}
-            aria-current={role === r ? 'true' : undefined}
-            onClick={() => { setRole(r); setSaved(false); setError(undefined) }}
+            key={r.slug}
+            active={role === r.slug}
+            aria-current={role === r.slug ? 'true' : undefined}
+            onClick={() => { setSelected(r.slug); setSaved(false); setError(undefined) }}
           >
-            {r}
+            {localized(r.label, locale)}
           </PillButton>
         ))}
       </div>
@@ -94,7 +102,7 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
 
       <div className="flex items-center gap-3">
         <Button
-          disabled={actions.setRoleDefaults.isPending}
+          disabled={!role || actions.setRoleDefaults.isPending}
           onClick={() => {
             setError(undefined)
             actions.setRoleDefaults.mutate(

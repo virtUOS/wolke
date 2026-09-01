@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -24,12 +25,11 @@ type AnnouncementInput struct {
 	Dismissible bool
 }
 
-var (
-	validSeverities = map[string]bool{"info": true, "warning": true, "critical": true}
-	validAudiences  = map[string]bool{"all": true, "student": true, "teacher": true, "staff": true}
-)
+var validSeverities = map[string]bool{"info": true, "warning": true, "critical": true}
 
-func validateAnnouncement(in AnnouncementInput) error {
+// validateAnnouncement checks an announcement against the configured role set:
+// the audience is "all" or one of this deployment's roles (roles.go).
+func validateAnnouncement(roles config.RoleSet, in AnnouncementInput) error {
 	if in.Title["de"] == "" {
 		return &ValidationError{Field: "title", Msg: "German title (de) is required"}
 	}
@@ -45,8 +45,8 @@ func validateAnnouncement(in AnnouncementInput) error {
 	if !validSeverities[in.Severity] {
 		return &ValidationError{Field: "severity", Msg: "must be one of info, warning, critical"}
 	}
-	if !validAudiences[in.Audience] {
-		return &ValidationError{Field: "audience", Msg: "must be one of all, student, teacher, staff"}
+	if err := validateAudience(roles, in.Audience); err != nil {
+		return err
 	}
 	if in.StartsAt != nil && in.EndsAt != nil && !in.EndsAt.After(*in.StartsAt) {
 		return &ValidationError{Field: "ends_at", Msg: "must be after starts_at"}
@@ -59,8 +59,8 @@ func validateAnnouncement(in AnnouncementInput) error {
 // new one first retires any currently-active notice (its window is ended now),
 // leaving it in the table as history rather than destroying it. The retire +
 // insert run in one tx so the invariant holds atomically.
-func CreateAnnouncement(ctx context.Context, db AdminDB, actor Actor, in AnnouncementInput) (store.Announcement, error) {
-	if err := validateAnnouncement(in); err != nil {
+func CreateAnnouncement(ctx context.Context, db AdminDB, actor Actor, roles config.RoleSet, in AnnouncementInput) (store.Announcement, error) {
+	if err := validateAnnouncement(roles, in); err != nil {
 		return store.Announcement{}, err
 	}
 	var out store.Announcement
@@ -89,8 +89,8 @@ func CreateAnnouncement(ctx context.Context, db AdminDB, actor Actor, in Announc
 
 // UpdateAnnouncement validates and replaces an announcement (edit or expire),
 // auditing the change.
-func UpdateAnnouncement(ctx context.Context, db AdminDB, actor Actor, id pgtype.UUID, in AnnouncementInput) (store.Announcement, error) {
-	if err := validateAnnouncement(in); err != nil {
+func UpdateAnnouncement(ctx context.Context, db AdminDB, actor Actor, roles config.RoleSet, id pgtype.UUID, in AnnouncementInput) (store.Announcement, error) {
+	if err := validateAnnouncement(roles, in); err != nil {
 		return store.Announcement{}, err
 	}
 	var out store.Announcement

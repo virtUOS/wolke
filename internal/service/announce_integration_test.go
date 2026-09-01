@@ -43,7 +43,7 @@ func TestAnnouncementsRetireScopingDismissal(t *testing.T) {
 
 	mk := func(severity, audience string, ends *time.Time) store.Announcement {
 		t.Helper()
-		a, err := CreateAnnouncement(ctx, db, actor, AnnouncementInput{
+		a, err := CreateAnnouncement(ctx, db, actor, exampleRoles(), AnnouncementInput{
 			Title: map[string]string{"de": "T", "en": "T"}, Body: map[string]string{"de": "B", "en": "B"},
 			Severity: severity, Audience: audience, EndsAt: ends, Dismissible: true,
 		})
@@ -60,7 +60,7 @@ func TestAnnouncementsRetireScopingDismissal(t *testing.T) {
 	}
 	listAs := func(role string, uid pgtype.UUID) []announce.Announcement {
 		t.Helper()
-		got, err := announce.ListActive(ctx, db, role, uid)
+		got, err := announce.ListActive(ctx, db, exampleRoles(), role, uid)
 		if err != nil {
 			t.Fatalf("ListActive: %v", err)
 		}
@@ -71,7 +71,7 @@ func TestAnnouncementsRetireScopingDismissal(t *testing.T) {
 	// history, so only the newest announcement stays active. The retired one is
 	// now expired, so it surfaces in the user's history.
 	a := mk("info", "all", nil)
-	b, err := CreateAnnouncement(ctx, db, actor, AnnouncementInput{
+	b, err := CreateAnnouncement(ctx, db, actor, exampleRoles(), AnnouncementInput{
 		Title: map[string]string{"de": "T2", "en": "T2"}, Body: map[string]string{"de": "B2", "en": "B2"}, Severity: "info", Audience: "all",
 	})
 	if err != nil {
@@ -80,7 +80,7 @@ func TestAnnouncementsRetireScopingDismissal(t *testing.T) {
 	if got := listAs("staff", admin.ID); len(got) != 1 {
 		t.Errorf("after retire-on-create, active = %d, want 1 (newest only)", len(got))
 	}
-	hist, err := announce.ListHistory(ctx, db, "staff", admin.ID)
+	hist, err := announce.ListHistory(ctx, db, exampleRoles(), "staff", admin.ID)
 	if err != nil {
 		t.Fatalf("ListHistory: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestAnnouncementsRetireScopingDismissal(t *testing.T) {
 	}
 
 	// Invalid input is rejected.
-	if _, err := CreateAnnouncement(ctx, db, actor, AnnouncementInput{Title: map[string]string{}, Severity: "info", Audience: "all"}); err == nil {
+	if _, err := CreateAnnouncement(ctx, db, actor, exampleRoles(), AnnouncementInput{Title: map[string]string{}, Severity: "info", Audience: "all"}); err == nil {
 		t.Error("create with empty title should fail validation")
 	}
 }

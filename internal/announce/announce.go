@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -25,6 +26,11 @@ type Announcement struct {
 	EndsAt      string            `json:"ends_at,omitempty"`
 	Dismissible bool              `json:"dismissible"`
 	CreatedAt   string            `json:"created_at,omitempty"` // RFC3339; when the notice was posted
+	// AudienceUnknown flags an audience that is no longer one of the configured
+	// roles (the role set is deployment config — docs/specs/configurable-roles.md
+	// §2.2). Such a notice reaches nobody; the views that can surface one say so
+	// rather than erroring. Read-only: never accepted from a client.
+	AudienceUnknown bool `json:"audience_unknown,omitempty"`
 }
 
 // Store is the read surface the announce package needs.
@@ -46,33 +52,33 @@ const historyLimit = 100
 
 // ListActive returns announcements currently in-window, addressed to the role,
 // and not already dismissed by the user.
-func ListActive(ctx context.Context, db Store, role string, userID pgtype.UUID) ([]Announcement, error) {
+func ListActive(ctx context.Context, db Store, roles config.RoleSet, role string, userID pgtype.UUID) ([]Announcement, error) {
 	rows, err := db.ListActiveAnnouncements(ctx, store.ListActiveAnnouncementsParams{Role: role, UserID: userID})
 	if err != nil {
 		return nil, fmt.Errorf("list active announcements: %w", err)
 	}
-	return views(rows), nil
+	return views(rows, roles), nil
 }
 
 // ListAllActive returns every in-window announcement regardless of audience, for
 // the public catalog MCP server, which has no user role to filter on.
-func ListAllActive(ctx context.Context, db Store) ([]Announcement, error) {
+func ListAllActive(ctx context.Context, db Store, roles config.RoleSet) ([]Announcement, error) {
 	rows, err := db.ListAllActiveAnnouncements(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list all active announcements: %w", err)
 	}
-	return views(rows), nil
+	return views(rows, roles), nil
 }
 
 // ListHistory returns a user's past notices for the notification center:
 // addressed to their role, already started, and no longer an active banner for
 // them (expired or dismissed). Most recent first.
-func ListHistory(ctx context.Context, db Store, role string, userID pgtype.UUID) ([]Announcement, error) {
+func ListHistory(ctx context.Context, db Store, roles config.RoleSet, role string, userID pgtype.UUID) ([]Announcement, error) {
 	rows, err := db.ListAnnouncementHistory(ctx, store.ListAnnouncementHistoryParams{Role: role, UserID: userID, Lim: historyLimit})
 	if err != nil {
 		return nil, fmt.Errorf("list announcement history: %w", err)
 	}
-	return views(rows), nil
+	return views(rows, roles), nil
 }
 
 // Purge permanently deletes expired announcements older than the retention
@@ -86,24 +92,26 @@ func Purge(ctx context.Context, db PurgeStore, cutoff time.Time) (int64, error) 
 }
 
 // AdminList returns the most recent announcements (all states), for management.
-func AdminList(ctx context.Context, db Store, limit int32) ([]Announcement, error) {
+func AdminList(ctx context.Context, db Store, roles config.RoleSet, limit int32) ([]Announcement, error) {
 	rows, err := db.AdminListAnnouncements(ctx, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list announcements: %w", err)
 	}
-	return views(rows), nil
+	return views(rows, roles), nil
 }
 
-func views(rows []store.Announcement) []Announcement {
+func views(rows []store.Announcement, roles config.RoleSet) []Announcement {
 	out := make([]Announcement, 0, len(rows))
 	for _, a := range rows {
-		out = append(out, View(a))
+		out = append(out, View(a, roles))
 	}
 	return out
 }
 
-// View maps a stored announcement to the API model.
-func View(a store.Announcement) Announcement {
+// View maps a stored announcement to the API model, flagging an audience that
+// is no longer a configured role. The flag is computed here, in the read model,
+// so the admin API and the public catalog MCP agree (CLAUDE.md rule 3).
+func View(a store.Announcement, roles config.RoleSet) Announcement {
 	return Announcement{
 		ID:          uuidStr(a.ID),
 		Title:       jsonMap(a.Title),
@@ -114,6 +122,8 @@ func View(a store.Announcement) Announcement {
 		EndsAt:      tsString(a.EndsAt),
 		Dismissible: a.Dismissible,
 		CreatedAt:   tsString(a.CreatedAt),
+		// AudienceAll is reserved, so it is never a role slug.
+		AudienceUnknown: a.Audience != config.AudienceAll && !roles.Has(a.Audience),
 	}
 }
 

@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -12,7 +11,6 @@ import (
 	"time"
 
 	"github.com/virtuos/wolke/internal/auth"
-	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -45,33 +43,7 @@ func TestOIDCLoginFlow(t *testing.T) {
 		db.Close()
 	})
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	base := "http://" + ln.Addr().String()
-
-	cfg := config.Defaults()
-	cfg.PublicURL = base
-	cfg.SessionSecret = "integration-test-secret"
-	cfg.OIDC.IssuerURL = issuer
-	cfg.OIDC.ClientID = "wolke"
-	cfg.OIDC.ClientSecret = "any-secret-mock-accepts"
-	cfg.OIDC.Scopes = []string{"openid", "profile", "email"}
-
-	authn, err := auth.NewAuthenticator(ctx, &cfg)
-	if err != nil {
-		t.Fatalf("authenticator: %v", err)
-	}
-	svc := auth.NewService(authn, auth.NewSessionStore(db, time.Hour), db, &cfg, discardLogger())
-	h, err := New(&cfg, Deps{Logger: discardLogger(), Auth: svc, Users: db, SPA: fakeBuiltSPA()})
-	if err != nil {
-		t.Fatalf("router: %v", err)
-	}
-
-	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second}
-	go func() { _ = srv.Serve(ln) }()
-	t.Cleanup(func() { _ = srv.Close() })
+	base := startIntegrationServer(t, db, issuer, nil, Deps{}).PublicURL
 
 	jar, _ := cookiejar.New(nil)
 	// Record the /auth/callback?code=…&state=… URL the flow passes through, so

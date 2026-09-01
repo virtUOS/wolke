@@ -7,7 +7,9 @@ import { cn } from '@/lib/utils'
 // visual active state; the caller sets the semantics (aria-current="page" for a
 // nav tab, aria-pressed for a toggle) by spreading the matching ARIA prop.
 const pillButtonVariants = cva(
-  'cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] disabled:cursor-default',
+  // min-h-11 is the 44px touch floor (CLAUDE.md "Responsive & viewport
+  // discipline"); from sm: up a pointer is precise enough for the denser pill.
+  'min-h-11 cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] disabled:cursor-default sm:min-h-0',
   {
     variants: {
       active: {
