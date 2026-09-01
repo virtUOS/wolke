@@ -69,9 +69,11 @@ services:
       # app port is internal-only (see README → Metrics). Set it only if the
       # scrape path crosses an untrusted boundary.
     volumes:
-      - ./config.yaml:/config.yaml:ro
+      # ,z relabels for SELinux (rootless podman) — without it the container
+      # can't read the mount; harmless elsewhere. Same flag as the Caddyfile.
+      - ./config.yaml:/config.yaml:ro,z
       # Optional: override the image's baked-in default branding.
-      # - ./branding:/branding:ro
+      # - ./branding:/branding:ro,z
     # The app auto-migrates on startup, so it only needs the database reachable.
     depends_on:
       postgres:
