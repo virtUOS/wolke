@@ -218,7 +218,11 @@ function OptionGroup<T extends string>({
             onClick={() => onChange(optionValue)}
             style={{
               display: 'grid', placeItems: 'center',
-              flex: '1 1 auto', padding: '5px 6px', fontSize: 12.5, lineHeight: 1.2,
+              // nowrap is the hard guarantee of issue #98: an option's label
+              // never breaks mid-word, whatever the language or the viewport.
+              // The group may still wrap *between* options if a future label set
+              // outgrows the panel — that degrades, it doesn't shatter a word.
+              flex: '1 1 auto', whiteSpace: 'nowrap', padding: '5px 6px', fontSize: 12.5, lineHeight: 1.2,
               borderRadius: 'var(--radius-sm)', cursor: 'pointer',
               border: '1px solid var(--border)',
               background: active ? 'color-mix(in srgb, var(--accent) 38%, var(--surface))' : 'transparent',
@@ -308,7 +312,12 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, the
           tabIndex={-1}
           style={{
             position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 20,
-            width: 'min(244px, calc(100vw - 24px))',
+            // 272px, not 244: the German language group (Automatisch · Deutsch ·
+            // English) needs 207px of pill row and only had 202px, so it wrapped
+            // and "English" stretched alone across a second row (issue #98).
+            // 272 leaves the widest group ~20px of headroom and still clears the
+            // narrowest supported phone (324 - 24 = 300).
+            width: 'min(272px, calc(100vw - 24px))',
             // The 44px mobile touch targets on the rows and pills (issue #28)
             // make the panel taller than a short phone viewport can fit —
             // scroll it internally rather than letting it clip or push past
@@ -369,9 +378,6 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, the
               <Languages className="h-4 w-4 shrink-0" aria-hidden="true" />
               {s.topbar.language}
             </span>
-            {/* Wraps rather than forcing three equal columns: at the panel's width
-                the three German/English labels don't fit one row, and equal
-                columns made the last one overflow the panel by a few px. */}
             <OptionGroup
               label={s.topbar.language}
               value={currentLocalePref}

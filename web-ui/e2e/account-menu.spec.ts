@@ -4,7 +4,7 @@
 // moment this spec opens the panel, which is exactly what it's here to catch
 // (and, in this PR, to fix — see TopBar.tsx).
 
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { expectViewportHealthy } from './helpers/viewport'
 import { gotoApp } from './helpers/session'
 import { expect, test } from './fixtures'
@@ -42,6 +42,65 @@ test('the account menu opens, survives a language switch, and closes cleanly', a
 
   await page.keyboard.press('Escape')
   await expect(menu).toBeHidden()
+})
+
+/**
+ * Asserts that every option pill in `group` sits on one row and renders its
+ * label as a single line box — the invariant issue #98 is about.
+ *
+ * A Range over the button's contents reports one client rect per line box, so
+ * `rects.length > 1` is a label broken across lines; comparing the buttons'
+ * `offsetTop` catches the other half of the defect, where the labels each fit
+ * but the group itself wraps and the odd pill stretches across its own row.
+ */
+async function expectOptionsOnOneLine(group: Locator, what: string): Promise<void> {
+  const measured = await group.evaluate((el) =>
+    Array.from(el.querySelectorAll('button')).map((b) => {
+      const range = document.createRange()
+      range.selectNodeContents(b)
+      return {
+        text: (b.textContent ?? '').trim(),
+        lines: range.getClientRects().length,
+        top: Math.round(b.getBoundingClientRect().top),
+        clipped: b.scrollWidth > b.clientWidth + 1,
+      }
+    }),
+  )
+  expect(measured.length, `${what}: options found`).toBeGreaterThan(1)
+
+  const wrapped = measured.filter((m) => m.lines !== 1)
+  expect(wrapped, `${what}: options whose label broke across lines: ${JSON.stringify(wrapped)}`).toEqual([])
+
+  const clipped = measured.filter((m) => m.clipped)
+  expect(clipped, `${what}: options clipping their label: ${JSON.stringify(clipped)}`).toEqual([])
+
+  const rows = [...new Set(measured.map((m) => m.top))]
+  expect(rows, `${what}: options spread over ${rows.length} rows — ${JSON.stringify(measured)}`).toHaveLength(1)
+}
+
+// Issue #98: in German the language group did not fit the panel, so it wrapped
+// and "English" stretched alone across a second row. The panel/pill sizing has
+// to hold one row per group in either language, at every viewport in the matrix.
+test('the theme and language options each stay on one line, de and en', async ({ page }) => {
+  await stubPrefs(page)
+  await gotoApp(page)
+
+  await page.getByRole('button', { name: /Konto-Menü|Account menu/i }).click()
+  // The panel's accessible name is localized, so it has to match either
+  // language: the switch below relabels this very dialog.
+  const menu = page.getByRole('dialog', { name: /Konto|Account/i })
+  await expect(menu).toBeVisible()
+
+  await expectOptionsOnOneLine(menu.getByRole('group', { name: 'Farbschema' }), 'Farbschema (de)')
+  await expectOptionsOnOneLine(menu.getByRole('group', { name: 'Sprache' }), 'Sprache (de)')
+
+  // The English labels are a different set of lengths — assert them too, on the
+  // same panel width, rather than assuming German is always the worst case.
+  await menu.getByRole('group', { name: 'Sprache' }).getByRole('button', { name: 'English' }).click()
+  const themeEn = menu.getByRole('group', { name: 'Colour scheme' })
+  await expect(themeEn).toBeVisible()
+  await expectOptionsOnOneLine(themeEn, 'Colour scheme (en)')
+  await expectOptionsOnOneLine(menu.getByRole('group', { name: 'Language' }), 'Language (en)')
 })
 
 test('the theme group switches themes without closing the menu', async ({ page }) => {
