@@ -86,10 +86,6 @@ type Querier interface {
 	// Favorites ordered by the user's click count (most-used first), then by the
 	// stored order as a stable tiebreaker.
 	ListFavoritesByUsage(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
-	// Distinct roles that currently have a stored default view. Used to purge rows
-	// left behind by a role that the deployment's claim mapping no longer defines
-	// (the role set is config, not schema — see internal/service/roles.go).
-	ListRoleDefaultRoles(ctx context.Context) ([]string, error)
 	ListServiceCategorySlugs(ctx context.Context, serviceID pgtype.UUID) ([]string, error)
 	// Most-searched queries that returned nothing within the last @days days — the
 	// admin worklist for adding keywords (docs/01 §4.6). Aggregate-only.
@@ -102,6 +98,11 @@ type Querier interface {
 	// be null for notices shown immediately, so fall back to created_at.
 	PurgeAnnouncementsBefore(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
 	PurgeOldClicks(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
+	// Deletes the default-view rows of every role outside the configured set and
+	// reports which roles those were (for the audit diff). One statement, so the
+	// read and the delete cannot disagree. The role set is config, not schema —
+	// see internal/service/roles.go.
+	PurgeRoleDefaultsNotIn(ctx context.Context, roles []string) ([]string, error)
 	// A lightweight click event (docs/01 §5.4). user_role is denormalized so
 	// aggregate metrics (Phase 4) need no join. target distinguishes a launch
 	// ('service') from a documentation-link click ('documentation'). NULLs on

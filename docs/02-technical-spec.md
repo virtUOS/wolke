@@ -232,8 +232,9 @@ role a later configuration dropped degrade rather than break:
   next login (roles re-resolve every login).
 - `role_defaults` rows for an unknown role are invisible to reads and are purged the next time an
   admin saves any role's list (the purge is audited).
-- an announcement whose `audience` is an unknown role reaches nobody, but stays in the admin list
-  flagged (`audience_unknown`) so it can be fixed.
+- an announcement whose `audience` is an unknown role reaches nobody, but stays listed with
+  `audience_unknown` set so it can be fixed. The flag is computed in the announcement read model
+  (`internal/announce`), so the admin API and the public catalog MCP report it identically.
 
 `click_events.user_role` and `usage_daily.user_role` were always free text — they are historical
 records, and history keeps the role it was recorded under.
@@ -348,6 +349,10 @@ Rules:
   everyone). A violation fails startup — a role slug travels in URLs (`/api/admin/role-defaults/{role}`)
   and in the `announcements.audience` column.
 - **Labels** are optional; a role with none renders as its capitalized slug, in both languages.
+- **The `role:` block is all-or-nothing.** A mounted config file that supplies it replaces the
+  bundled example wholesale (claim, values, precedence, default, labels) rather than merging with
+  it — otherwise a two-role deployment would silently inherit a third role from the example that
+  no claim value can produce. Supply the whole block, or none of it.
 - **Above five roles** the server logs a WARN once at startup and keeps going: the per-role screens
   (default-view editor, audience picker) are designed for a handful.
 - The set is served to the SPA at `GET /api/roles` in precedence order, and it is what every

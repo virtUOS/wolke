@@ -185,12 +185,12 @@ func load(path string, lookupEnv func(string) (string, bool)) (*Config, error) {
 			return nil, fmt.Errorf("read config file %q: %w", path, err)
 		}
 		// Unmarshalling onto the defaulted struct overlays file values, leaving
-		// untouched keys alone. For a map that means a *merge* — which is what a
-		// skin wants (override one theme token, inherit the rest) but never what
-		// a role mapping wants: a two-role deployment must be able to drop the
-		// bundled example's third role, not inherit it. So the role maps are
-		// cleared first whenever the file supplies them.
-		if err := clearOverriddenRoleMaps(data, &cfg); err != nil {
+		// untouched keys alone — for a map, a *merge*. That is what a skin wants
+		// (override one theme token, inherit the rest) but never what a role
+		// mapping wants: the mapping defines the role set, so anything inherited
+		// from the bundled example is a role no claim value can produce. A file
+		// that supplies `oidc.role` therefore replaces the block whole.
+		if err := resetRoleBlockIfPresent(data, &cfg); err != nil {
 			return nil, fmt.Errorf("parse config file %q: %w", path, err)
 		}
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
@@ -206,26 +206,23 @@ func load(path string, lookupEnv func(string) (string, bool)) (*Config, error) {
 	return &cfg, nil
 }
 
-// clearOverriddenRoleMaps empties cfg's role values/labels when the file sets
-// them, so the file's mapping replaces the bundled example instead of merging
-// with it (the role set is derived from exactly these keys — roles.go).
-func clearOverriddenRoleMaps(data []byte, cfg *Config) error {
+// resetRoleBlockIfPresent zeroes cfg's claim mapping when the file supplies an
+// `oidc.role` block, so the file's mapping replaces the bundled example rather
+// than merging with it. The block is one unit — claim, values, precedence,
+// default and labels together define the role set (roles.go) — so a file that
+// sets any of it must set all of it, and validate() refuses what it leaves
+// incomplete.
+func resetRoleBlockIfPresent(data []byte, cfg *Config) error {
 	var probe struct {
 		OIDC struct {
-			Role struct {
-				Values map[string]string            `yaml:"values"`
-				Labels map[string]map[string]string `yaml:"labels"`
-			} `yaml:"role"`
+			Role *yaml.Node `yaml:"role"`
 		} `yaml:"oidc"`
 	}
 	if err := yaml.Unmarshal(data, &probe); err != nil {
 		return err
 	}
-	if probe.OIDC.Role.Values != nil {
-		cfg.OIDC.Role.Values = nil
-	}
-	if probe.OIDC.Role.Labels != nil {
-		cfg.OIDC.Role.Labels = nil
+	if probe.OIDC.Role != nil {
+		cfg.OIDC.Role = RoleMapping{}
 	}
 	return nil
 }

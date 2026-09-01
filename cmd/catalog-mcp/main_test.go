@@ -6,6 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/readmcp"
 )
 
@@ -15,7 +16,7 @@ import (
 func TestToolRegistration(t *testing.T) {
 	ctx := context.Background()
 	srv := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	registerTools(srv, readmcp.New(nil, nil))
+	registerTools(srv, readmcp.New(nil, nil, config.RoleSet{}))
 
 	t1, t2 := mcp.NewInMemoryTransports()
 	if _, err := srv.Connect(ctx, t1, nil); err != nil {

@@ -60,7 +60,7 @@ func TestAnnouncementsRetireScopingDismissal(t *testing.T) {
 	}
 	listAs := func(role string, uid pgtype.UUID) []announce.Announcement {
 		t.Helper()
-		got, err := announce.ListActive(ctx, db, role, uid)
+		got, err := announce.ListActive(ctx, db, exampleRoles(), role, uid)
 		if err != nil {
 			t.Fatalf("ListActive: %v", err)
 		}
@@ -80,7 +80,7 @@ func TestAnnouncementsRetireScopingDismissal(t *testing.T) {
 	if got := listAs("staff", admin.ID); len(got) != 1 {
 		t.Errorf("after retire-on-create, active = %d, want 1 (newest only)", len(got))
 	}
-	hist, err := announce.ListHistory(ctx, db, "staff", admin.ID)
+	hist, err := announce.ListHistory(ctx, db, exampleRoles(), "staff", admin.ID)
 	if err != nil {
 		t.Fatalf("ListHistory: %v", err)
 	}

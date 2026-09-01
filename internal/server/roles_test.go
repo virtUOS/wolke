@@ -1,18 +1,25 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
-	"github.com/virtuos/wolke/internal/announce"
+	"github.com/go-chi/chi/v5"
+
 	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
-func twoRoleSet() config.RoleSet {
+// twoRoleMapping is the launch deployment's claim mapping: an IdM that can only
+// tell students from employees. Shared by the unit and integration tests so
+// "what a two-role deployment looks like" is written down once.
+func twoRoleMapping() config.RoleMapping {
 	return config.RoleMapping{
+		Claim:      "eduPersonAffiliation",
 		Values:     map[string]string{"student": "student", "employee": "staff"},
 		Precedence: []string{"staff", "student"},
 		Default:    "student",
@@ -20,14 +27,16 @@ func twoRoleSet() config.RoleSet {
 			"staff":   {"de": "Mitarbeitende", "en": "Staff"},
 			"student": {"de": "Studierende", "en": "Students"},
 		},
-	}.RoleSet()
+	}
 }
+
+func twoRoleSet() config.RoleSet { return twoRoleMapping().RoleSet() }
 
 // GET /api/roles is what the admin screens render from, so it must be the
 // configured set, in precedence order, with resolved labels (spec §2.3).
 func TestRoleListHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
-	roleList(twoRoleSet())(rec, httptest.NewRequest(http.MethodGet, "/api/roles", nil))
+	roleList(mustRolesJSON(twoRoleSet()))(rec, httptest.NewRequest(http.MethodGet, "/api/roles", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -70,20 +79,22 @@ func TestEffectiveRoleDegradesStaleUsers(t *testing.T) {
 	}
 }
 
-// An announcement whose audience is no longer a configured role reaches nobody,
-// but the admin list still shows it — flagged, never an error (spec §2.2).
-func TestFlagUnknownAudiences(t *testing.T) {
-	roles := twoRoleSet()
-	list := []announce.Announcement{
-		{ID: "1", Audience: "all"},
-		{ID: "2", Audience: "staff"},
-		{ID: "3", Audience: "teacher"},
+// Reading a role's defaults must validate the role too: an unconfigured role is
+// a client error, not an empty list that reads as "this role has no defaults".
+// It also keeps the URL path from being a free-text lookup key.
+func TestAdminGetRoleDefaultsRejectsAnUnconfiguredRole(t *testing.T) {
+	d := AdminDeps{Roles: twoRoleSet()}
+	r := httptest.NewRequest(http.MethodGet, "/api/admin/role-defaults/teacher", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("role", "teacher")
+	rec := httptest.NewRecorder()
+
+	adminGetRoleDefaults(d)(rec, r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx)))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 (%s)", rec.Code, rec.Body.String())
 	}
-	flagUnknownAudiences(list, roles)
-	if list[0].AudienceUnknown || list[1].AudienceUnknown {
-		t.Error("configured audiences must not be flagged")
-	}
-	if !list[2].AudienceUnknown {
-		t.Error("an audience outside the configured set must be flagged for the admin view")
+	if !strings.Contains(rec.Body.String(), "staff") {
+		t.Errorf("body = %s, want it to name the configured roles", rec.Body.String())
 	}
 }

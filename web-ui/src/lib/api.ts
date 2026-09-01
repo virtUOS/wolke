@@ -210,8 +210,8 @@ export interface Announcement {
   body: Localized
   severity: Severity
   audience: Audience
-  // Set by the admin list when the audience is no longer a configured role:
-  // the notice reaches nobody, and the admin view says so (docs/02 §6).
+  // Read-only, server-computed: the audience is no longer a configured role, so
+  // the notice reaches nobody (docs/02 §6). Never sent back on a write.
   audience_unknown?: boolean
   starts_at?: string
   ends_at?: string
@@ -224,9 +224,6 @@ export interface AnnouncementInput {
   body: Localized
   severity: Severity
   audience: Audience
-  // Set by the admin list when the audience is no longer a configured role:
-  // the notice reaches nobody, and the admin view says so (docs/02 §6).
-  audience_unknown?: boolean
   starts_at?: string | null
   ends_at?: string | null
   dismissible: boolean

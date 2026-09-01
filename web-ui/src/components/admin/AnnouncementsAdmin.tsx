@@ -20,11 +20,28 @@ const SEVERITIES: Severity[] = ['info', 'warning', 'critical']
 const ALL: Audience = 'all'
 
 // audienceName renders an audience: 'all' is a fixed string, a role shows its
-// configured label, and a role this deployment no longer defines falls back to
-// its bare slug (the list flags it separately).
-function audienceName(audience: Audience, roles: Role[], locale: string, fallback: (a: string) => string): string {
+// configured label, and a role this deployment no longer defines shows its bare
+// slug (the list flags that separately, with a badge).
+function audienceName(audience: Audience, roles: Role[], locale: string): string {
+  if (audience === ALL) return t(locale).admin.audienceLabel(ALL)
   const role = roles.find((r) => r.slug === audience)
-  return role ? localized(role.label, locale) : fallback(audience)
+  return role ? localized(role.label, locale) : audience
+}
+
+// In the picker there is no room for a badge, so an unconfigured audience says
+// why it is listed at all.
+function audienceOptionLabel(audience: Audience, roles: Role[], locale: string): string {
+  const name = audienceName(audience, roles, locale)
+  const known = audience === ALL || roles.some((r) => r.slug === audience)
+  return known ? name : `${name} — ${t(locale).admin.audienceUnknown}`
+}
+
+// audienceOptions is 'all' + the configured roles, plus the announcement's own
+// audience when that is no longer one of them: an editor must be able to open,
+// see and fix such a notice, not have the picker silently reassign it on save.
+function audienceOptions(roles: Role[], current: Audience | undefined): Audience[] {
+  const options: Audience[] = [ALL, ...roles.map((r) => r.slug)]
+  return current && !options.includes(current) ? [...options, current] : options
 }
 
 export function AnnouncementsAdmin({ locale }: { locale: string }) {
@@ -56,8 +73,10 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
         <h2 ref={headingRef} tabIndex={-1} className="focus:outline-hidden" style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{s.admin.announcementsHeading}</h2>
         {/* Creating retires the current active notice into history, so the create
             action is always available (not gated on there being none). */}
+        {/* Both entry points wait for /api/roles: an audience picker rendered
+            without the configured roles could only offer "all". */}
         {!showForm && (
-          <Button size="sm" onClick={() => { setEditing(null); setFormError(undefined); setShowForm(true) }}>{s.admin.newAnnouncement}</Button>
+          <Button size="sm" disabled={!roles.isSuccess} onClick={() => { setEditing(null); setFormError(undefined); setShowForm(true) }}>{s.admin.newAnnouncement}</Button>
         )}
       </div>
 
@@ -87,9 +106,9 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
           <ListItem>
             <Badge variant={severityVariant(current.severity)}>{s.admin.severityLabel(current.severity)}</Badge>
             <span className="min-w-0 flex-1 truncate">{localized(current.title, locale)}</span>
-            <span className="text-xs text-text-muted">{audienceName(current.audience, roleList, locale, s.admin.audienceLabel)}{current.ends_at ? ` · ${s.admin.until} ${isoToLocalInput(current.ends_at).replace('T', ' ')}` : ''}</span>
+            <span className="text-xs text-text-muted">{audienceName(current.audience, roleList, locale)}{current.ends_at ? ` · ${s.admin.until} ${isoToLocalInput(current.ends_at).replace('T', ' ')}` : ''}</span>
             {current.audience_unknown && <Badge variant="warning">{s.admin.audienceUnknown}</Badge>}
-            <Button variant="ghost" size="sm" onClick={() => { setEditing(current); setFormError(undefined); setShowForm(true) }}>{s.common.edit}</Button>
+            <Button variant="ghost" size="sm" disabled={!roles.isSuccess} onClick={() => { setEditing(current); setFormError(undefined); setShowForm(true) }}>{s.common.edit}</Button>
             <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>{s.common.delete}</Button>
           </ListItem>
         </List>
@@ -210,8 +229,8 @@ function AnnouncementForm({
         </Field>
         <Field label={s.admin.fAudience}>
           <Select value={audience} onChange={(e) => setAudience(e.target.value)}>
-            {[ALL, ...roles.map((r) => r.slug)].map((a) => (
-              <option key={a} value={a}>{audienceName(a, roles, locale, s.admin.audienceLabel)}</option>
+            {audienceOptions(roles, initial?.audience).map((a) => (
+              <option key={a} value={a}>{audienceOptionLabel(a, roles, locale)}</option>
             ))}
           </Select>
         </Field>

@@ -29,7 +29,9 @@ oidc:
   # Shown here: the UOS deployment, whose IdM can only distinguish students from
   # employees. (The *built-in* defaults are a three-role example —
   # faculty→teacher, employee/member→staff, student→student — so an unmounted
-  # config still runs; whatever this file sets replaces it wholesale.)
+  # config still runs.) Supplying this block replaces the built-in one WHOLE —
+  # claim, values, precedence, default and labels together — so set all of it,
+  # not just the keys you want to change.
   role:
     claim: eduPersonAffiliation
     values:                                 # claim value -> role slug

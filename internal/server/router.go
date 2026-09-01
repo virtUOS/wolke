@@ -46,6 +46,10 @@ type Deps struct {
 	AnnounceDismiss service.DismissStore
 	// Admin enables the admin write API + audit read (mounted behind requireAdmin).
 	Admin *AdminDeps
+	// Roles is the deployment's configured role set. New() fills it from the
+	// config — callers never set it — so every handler that validates, serves or
+	// degrades a role reads the same set (docs/specs/configurable-roles.md).
+	Roles config.RoleSet
 	// SPA overrides the embedded SPA filesystem; nil uses the real embedded
 	// build (web.FS()). Tests inject a fake filesystem here so they never
 	// depend on whether `make web-build && make embed` has actually run in
@@ -98,8 +102,10 @@ func New(cfg *config.Config, deps Deps) (http.Handler, error) {
 	r.Get("/sw.js", spaHandler.ServeHTTP)
 	r.Get("/workbox-{file}", spaHandler.ServeHTTP)
 
+	deps.Roles = cfg.Roles()
+
 	if deps.Auth != nil {
-		mountAuthenticated(r, cfg, deps, spaHandler)
+		mountAuthenticated(r, deps, spaHandler)
 	} else {
 		mountStub(r, cfg, spaHandler)
 	}
@@ -121,11 +127,11 @@ func buildSPA(override fs.FS) (http.Handler, error) {
 
 // mountAuthenticated wires the real OIDC BFF and the session-gated routes: the
 // API returns 401 without a session; the SPA redirects to login (docs/01 §6).
-func mountAuthenticated(r chi.Router, cfg *config.Config, deps Deps, spaHandler http.Handler) {
-	// The configured role set (docs/specs/configurable-roles.md): served to the
-	// admin UI, validated against on every role-shaped write, and used to
-	// degrade rows written under a role this deployment no longer defines.
-	roles := cfg.Roles()
+func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
+	roles := deps.Roles
+	// GET /api/roles answers the same bytes for every request, so render them
+	// once here rather than per request.
+	rolesJSON := mustRolesJSON(roles)
 
 	r.Get("/auth/login", deps.Auth.Login)
 	r.Get("/auth/callback", deps.Auth.Callback)
@@ -142,7 +148,7 @@ func mountAuthenticated(r chi.Router, cfg *config.Config, deps Deps, spaHandler 
 	r.Group(func(pr chi.Router) {
 		pr.Use(loadSession(deps.Auth, deps.Users, roles))
 		pr.With(requireUserJSON).Get("/api/me", me)
-		pr.With(requireUserJSON).Get("/api/roles", roleList(roles))
+		pr.With(requireUserJSON).Get("/api/roles", roleList(rolesJSON))
 		if deps.Prefs != nil {
 			pr.With(requireUserJSON).Patch("/api/me/prefs", updatePrefs(deps.Prefs))
 		}
@@ -160,8 +166,8 @@ func mountAuthenticated(r chi.Router, cfg *config.Config, deps Deps, spaHandler 
 			}
 		}
 		if deps.Announce != nil {
-			pr.With(requireUserJSON).Get("/api/announcements", userAnnouncements(deps.Announce))
-			pr.With(requireUserJSON).Get("/api/announcements/history", userAnnouncementHistory(deps.Announce))
+			pr.With(requireUserJSON).Get("/api/announcements", userAnnouncements(deps.Announce, roles))
+			pr.With(requireUserJSON).Get("/api/announcements/history", userAnnouncementHistory(deps.Announce, roles))
 		}
 		if deps.AnnounceDismiss != nil {
 			pr.With(requireUserJSON).Post("/api/announcements/{id}/dismiss", dismissAnnouncement(deps.AnnounceDismiss))
@@ -173,6 +179,7 @@ func mountAuthenticated(r chi.Router, cfg *config.Config, deps Deps, spaHandler 
 		}
 		if deps.Admin != nil {
 			ad := *deps.Admin
+			ad.Roles = roles
 			pr.Route("/api/admin", func(ar chi.Router) {
 				ar.Use(requireAdmin)
 				ar.Get("/services", adminListServices(ad))
@@ -180,11 +187,11 @@ func mountAuthenticated(r chi.Router, cfg *config.Config, deps Deps, spaHandler 
 				ar.Patch("/services/{id}", adminUpdateService(ad))
 				ar.Delete("/services/{id}", adminDeleteService(ad))
 				ar.Get("/role-defaults/{role}", adminGetRoleDefaults(ad))
-				ar.Put("/role-defaults/{role}", adminSetRoleDefaults(ad, roles))
+				ar.Put("/role-defaults/{role}", adminSetRoleDefaults(ad))
 				ar.Post("/categories", adminCreateCategory(ad))
-				ar.Get("/announcements", adminListAnnouncements(ad, roles))
-				ar.Post("/announcements", adminCreateAnnouncement(ad, roles))
-				ar.Patch("/announcements/{id}", adminUpdateAnnouncement(ad, roles))
+				ar.Get("/announcements", adminListAnnouncements(ad))
+				ar.Post("/announcements", adminCreateAnnouncement(ad))
+				ar.Patch("/announcements/{id}", adminUpdateAnnouncement(ad))
 				ar.Delete("/announcements/{id}", adminDeleteAnnouncement(ad))
 				ar.Get("/audit", adminListAudit(ad))
 				ar.Get("/search-insights", adminSearchInsights(ad))

@@ -9,15 +9,26 @@
 
 import { expect, test } from './fixtures'
 
-// Overflow and readability, not touch targets. The admin surface as a whole
-// (its section tabs, form inputs, selects, checkboxes and buttons) sits below
-// the 44px touch floor at phone widths — pre-existing debt across the shared
-// primitives, not something the role set introduced, and too broad to fix
-// sideways here. What this feature owes the matrix is that a role list of any
-// length wraps instead of overflowing (docs/specs/configurable-roles.md §2.4);
-// that is what these two checks assert. Restore the full set once the admin
-// screens get their touch-target pass.
+// The page-wide touch-target check is off here, and only here: the rest of the
+// admin surface (text inputs, the dismissible checkbox, the ghost icon buttons,
+// the form buttons) sits below the 44px floor at phone widths — pre-existing
+// debt across shared primitives, tracked in #101, not something the role set
+// introduced. The controls this feature owns are asserted explicitly instead
+// (expectTouchTarget below), so nothing new slips under the floor.
 test.use({ viewportChecks: ['overflow', 'readability'] })
+
+/** Asserts one control meets the 44px touch floor; a no-op off the phone projects. */
+async function expectTouchTarget(
+  locator: import('@playwright/test').Locator,
+  isMobile: boolean,
+  what: string,
+): Promise<void> {
+  if (!isMobile) return
+  const box = await locator.boundingBox()
+  expect(box, `${what} has no box`).not.toBeNull()
+  expect(box!.height, `${what} height`).toBeGreaterThanOrEqual(44)
+  expect(box!.width, `${what} width`).toBeGreaterThanOrEqual(44)
+}
 
 interface Role {
   slug: string
@@ -32,7 +43,7 @@ async function configuredRoles(page: import('@playwright/test').Page): Promise<R
   return roles
 }
 
-test('the role default-view editor renders one tab per configured role', async ({ page }) => {
+test('the role default-view editor renders one tab per configured role', async ({ page, isMobile }) => {
   await page.goto('/?admin=1')
   const roles = await configuredRoles(page)
 
@@ -49,6 +60,15 @@ test('the role default-view editor renders one tab per configured role', async (
     'true',
   )
 
+  // Every role tab is a real touch target, at every role-name length.
+  for (const role of roles) {
+    await expectTouchTarget(
+      page.getByRole('button', { name: role.label.de, exact: true }),
+      isMobile,
+      `role tab ${role.slug}`,
+    )
+  }
+
   // Switching roles loads that role's list (and, at 324px, must not overflow —
   // the fixture checks that after the test).
   const other = roles[roles.length - 1]
@@ -59,7 +79,7 @@ test('the role default-view editor renders one tab per configured role', async (
   )
 })
 
-test('the announcement audience picker offers all + the configured roles', async ({ page }) => {
+test('the announcement audience picker offers all + the configured roles', async ({ page, isMobile }) => {
   await page.goto('/?admin=1')
   const roles = await configuredRoles(page)
 
@@ -73,6 +93,8 @@ test('the announcement audience picker offers all + the configured roles', async
     await expect(audience.locator(`option[value="${role.slug}"]`)).toHaveCount(1)
   }
   await expect(audience.locator('option[value="all"]')).toHaveCount(1)
+
+  await expectTouchTarget(audience, isMobile, 'audience select')
 
   // Selecting a role audience is the state an admin publishes from; leave the
   // form open (nothing is written) so the viewport check sees it.

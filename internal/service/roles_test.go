@@ -32,19 +32,19 @@ func exampleRoles() config.RoleSet {
 func TestValidateRoleAgainstTheConfiguredSet(t *testing.T) {
 	roles := twoRoles()
 	for _, role := range []string{"staff", "student"} {
-		if err := validateRole(roles, role); err != nil {
-			t.Errorf("validateRole(%q) = %v, want nil", role, err)
+		if err := ValidateRole(roles, role); err != nil {
+			t.Errorf("ValidateRole(%q) = %v, want nil", role, err)
 		}
 	}
 	for _, role := range []string{"teacher", "", "all", "Staff", "../etc"} {
-		err := validateRole(roles, role)
+		err := ValidateRole(roles, role)
 		var ve *ValidationError
 		if !errors.As(err, &ve) || ve.Field != "role" {
-			t.Errorf("validateRole(%q) = %v, want a ValidationError on role", role, err)
+			t.Errorf("ValidateRole(%q) = %v, want a ValidationError on role", role, err)
 		}
 	}
 	// The message names what this deployment does accept.
-	err := validateRole(roles, "teacher")
+	err := ValidateRole(roles, "teacher")
 	if !strings.Contains(err.Error(), "staff") || !strings.Contains(err.Error(), "student") {
 		t.Errorf("error = %v, want it to list the configured roles", err)
 	}
@@ -84,28 +84,8 @@ func TestValidationScalesWithTheConfiguredSet(t *testing.T) {
 		Default:    "student",
 	}.RoleSet()
 	for _, role := range roles.Slugs() {
-		if err := validateRole(roles, role); err != nil {
-			t.Errorf("validateRole(%q) = %v, want nil", role, err)
+		if err := ValidateRole(roles, role); err != nil {
+			t.Errorf("ValidateRole(%q) = %v, want nil", role, err)
 		}
-	}
-}
-
-// Stale rows for a role the deployment no longer configures are dropped when
-// that admin next saves a role's list (spec §2.2).
-func TestStaleRoleDefaults(t *testing.T) {
-	roles := twoRoles()
-	stored := []string{"staff", "student", "teacher", "guest"}
-	got := staleRoles(roles, stored)
-	want := []string{"teacher", "guest"}
-	if len(got) != len(want) {
-		t.Fatalf("staleRoles = %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("staleRoles = %v, want %v", got, want)
-		}
-	}
-	if n := staleRoles(roles, []string{"staff", "student"}); len(n) != 0 {
-		t.Errorf("staleRoles = %v, want none when every row is configured", n)
 	}
 }

@@ -3,21 +3,18 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
-
-	"os"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/announce"
-	"github.com/virtuos/wolke/internal/auth"
 	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
@@ -51,50 +48,16 @@ func TestTwoRoleDeployment(t *testing.T) {
 		_, _ = db.Pool.Exec(ctx, "delete from role_defaults where role = 'phd'")
 		db.Close()
 	})
-	// The mock IdP always logs in as stud-1; the row may already exist from
-	// another run (it is referenced by audit rows, so it is never deleted here).
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	base := "http://" + ln.Addr().String()
+	// (The mock IdP always logs in as stud-1; that row may already exist from an
+	// earlier run and is referenced by audit rows, so it is never deleted here.)
 
 	// The launch deployment's mapping: the IdM distinguishes students from
 	// employees, nothing else. 'teacher' is not a role here.
-	cfg := config.Defaults()
-	cfg.PublicURL = base
-	cfg.SessionSecret = "roles-integration-secret"
-	cfg.OIDC.IssuerURL = issuer
-	cfg.OIDC.ClientID = "wolke"
-	cfg.OIDC.ClientSecret = "any-secret-mock-accepts"
-	cfg.OIDC.Role = config.RoleMapping{
-		Claim:      "eduPersonAffiliation",
-		Values:     map[string]string{"student": "student", "employee": "staff"},
-		Precedence: []string{"staff", "student"},
-		Default:    "student",
-		Labels: map[string]map[string]string{
-			"student": {"de": "Studierende", "en": "Students"},
-			"staff":   {"de": "Mitarbeitende", "en": "Staff"},
-		},
-	}
+	cfg := startIntegrationServer(t, db, issuer, func(c *config.Config) {
+		c.OIDC.Role = twoRoleMapping()
+	}, Deps{Defaults: db, Announce: db})
+	base := cfg.PublicURL
 	roles := cfg.Roles()
-
-	authn, err := auth.NewAuthenticator(ctx, &cfg)
-	if err != nil {
-		t.Fatalf("authenticator: %v", err)
-	}
-	svc := auth.NewService(authn, auth.NewSessionStore(db, time.Hour), db, &cfg, discardLogger())
-	h, err := New(&cfg, Deps{
-		Logger: discardLogger(), Auth: svc, Users: db, SPA: fakeBuiltSPA(),
-		Defaults: db, Announce: db, Catalog: nil,
-	})
-	if err != nil {
-		t.Fatalf("router: %v", err)
-	}
-	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second}
-	go func() { _ = srv.Serve(ln) }()
-	t.Cleanup(func() { _ = srv.Close() })
 
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{Jar: jar, Timeout: 15 * time.Second}
@@ -140,7 +103,7 @@ func TestTwoRoleDeployment(t *testing.T) {
 		h(rec, r.WithContext(c))
 		return rec
 	}
-	d := AdminDeps{Store: db, Invalidate: func() {}, Audit: db}
+	d := AdminDeps{Roles: roles, Store: db, Invalidate: func() {}, Audit: db}
 
 	// The dev database is seeded (and the e2e suite reads those seeds), so
 	// capture the role lists this test overwrites and put them back afterwards.
@@ -148,19 +111,19 @@ func TestTwoRoleDeployment(t *testing.T) {
 
 	// 4. Writes accept the configured roles and refuse the others — the check
 	// constraints are gone, so this is the service layer doing the work.
-	if rec := call(adminSetRoleDefaults(d, roles), http.MethodPut, "/x", `{"service_ids":[]}`, "", "staff"); rec.Code != http.StatusNoContent {
+	if rec := call(adminSetRoleDefaults(d), http.MethodPut, "/x", `{"service_ids":[]}`, "", "staff"); rec.Code != http.StatusNoContent {
 		t.Fatalf("set defaults for staff = %d, want 204 (%s)", rec.Code, rec.Body.String())
 	}
-	if rec := call(adminSetRoleDefaults(d, roles), http.MethodPut, "/x", `{"service_ids":[]}`, "", "teacher"); rec.Code != http.StatusBadRequest {
+	if rec := call(adminSetRoleDefaults(d), http.MethodPut, "/x", `{"service_ids":[]}`, "", "teacher"); rec.Code != http.StatusBadRequest {
 		t.Errorf("set defaults for an unconfigured role = %d, want 400", rec.Code)
 	}
 	body := func(audience string) string {
 		return `{"title":{"de":"Rollen-Test","en":"Roles test"},"body":{"de":"Text.","en":"Text."},"severity":"info","audience":"` + audience + `","dismissible":true}`
 	}
-	if rec := call(adminCreateAnnouncement(d, roles), http.MethodPost, "/x", body("staff"), "", ""); rec.Code != http.StatusCreated {
+	if rec := call(adminCreateAnnouncement(d), http.MethodPost, "/x", body("staff"), "", ""); rec.Code != http.StatusCreated {
 		t.Fatalf("announcement for staff = %d, want 201 (%s)", rec.Code, rec.Body.String())
 	}
-	if rec := call(adminCreateAnnouncement(d, roles), http.MethodPost, "/x", body("teacher"), "", ""); rec.Code != http.StatusBadRequest {
+	if rec := call(adminCreateAnnouncement(d), http.MethodPost, "/x", body("teacher"), "", ""); rec.Code != http.StatusBadRequest {
 		t.Errorf("announcement for an unconfigured audience = %d, want 400", rec.Code)
 	}
 
@@ -195,7 +158,7 @@ func TestTwoRoleDeployment(t *testing.T) {
 		}
 	}
 	// ...but is listed, flagged, for an admin.
-	rec := call(adminListAnnouncements(d, roles), http.MethodGet, "/x", "", "", "")
+	rec := call(adminListAnnouncements(d), http.MethodGet, "/x", "", "", "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("admin announcements = %d, want 200", rec.Code)
 	}
@@ -217,7 +180,7 @@ func TestTwoRoleDeployment(t *testing.T) {
 	}
 
 	// 5c. Stale role_defaults rows are invisible, and the next write purges them.
-	if rec := call(adminSetRoleDefaults(d, roles), http.MethodPut, "/x", `{"service_ids":[]}`, "", "student"); rec.Code != http.StatusNoContent {
+	if rec := call(adminSetRoleDefaults(d), http.MethodPut, "/x", `{"service_ids":[]}`, "", "student"); rec.Code != http.StatusNoContent {
 		t.Fatalf("set defaults for student = %d, want 204 (%s)", rec.Code, rec.Body.String())
 	}
 	var left int

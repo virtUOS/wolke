@@ -19,6 +19,7 @@ import (
 
 	"github.com/virtuos/wolke/internal/announce"
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -34,11 +35,14 @@ type Store interface {
 type Manager struct {
 	cache *catalog.Cache
 	db    Store
+	roles config.RoleSet
 }
 
-// New builds a Manager over the given catalog cache and read store.
-func New(cache *catalog.Cache, db Store) *Manager {
-	return &Manager{cache: cache, db: db}
+// New builds a Manager over the given catalog cache and read store. The role
+// set travels with it so announcements carry the same audience flag the admin
+// API shows (docs/specs/configurable-roles.md §2.2).
+func New(cache *catalog.Cache, db Store, roles config.RoleSet) *Manager {
+	return &Manager{cache: cache, db: db, roles: roles}
 }
 
 // Category is the read shape for category.list.
@@ -128,7 +132,7 @@ func (m *Manager) ListCategories(ctx context.Context) ([]Category, error) {
 // ListAnnouncements returns every in-window announcement across all audiences —
 // the maintenance-window signal that complements a service's "wartung" tag.
 func (m *Manager) ListAnnouncements(ctx context.Context) ([]announce.Announcement, error) {
-	return announce.ListAllActive(ctx, m.db)
+	return announce.ListAllActive(ctx, m.db, m.roles)
 }
 
 // --- helpers ---

@@ -12,7 +12,9 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({ classN
   <select
     ref={ref}
     className={cn(
-      'h-9 rounded-md border border-border bg-surface px-2 text-sm text-text',
+      // h-11 is the 44px touch floor at phone widths (CLAUDE.md "Responsive &
+      // viewport discipline"); denser from sm: up, where a pointer is precise.
+      'h-11 rounded-md border border-border bg-surface px-2 text-sm text-text sm:h-9',
       'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]',
       'disabled:cursor-not-allowed disabled:opacity-50',
       'aria-[invalid=true]:border-danger aria-[invalid=true]:focus-visible:ring-danger',

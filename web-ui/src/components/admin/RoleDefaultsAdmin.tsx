@@ -19,9 +19,11 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
   const actions = useAdminActions()
   const roleList = roles.data ?? []
   // Empty until /api/roles resolves; the first role in precedence order is the
-  // one an admin lands on.
+  // one an admin lands on. A selection that the configured set no longer
+  // contains (the roles query refetched after a config change) falls back to
+  // that first role, so the editor never saves under a role that is gone.
   const [selected, setSelected] = useState('')
-  const role = selected || roleList[0]?.slug || ''
+  const role = roleList.some((r) => r.slug === selected) ? selected : roleList[0]?.slug ?? ''
   const [ordered, setOrdered] = useState<string[]>([])
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | undefined>()

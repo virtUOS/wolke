@@ -7,12 +7,16 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"testing/fstest"
+	"time"
 
+	"github.com/virtuos/wolke/internal/auth"
 	"github.com/virtuos/wolke/internal/config"
+	"github.com/virtuos/wolke/internal/store"
 )
 
 func discardLogger() *slog.Logger {
@@ -44,6 +48,49 @@ func newTestRouter(t *testing.T, cfg *config.Config, deps Deps) http.Handler {
 		t.Fatalf("New: %v", err)
 	}
 	return h
+}
+
+// startIntegrationServer boots the real router — the OIDC BFF included —
+// against a live database and the mock IdP, and returns its base URL. Shared by
+// the integration tests so they differ only in what they assert: tune adjusts
+// the config (e.g. a different role mapping) before the authenticator is built,
+// and extra carries the optional read-model deps a test needs mounted.
+func startIntegrationServer(t *testing.T, db *store.DB, issuer string, tune func(*config.Config), extra Deps) *config.Config {
+	t.Helper()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	cfg := config.Defaults()
+	cfg.PublicURL = "http://" + ln.Addr().String()
+	cfg.SessionSecret = "integration-test-secret"
+	cfg.OIDC.IssuerURL = issuer
+	cfg.OIDC.ClientID = "wolke"
+	cfg.OIDC.ClientSecret = "any-secret-mock-accepts"
+	cfg.OIDC.Scopes = []string{"openid", "profile", "email"}
+	if tune != nil {
+		tune(&cfg)
+	}
+
+	authn, err := auth.NewAuthenticator(context.Background(), &cfg)
+	if err != nil {
+		t.Fatalf("authenticator: %v", err)
+	}
+	deps := extra
+	deps.Logger = discardLogger()
+	deps.Auth = auth.NewService(authn, auth.NewSessionStore(db, time.Hour), db, &cfg, discardLogger())
+	deps.Users = db
+	deps.SPA = fakeBuiltSPA()
+
+	h, err := New(&cfg, deps)
+	if err != nil {
+		t.Fatalf("router: %v", err)
+	}
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { _ = srv.Close() })
+	return &cfg
 }
 
 func TestHealthzAlwaysOK(t *testing.T) {

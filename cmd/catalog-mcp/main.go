@@ -57,7 +57,7 @@ func run() error {
 	cache := catalog.NewCache(catalogCacheTTL, func(ctx context.Context) (*catalog.Snapshot, error) {
 		return catalog.Load(ctx, db)
 	})
-	mgr := readmcp.New(cache, db)
+	mgr := readmcp.New(cache, db, cfg.Roles())
 
 	srv := mcp.NewServer(&mcp.Implementation{Name: "wolke-catalog", Version: "0.1.0"}, nil)
 	registerTools(srv, mgr)

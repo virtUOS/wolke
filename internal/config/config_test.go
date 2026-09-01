@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -126,8 +127,11 @@ branding:
       primary: "#AAAAAA"
 oidc:
   role:
+    claim: eduPersonAffiliation
     values:
       faculty: teacher
+    precedence: [teacher]
+    default: teacher
 `)
 	// Even if a deployer sets suggestively-named env vars, nested keys are
 	// untouched: only the file controls them.
@@ -157,11 +161,11 @@ func TestEnvCSVParsing(t *testing.T) {
 		t.Fatalf("load: %v", err)
 	}
 	wantScopes := []string{"openid", "profile", "email", "groups"}
-	if got := cfg.OIDC.Scopes; !equalStrings(got, wantScopes) {
+	if got := cfg.OIDC.Scopes; !slices.Equal(got, wantScopes) {
 		t.Errorf("Scopes = %v, want %v", got, wantScopes)
 	}
 	wantProxies := []string{"10.0.0.0/8", "172.16.0.0/12"}
-	if got := cfg.TrustedProxies; !equalStrings(got, wantProxies) {
+	if got := cfg.TrustedProxies; !slices.Equal(got, wantProxies) {
 		t.Errorf("TrustedProxies = %v, want %v", got, wantProxies)
 	}
 }
@@ -231,16 +235,4 @@ func TestEmptyPublicURLRejected(t *testing.T) {
 	if _, err := load(path, envMap(nil)); err == nil {
 		t.Fatal("load: want error for empty public_url, got nil")
 	}
-}
-
-func equalStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -60,7 +61,7 @@ func TestRoleSetDerivation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.m.RoleSet().Slugs()
-			if !equalStrings(got, tt.want) {
+			if !slices.Equal(got, tt.want) {
 				t.Errorf("Slugs() = %v, want %v", got, tt.want)
 			}
 		})
@@ -300,4 +301,31 @@ func logRoleSet(t *testing.T, m RoleMapping) []map[string]any {
 		out = append(out, rec)
 	}
 	return out
+}
+
+// A config file that supplies the role block replaces it whole. Anything else
+// leaks the bundled example into the deployment's set: here, a file that names
+// two roles but no precedence would otherwise inherit the example's
+// [teacher, staff, student] and end up with three roles, one of which no claim
+// value can ever produce.
+func TestLoadReplacesTheWholeRoleBlock(t *testing.T) {
+	path := writeTemp(t, `
+oidc:
+  role:
+    claim: eduPersonAffiliation
+    values:
+      student: student
+      employee: staff
+    default: student
+`)
+	cfg, err := load(path, envMap(nil))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got := cfg.Roles().Slugs(); !slices.Equal(got, []string{"staff", "student"}) {
+		t.Errorf("roles = %v, want exactly [staff student] — the example's precedence must not leak", got)
+	}
+	if got := cfg.OIDC.Role.Precedence; len(got) != 0 {
+		t.Errorf("precedence = %v, want empty: the file did not set one", got)
+	}
 }

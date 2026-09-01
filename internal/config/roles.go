@@ -9,8 +9,9 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"maps"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"unicode"
 )
@@ -20,9 +21,10 @@ import (
 // startup — more roles still work, they just crowd those screens.
 const softMaxRoles = 5
 
-// reservedRole is the announcement audience meaning "everyone", so it can never
-// also be a role slug.
-const reservedRole = "all"
+// AudienceAll is the announcement audience meaning "everyone". It is reserved:
+// no role slug may take this value, which is what lets an audience be either
+// AudienceAll or a role slug with no ambiguity.
+const AudienceAll = "all"
 
 // roleSlugPattern is what a role slug may look like. It travels in URL paths
 // (/api/admin/role-defaults/{role}) and in the announcement audience column, so
@@ -53,36 +55,35 @@ func (c *Config) Roles() RoleSet { return c.OIDC.Role.RoleSet() }
 // already refused such a mapping at startup (see Config.validate).
 func (m RoleMapping) RoleSet() RoleSet {
 	set := RoleSet{index: map[string]struct{}{}, def: m.Default}
-	add := func(slug string) {
-		if !roleSlugPattern.MatchString(slug) || slug == reservedRole {
-			return
+	for _, slug := range m.orderedSlugs() {
+		if !roleSlugPattern.MatchString(slug) || slug == AudienceAll {
+			continue
 		}
 		if _, dup := set.index[slug]; dup {
-			return
+			continue
 		}
 		set.index[slug] = struct{}{}
 		set.roles = append(set.roles, Role{Slug: slug, Label: m.label(slug)})
 	}
-
-	// Precedence first: it is the order the admin UI and /api/roles present.
-	for _, slug := range m.Precedence {
-		add(slug)
-	}
-	// Then any role the claim mapping produces that precedence forgot. Map
-	// iteration order is random, so sort for a stable API response.
-	rest := make([]string, 0, len(m.Values))
-	for _, slug := range m.Values {
-		if _, known := set.index[slug]; !known {
-			rest = append(rest, slug)
-		}
-	}
-	sort.Strings(rest)
-	for _, slug := range rest {
-		add(slug)
-	}
-	// The fallback role is part of the set even if nothing maps to it.
-	add(m.Default)
 	return set
+}
+
+// orderedSlugs lists every slug the mapping mentions, in the order the role set
+// presents them: precedence first (it is the order the admin UI and /api/roles
+// use), then whatever the claim values add — sorted, because map iteration
+// order is random and the API response must be stable — and finally the
+// fallback role, which belongs to the set even if nothing maps to it.
+func (m RoleMapping) orderedSlugs() []string {
+	fromValues := make([]string, 0, len(m.Values))
+	for _, slug := range m.Values {
+		fromValues = append(fromValues, slug)
+	}
+	slices.Sort(fromValues)
+
+	all := make([]string, 0, len(m.Precedence)+len(fromValues)+1)
+	all = append(all, m.Precedence...)
+	all = append(all, fromValues...)
+	return append(all, m.Default)
 }
 
 // label resolves a role's display labels, falling back to the capitalized slug
@@ -105,32 +106,18 @@ func (m RoleMapping) validateRoles() error {
 	if strings.TrimSpace(m.Default) == "" {
 		return fmt.Errorf("config: oidc.role.default must name the fallback role")
 	}
-	seen := map[string]bool{}
-	for _, slug := range append(append([]string{}, m.Precedence...), m.Default) {
+	// One traversal of the same ordered union the set is built from, so the
+	// error a deployer sees names the first offending slug deterministically.
+	for _, slug := range m.orderedSlugs() {
 		if err := validateRoleSlug(slug); err != nil {
 			return err
 		}
-		seen[slug] = true
-	}
-	slugs := make([]string, 0, len(m.Values))
-	for _, slug := range m.Values {
-		slugs = append(slugs, slug)
-	}
-	sort.Strings(slugs) // deterministic error message across runs
-	for _, slug := range slugs {
-		if seen[slug] {
-			continue
-		}
-		if err := validateRoleSlug(slug); err != nil {
-			return err
-		}
-		seen[slug] = true
 	}
 	return nil
 }
 
 func validateRoleSlug(slug string) error {
-	if slug == reservedRole {
+	if slug == AudienceAll {
 		return fmt.Errorf("config: role slug %q is reserved (it is the announcement audience meaning everyone)", slug)
 	}
 	if !roleSlugPattern.MatchString(slug) {
@@ -144,11 +131,7 @@ func validateRoleSlug(slug string) error {
 func (s RoleSet) List() []Role {
 	out := make([]Role, 0, len(s.roles))
 	for _, r := range s.roles {
-		label := make(map[string]string, len(r.Label))
-		for k, v := range r.Label {
-			label[k] = v
-		}
-		out = append(out, Role{Slug: r.Slug, Label: label})
+		out = append(out, Role{Slug: r.Slug, Label: maps.Clone(r.Label)})
 	}
 	return out
 }

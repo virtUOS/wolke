@@ -263,17 +263,18 @@ func SoftDeleteService(ctx context.Context, db AdminDB, actor Actor, id pgtype.U
 // rows left behind by roles the claim mapping no longer defines, which is the
 // one moment we know it is safe to (spec §2.2).
 func SetRoleDefaults(ctx context.Context, db AdminDB, actor Actor, roles config.RoleSet, role string, serviceIDs []pgtype.UUID) error {
-	if err := validateRole(roles, role); err != nil {
+	if err := ValidateRole(roles, role); err != nil {
 		return err
 	}
 	return inTx(ctx, db, func(q *store.Queries) error {
-		stored, err := q.ListRoleDefaultRoles(ctx)
-		if err != nil {
-			return fmt.Errorf("list role default roles: %w", err)
-		}
-		purged := staleRoles(roles, stored)
-		for _, stale := range purged {
-			if err := q.DeleteRoleDefaults(ctx, stale); err != nil {
+		// Purge first, in one statement, so the delete and the roles it reports
+		// cannot disagree. Guarded on a non-empty set: `<> all('{}')` matches
+		// every row, and an empty set means a misconfigured caller, not "purge
+		// everything".
+		var purged []string
+		if slugs := roles.Slugs(); len(slugs) > 0 {
+			var err error
+			if purged, err = q.PurgeRoleDefaultsNotIn(ctx, slugs); err != nil {
 				return fmt.Errorf("purge stale role defaults: %w", err)
 			}
 		}
