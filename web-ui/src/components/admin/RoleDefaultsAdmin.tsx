@@ -5,6 +5,7 @@ import { t } from '@/lib/i18n'
 import { useAdminActions } from '@/lib/admin-hooks'
 import { useCatalog, useRoles } from '@/lib/hooks'
 import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
 import { PillButton } from '@/components/ui/pill-button'
 import { Select } from '@/components/ui/select'
 
@@ -72,17 +73,20 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
 
       <ol className="space-y-1">
         {ordered.map((id, i) => (
-          <li key={id} className="flex items-center gap-2 rounded-md border border-surface px-2 py-1 text-sm">
-            <span className="flex-1">{i + 1}. {name(id)}</span>
-            <button type="button" aria-label={`${s.admin.moveUp} – ${name(id)}`} disabled={i === 0} onClick={() => move(i, -1)} className="cursor-pointer rounded p-1 text-text-muted hover:bg-surface disabled:cursor-default disabled:opacity-30">
-              <ChevronUp className="h-4 w-4" />
-            </button>
-            <button type="button" aria-label={`${s.admin.moveDown} – ${name(id)}`} disabled={i === ordered.length - 1} onClick={() => move(i, 1)} className="cursor-pointer rounded p-1 text-text-muted hover:bg-surface disabled:cursor-default disabled:opacity-30">
-              <ChevronDown className="h-4 w-4" />
-            </button>
-            <button type="button" aria-label={`${s.admin.remove} – ${name(id)}`} onClick={() => remove(id)} className="cursor-pointer rounded p-1 text-text-muted hover:text-primary">
-              <X className="h-4 w-4" />
-            </button>
+          // The three row actions are IconButtons rather than hand-rolled
+          // buttons, so they inherit the shared 44px phone touch floor (issue
+          // #101) instead of the 24px boxes they used to be.
+          <li key={id} className="flex flex-wrap items-center gap-2 rounded-md border border-surface px-2 py-1 text-sm">
+            <span className="min-w-0 flex-1 break-words hyphens-auto">{i + 1}. {name(id)}</span>
+            <IconButton size="sm" aria-label={`${s.admin.moveUp} – ${name(id)}`} disabled={i === 0} onClick={() => move(i, -1)} className="disabled:opacity-30">
+              <ChevronUp className="h-4 w-4" aria-hidden="true" />
+            </IconButton>
+            <IconButton size="sm" aria-label={`${s.admin.moveDown} – ${name(id)}`} disabled={i === ordered.length - 1} onClick={() => move(i, 1)} className="disabled:opacity-30">
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
+            </IconButton>
+            <IconButton size="sm" variant="plain" aria-label={`${s.admin.remove} – ${name(id)}`} onClick={() => remove(id)} className="hover:text-primary">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </IconButton>
           </li>
         ))}
         {ordered.length === 0 && <li className="text-sm text-text-muted">{s.admin.noRoleDefaults}</li>}

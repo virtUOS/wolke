@@ -69,8 +69,8 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
       ) : (
         <List>
           {list.map((svc) => (
-            <ListItem key={svc.id}>
-              <span className="min-w-0 flex-1">
+            <ListItem key={svc.id} className="flex-wrap">
+              <span className="min-w-0 flex-1 break-words hyphens-auto">
                 <span className="font-medium">{svc.name}</span>
                 {!svc.is_active && <Badge className="ml-2">{s.admin.inactive}</Badge>}
               </span>

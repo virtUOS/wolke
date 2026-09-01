@@ -6,6 +6,7 @@ import { useRoles } from '@/lib/hooks'
 import { Alert } from '@/components/ui/alert'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -103,7 +104,7 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
         />
       ) : current ? (
         <List className="text-sm">
-          <ListItem>
+          <ListItem className="flex-wrap">
             <Badge variant={severityVariant(current.severity)}>{s.admin.severityLabel(current.severity)}</Badge>
             <span className="min-w-0 flex-1 truncate">{localized(current.title, locale)}</span>
             <span className="text-xs text-text-muted">{audienceName(current.audience, roleList, locale)}{current.ends_at ? ` · ${s.admin.until} ${isoToLocalInput(current.ends_at).replace('T', ' ')}` : ''}</span>
@@ -237,10 +238,12 @@ function AnnouncementForm({
         <Field label={s.admin.fEndsAt}>
           <Input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
         </Field>
-        <label className="flex items-center gap-2 self-end text-sm">
-          <input type="checkbox" checked={dismissible} onChange={(e) => setDismissible(e.target.checked)} />
-          {s.admin.dismissible}
-        </label>
+        <Checkbox
+          label={s.admin.dismissible}
+          labelClassName="self-end"
+          checked={dismissible}
+          onChange={(e) => setDismissible(e.target.checked)}
+        />
       </div>
       {error && (
         <Alert variant="danger" role="alert">

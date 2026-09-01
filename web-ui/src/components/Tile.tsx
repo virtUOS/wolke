@@ -117,28 +117,32 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           style={{ position: 'absolute', inset: 0 }}
           className="tile-focus-link"
         />
+        {/* The row is the phone layout's primary control, and users found it
+            cramped (issue #99): 14px of vertical padding around a 44px icon chip
+            makes it a comfortable ~72px tall, and every control inside it
+            already meets the 44px floor. */}
         <div
           style={{
             position: 'relative',
             display: 'flex',
             alignItems: 'center',
-            gap: 12,
-            padding: '10px 8px 10px 14px',
+            gap: 14,
+            padding: '14px 10px 14px 16px',
             pointerEvents: 'none',
           }}
         >
           <div
             aria-hidden="true"
             style={{
-              width: 40, height: 40, borderRadius: 'var(--radius-md)', flexShrink: 0,
+              width: 44, height: 44, borderRadius: 'var(--radius-md)', flexShrink: 0,
               background: 'var(--surface-2)', display: 'grid', placeItems: 'center',
               color: 'var(--text)',
             }}
           >
-            <ServiceIcon name={service.icon} className="h-5 w-5" aria-hidden="true" />
+            <ServiceIcon name={service.icon} className="h-[22px] w-[22px]" aria-hidden="true" />
           </div>
 
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
               <TileName style={{ minWidth: 0 }}>{service.name}</TileName>
               {service.tag === 'beta' && <Badge variant="info">{s.tile.beta}</Badge>}

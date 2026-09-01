@@ -193,7 +193,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
           <legend className="mb-1 text-sm font-medium">{s.admin.fCategories}</legend>
           <div className="flex flex-wrap gap-2">
             {categories.map((c) => (
-              <label key={c.slug} className={cn('cursor-pointer rounded-md border px-2 py-1 text-sm', cats.has(c.slug) ? 'border-primary bg-primary text-white' : 'border-border text-text-muted')}>
+              <label key={c.slug} className={cn('inline-flex min-h-11 cursor-pointer items-center rounded-md border px-3 py-1 text-sm md:min-h-0 md:px-2', cats.has(c.slug) ? 'border-primary bg-primary text-white' : 'border-border text-text-muted')}>
                 <input type="checkbox" className="sr-only" checked={cats.has(c.slug)} onChange={() => toggleCat(c.slug)} />
                 {localized(c.label, locale)}
               </label>
@@ -207,16 +207,20 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
           {keywords.length > 0 && (
             <ul className="mb-2 flex flex-wrap gap-1.5">
               {keywords.map((kw) => (
-                <li key={kw} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-0.5 text-sm">
+                <li key={kw} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface py-0.5 pl-2 text-sm">
                   <span>{kw}</span>
-                  <button
-                    type="button"
+                  {/* The chip's remove control is a real touch target on a phone
+                      (44px) and collapses back to the tight 16px box from md: up
+                      — issue #101. */}
+                  <IconButton
+                    size="sm"
+                    variant="plain"
                     aria-label={s.admin.keywordRemove(kw)}
                     onClick={() => removeKeyword(kw)}
-                    className="grid h-4 w-4 cursor-pointer place-items-center rounded text-text-muted hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                    className="md:h-4 md:w-4 md:p-0"
                   >
                     <X className="h-3 w-3" aria-hidden="true" />
-                  </button>
+                  </IconButton>
                 </li>
               ))}
             </ul>
@@ -235,7 +239,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
           <legend className="mb-1 text-sm font-medium">{s.admin.fStatus}</legend>
           <div className="flex flex-wrap gap-2">
             {(['', 'beta', 'wartung'] as const).map((value) => (
-              <label key={value} className={cn('cursor-pointer rounded-md border px-2 py-1 text-sm', tag === value ? 'border-primary bg-primary text-white' : 'border-border text-text-muted')}>
+              <label key={value} className={cn('inline-flex min-h-11 cursor-pointer items-center rounded-md border px-3 py-1 text-sm md:min-h-0 md:px-2', tag === value ? 'border-primary bg-primary text-white' : 'border-border text-text-muted')}>
                 <input type="radio" name="tag" className="sr-only" value={value} checked={tag === value} onChange={() => setTag(value)} />
                 {value === '' ? s.admin.statusNone : value === 'beta' ? s.admin.statusBeta : s.admin.statusWartung}
               </label>
@@ -253,7 +257,9 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
             aria-label={s.admin.iconSearch}
             className="mb-2"
           />
-          <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto rounded-md border border-border p-2">
+          {/* Taller at phone widths so two rows of the (now 44px) icon buttons
+              are visible without scrolling; unchanged from md: up. */}
+          <div className="flex max-h-44 flex-wrap gap-1 overflow-y-auto rounded-md border border-border p-2 md:max-h-32">
             {!iconSet ? (
               <p className="px-1 py-2 text-sm text-text-muted" aria-busy="true">{s.common.loading}</p>
             ) : (
