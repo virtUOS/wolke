@@ -127,12 +127,15 @@ Caddy serves HTTPS on :443 (its internal CA for `localhost`; real certificates f
 **Branding and OIDC claim mapping** live in `config.yaml` (copy from `config.example.yaml`). This is the one file you edit to reskin for a different institution — colors, logo paths, product name, and which OIDC claim maps to which role. **The roles themselves come from that mapping**: the distinct slugs in `oidc.role.values` ∪ `precedence` ∪ `{default}` are the role set (optional `labels:` give them display names), so a deployment whose IdP only tells students from employees configures two roles and sees exactly two everywhere — admin editors, default views, announcement audiences. Slugs are `[a-z0-9-]{1,32}` and `all` is reserved; more than five roles works but logs a startup warning, since the per-role admin screens are built for a handful. Supplying the `role:` block in your config file replaces the built-in one whole — set all of it (claim, values, precedence, default, optional labels), not just the keys you want to change. OIDC is provider-agnostic (Keycloak, Authentik, Zitadel, Entra, …); for a step-by-step Keycloak setup see **[docs/oidc-keycloak.md](docs/oidc-keycloak.md)**. wolke also implements **OIDC back-channel logout** — logging out at the IdP ends the wolke session too. Register `PUBLIC_URL` + `/auth/backchannel-logout` as the client's back-channel logout URL at your IdP (with "session required" enabled where offered); that registration is the only knob, the endpoint is always on. `TRUSTED_PROXIES` must cover the proxy's network so `X-Forwarded-For` is trusted (it's preset to the compose `edge` subnet).
 
 **Branding assets** are plain files: mount a directory over the bundled `branding/`
-(compose: `- ./branding:/branding:ro,z`) containing any of `logo-light.svg`,
-`logo-dark.svg`, `favicon.svg`, `icon-192.png`, `icon-512.png`,
-`icon-maskable-512.png`, `apple-touch-icon.png` — the logos and favicon are
-referenced from `config.yaml` (`branding.logo_light` etc.), the PNG icons feed the
-PWA manifest and install prompts. Files you don't provide fall back to the bundled
-placeholder mark.
+(compose: `- ./branding:/branding:ro,z`). The mount **replaces the bundled set
+wholesale — provide all seven files**: `logo-light.svg`, `logo-dark.svg`,
+`favicon.svg`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`,
+`apple-touch-icon.png` (a missing file 404s; there is no per-file fallback, and the
+manifest still advertises the icons, so the PWA install silently degrades). The
+logos and favicon are referenced from `config.yaml` (`branding.logo_light` etc.);
+the PNGs serve the PWA manifest and the apple-touch link. **The whole directory is
+served publicly** (unauthenticated, at `/branding/`) — keep only these assets in
+it, never drafts or working files.
 
 **PWA updates reach open clients.** The app is an installable PWA whose service worker updates in *prompt* mode: a deploy never reloads anyone's tab by surprise, but every running client — a long-lived desktop tab or the installed app on a phone — checks for a new version hourly and on every resume, then offers an in-app "Neue Version verfügbar. / Reload" notice. So a fix ships to open clients within an hour, or on the next app resume, whichever comes first. See [docs/02 §11.1](docs/02-technical-spec.md).
 
