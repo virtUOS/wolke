@@ -25,6 +25,11 @@ type Announcement struct {
 	EndsAt      string            `json:"ends_at,omitempty"`
 	Dismissible bool              `json:"dismissible"`
 	CreatedAt   string            `json:"created_at,omitempty"` // RFC3339; when the notice was posted
+	// AudienceUnknown flags an audience that is no longer one of the configured
+	// roles (the role set is deployment config — docs/specs/configurable-roles.md
+	// §2.2). Such a notice reaches nobody; the admin list surfaces it rather than
+	// erroring. Only ever set on the admin read model.
+	AudienceUnknown bool `json:"audience_unknown,omitempty"`
 }
 
 // Store is the read surface the announce package needs.

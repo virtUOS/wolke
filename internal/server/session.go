@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/auth"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/store"
 )
@@ -22,13 +23,13 @@ type UserStore interface {
 // loadSession resolves the session cookie to a user and stashes it in the
 // context when valid. It never rejects — the requireUser* guards do that — so
 // public routes that happen to run through it are unaffected.
-func loadSession(a *auth.Service, users UserStore) func(http.Handler) http.Handler {
+func loadSession(a *auth.Service, users UserStore, roles config.RoleSet) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if c, err := r.Cookie(auth.SessionCookieName); err == nil {
 				if sess, err := a.Sessions().Lookup(r.Context(), c.Value); err == nil {
 					if user, err := users.GetUserByID(r.Context(), sess.UserID); err == nil {
-						r = r.WithContext(context.WithValue(r.Context(), userCtxKey{}, user))
+						r = r.WithContext(context.WithValue(r.Context(), userCtxKey{}, withEffectiveRole(user, roles)))
 					}
 				}
 			}

@@ -50,6 +50,12 @@ insert into categories (slug, label, sort) values (@slug, @label, @sort) returni
 -- name: DeleteRoleDefaults :exec
 delete from role_defaults where role = @role;
 
+-- name: ListRoleDefaultRoles :many
+-- Distinct roles that currently have a stored default view. Used to purge rows
+-- left behind by a role that the deployment's claim mapping no longer defines
+-- (the role set is config, not schema — see internal/service/roles.go).
+select distinct role from role_defaults order by role;
+
 -- name: AddRoleDefault :exec
 insert into role_defaults (role, service_id, sort) values (@role, @service_id, @sort);
 

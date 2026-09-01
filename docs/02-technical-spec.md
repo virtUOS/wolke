@@ -110,7 +110,7 @@ create table users (
   oidc_sub      text unique not null,
   display_name  text not null,
   email         text,
-  primary_role  text not null check (primary_role in ('student','teacher','staff')),
+  primary_role  text not null,          -- a configured role slug (§6); no check constraint: the role set is deployment config
   is_admin      boolean not null default false,   -- derived from group claim at login
   view_mode     text not null default 'auto' check (view_mode in ('list','table','auto')),
   theme         text not null default 'system'   check (theme in ('light','dark','system')),
@@ -149,7 +149,7 @@ create table service_categories (      -- many-to-many
 
 -- Admin-curated default ordering shown to each role on first visit.
 create table role_defaults (
-  role        text not null check (role in ('student','teacher','staff')),
+  role        text not null,             -- a configured role slug (§6)
   service_id  uuid references services(id) on delete cascade,
   sort        int not null default 0,
   primary key (role, service_id)
@@ -193,7 +193,7 @@ create table announcements (
   title       jsonb not null,
   body        jsonb not null,
   severity    text not null check (severity in ('info','warning','critical')),
-  audience    text not null default 'all' check (audience in ('all','student','teacher','staff')),
+  audience    text not null default 'all',   -- 'all' or a configured role slug (§6)
   starts_at   timestamptz,
   ends_at     timestamptz,
   dismissible boolean not null default true,
@@ -221,6 +221,22 @@ create table audit_log (
   created_at  timestamptz not null default now()
 );
 ```
+
+**Why no role check constraints (migration 00016).** The role set comes from the deployment's
+claim mapping (§6), and a config-time set cannot be a schema-time constraint — a two-role or
+six-role deployment would fail its own writes. Role validation lives in `/internal/service`
+instead, shared by the HTTP handlers and the MCP tools (CLAUDE.md rule 3). Rows written under a
+role a later configuration dropped degrade rather than break:
+
+- `users.primary_role` outside the set reads as `oidc.role.default`, and heals at that user's
+  next login (roles re-resolve every login).
+- `role_defaults` rows for an unknown role are invisible to reads and are purged the next time an
+  admin saves any role's list (the purge is audited).
+- an announcement whose `audience` is an unknown role reaches nobody, but stays in the admin list
+  flagged (`audience_unknown`) so it can be fixed.
+
+`click_events.user_role` and `usage_daily.user_role` were always free text — they are historical
+records, and history keeps the role it was recorded under.
 
 Indexes worth having from day one: `services(is_active)`, a trigram/GIN index on
 `services.name` and `services.description` for search, `click_events(user_id, clicked_at)`,
@@ -304,24 +320,41 @@ oidc:
   client_id:     uos-wolke
   client_secret: ${OIDC_CLIENT_SECRET}
   scopes: [openid, profile, email]
-  # which ID-token / userinfo claim carries affiliation, and how its values map to our 3 roles
+  # which ID-token / userinfo claim carries affiliation, and how its values map to roles.
+  # This block also DEFINES the role set (see "The role set is the mapping" below).
   role:
     claim: eduPersonAffiliation        # e.g. could be 'groups', 'realm_access.roles', a custom claim
-    values:                            # claim value -> internal role
-      faculty: teacher
+    values:                            # claim value -> role slug
+      student:  student
       employee: staff
-      member:  staff
-      student: student
-    precedence: [teacher, staff, student]   # if several match, pick the first
-    default: student                          # if none match
+    precedence: [staff, student]       # if several match, pick the first
+    default: student                   # if none match
+    labels:                            # optional display names; default = the capitalized slug
+      student: { de: "Studierende", en: "Students" }
+      staff:   { de: "Mitarbeitende", en: "Staff" }
   # how to detect a dashboard admin
   admin:
     claim: groups                      # claim to inspect (supports nested path, e.g. realm_access.roles)
     match: dashboard-admins            # value that grants admin
 ```
 
-The resolver reads these at startup; swapping IdP or claim names is a config change. Ship sensible
-defaults plus this documented example so a new adopter is productive quickly.
+**The role set is the mapping.** The configured roles are the distinct slugs in
+`role.values` ∪ `role.precedence` ∪ `{role.default}` — there is no second list to keep in sync, and
+nothing in the code knows a role name. The example above is the UOS launch deployment, whose IdM
+distinguishes only students from employees; the bundled defaults ship a three-role example instead.
+Rules:
+
+- **Slugs** must match `[a-z0-9-]{1,32}`; `all` is reserved (it is the announcement audience meaning
+  everyone). A violation fails startup — a role slug travels in URLs (`/api/admin/role-defaults/{role}`)
+  and in the `announcements.audience` column.
+- **Labels** are optional; a role with none renders as its capitalized slug, in both languages.
+- **Above five roles** the server logs a WARN once at startup and keeps going: the per-role screens
+  (default-view editor, audience picker) are designed for a handful.
+- The set is served to the SPA at `GET /api/roles` in precedence order, and it is what every
+  role-shaped write is validated against (§4).
+
+The resolver reads these at startup; swapping IdP, claim names, or the number of roles is a config
+change. Ship sensible defaults plus this documented example so a new adopter is productive quickly.
 
 **Sessions:** start with a Postgres-backed session table (or signed encrypted cookie if you prefer
 stateless). Move to Redis only when you run multiple instances (see §9).
@@ -333,9 +366,10 @@ stateless). Move to Redis only when you run multiple instances (see §9).
   group/role at the IdP revokes admin access at next login. (For instant revocation, also re-check
   on a short session refresh.)
 
-> **Confirm for the UOS deployment:** the actual affiliation claim + values and the admin
-> group/role value, then fill the mapping above. (These are now config, not code, so other
-> institutions adapt the hub by editing this block.)
+> **UOS deployment:** the IdM can only distinguish students from employees, so the launch
+> configuration is the two-role mapping shown above (`student`, `employee → staff`). The exact
+> affiliation claim name and the admin group value are still to be confirmed against the IdM.
+> (These are config, not code, so other institutions adapt the hub by editing this block.)
 
 ## 7. Metrics — Prometheus
 
@@ -538,6 +572,7 @@ POST   /auth/logout                → clear session + IdP end-session (if disco
 # the dashboard read model
 GET    /api/branding               → product name, logo URLs, theme tokens (public; no session)
 GET    /api/me                     → user, primary_role, is_admin, prefs
+GET    /api/roles                  → the configured roles [{slug, label{de,en}}], precedence order
 GET    /api/catalog                → active services + categories (cache-served)
 GET    /api/catalog/defaults       → role-ordered default view for the current user
 GET    /api/search?q=              → grouped search results

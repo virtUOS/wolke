@@ -86,6 +86,10 @@ type Querier interface {
 	// Favorites ordered by the user's click count (most-used first), then by the
 	// stored order as a stable tiebreaker.
 	ListFavoritesByUsage(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
+	// Distinct roles that currently have a stored default view. Used to purge rows
+	// left behind by a role that the deployment's claim mapping no longer defines
+	// (the role set is config, not schema — see internal/service/roles.go).
+	ListRoleDefaultRoles(ctx context.Context) ([]string, error)
 	ListServiceCategorySlugs(ctx context.Context, serviceID pgtype.UUID) ([]string, error)
 	// Most-searched queries that returned nothing within the last @days days — the
 	// admin worklist for adding keywords (docs/01 §4.6). Aggregate-only.

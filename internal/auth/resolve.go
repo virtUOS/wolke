@@ -13,15 +13,16 @@ type Identity struct {
 	Subject     string
 	DisplayName string
 	Email       string
-	Role        string // student | teacher | staff
+	Role        string // one of the deployment's configured role slugs (config.RoleSet)
 	IsAdmin     bool
 }
 
-// ResolveRole maps the affiliation claim's value(s) to one internal role using
-// the configured mapping and precedence (docs/02 §6). The mapping is data, never
-// code, so swapping IdP or claim names is a config change. If several mapped
-// roles are present, precedence decides; if none match, the configured default
-// is used.
+// ResolveRole maps the affiliation claim's value(s) to one role using the
+// configured mapping and precedence (docs/02 §6). The mapping is data, never
+// code — it is also what defines the role set itself
+// (docs/specs/configurable-roles.md) — so swapping IdP, claim names or the
+// number of roles is a config change. If several mapped roles are present,
+// precedence decides; if none match, the configured default is used.
 func ResolveRole(claims map[string]any, m config.RoleMapping) string {
 	present := map[string]bool{}
 	for _, raw := range claimStrings(claimByPath(claims, m.Claim)) {

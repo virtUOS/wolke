@@ -218,8 +218,9 @@ const de = {
     fAudience: 'Zielgruppe',
     severityLabel: (s: string): string =>
       ({ info: 'Info', warning: 'Warnung', critical: 'Kritisch' })[s] ?? s,
-    audienceLabel: (a: string): string =>
-      ({ all: 'Alle', student: 'Studierende', teacher: 'Lehrende', staff: 'Beschäftigte' })[a] ?? a,
+    // Only 'all' is a fixed audience; role names come from /api/roles.
+    audienceLabel: (a: string): string => (a === 'all' ? 'Alle' : a),
+    audienceUnknown: 'Rolle nicht konfiguriert',
     fEndsAt: 'Endet am (optional)',
     dismissible: 'Schließbar',
     publish: 'Veröffentlichen',
@@ -417,8 +418,8 @@ const en: Strings = {
     fAudience: 'Audience',
     severityLabel: (s: string): string =>
       ({ info: 'Info', warning: 'Warning', critical: 'Critical' })[s] ?? s,
-    audienceLabel: (a: string): string =>
-      ({ all: 'Everyone', student: 'Students', teacher: 'Teachers', staff: 'Staff' })[a] ?? a,
+    audienceLabel: (a: string): string => (a === 'all' ? 'Everyone' : a),
+    audienceUnknown: 'Role not configured',
     fEndsAt: 'Ends at (optional)',
     dismissible: 'Dismissible',
     publish: 'Publish',

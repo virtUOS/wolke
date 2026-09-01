@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { localized, localizedInput, type Announcement, type AnnouncementInput, type Audience, type Severity } from '@/lib/api'
+import { localized, localizedInput, type Announcement, type AnnouncementInput, type Audience, type Role, type Severity } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { useAdminActions, useAdminAnnouncements } from '@/lib/admin-hooks'
+import { useRoles } from '@/lib/hooks'
 import { Alert } from '@/components/ui/alert'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,11 +14,24 @@ import { Select } from '@/components/ui/select'
 import { List, ListItem } from '@/components/ui/list'
 
 const SEVERITIES: Severity[] = ['info', 'warning', 'critical']
-const AUDIENCES: Audience[] = ['all', 'student', 'teacher', 'staff']
+
+// The audience picker is 'all' plus this deployment's roles (added client-side
+// from /api/roles — docs/specs/configurable-roles.md §2.3).
+const ALL: Audience = 'all'
+
+// audienceName renders an audience: 'all' is a fixed string, a role shows its
+// configured label, and a role this deployment no longer defines falls back to
+// its bare slug (the list flags it separately).
+function audienceName(audience: Audience, roles: Role[], locale: string, fallback: (a: string) => string): string {
+  const role = roles.find((r) => r.slug === audience)
+  return role ? localized(role.label, locale) : fallback(audience)
+}
 
 export function AnnouncementsAdmin({ locale }: { locale: string }) {
   const s = t(locale)
   const list = useAdminAnnouncements()
+  const roles = useRoles()
+  const roleList = roles.data ?? []
   const actions = useAdminActions()
   // At most one announcement is active at a time; the newest row is the current
   // one. Creating a new one retires the current into the user-facing history
@@ -51,6 +65,7 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
         <AnnouncementForm
           key={editing?.id ?? 'new'}
           locale={locale}
+          roles={roleList}
           initial={editing}
           error={formError}
           submitting={actions.createAnnouncement.isPending || actions.updateAnnouncement.isPending}
@@ -72,7 +87,8 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
           <ListItem>
             <Badge variant={severityVariant(current.severity)}>{s.admin.severityLabel(current.severity)}</Badge>
             <span className="min-w-0 flex-1 truncate">{localized(current.title, locale)}</span>
-            <span className="text-xs text-text-muted">{s.admin.audienceLabel(current.audience)}{current.ends_at ? ` · ${s.admin.until} ${isoToLocalInput(current.ends_at).replace('T', ' ')}` : ''}</span>
+            <span className="text-xs text-text-muted">{audienceName(current.audience, roleList, locale, s.admin.audienceLabel)}{current.ends_at ? ` · ${s.admin.until} ${isoToLocalInput(current.ends_at).replace('T', ' ')}` : ''}</span>
+            {current.audience_unknown && <Badge variant="warning">{s.admin.audienceUnknown}</Badge>}
             <Button variant="ghost" size="sm" onClick={() => { setEditing(current); setFormError(undefined); setShowForm(true) }}>{s.common.edit}</Button>
             <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>{s.common.delete}</Button>
           </ListItem>
@@ -121,6 +137,7 @@ function isoToLocalInput(iso: string): string {
 
 function AnnouncementForm({
   locale,
+  roles,
   initial,
   onSubmit,
   onCancel,
@@ -128,6 +145,7 @@ function AnnouncementForm({
   error,
 }: {
   locale: string
+  roles: Role[]
   initial: Announcement | null
   onSubmit: (input: AnnouncementInput) => void
   onCancel: () => void
@@ -144,7 +162,7 @@ function AnnouncementForm({
   const [bodyDe, setBodyDe] = useState(initial?.body.de ?? '')
   const [bodyEn, setBodyEn] = useState(initial?.body.en ?? '')
   const [severity, setSeverity] = useState<Severity>(initial?.severity ?? 'info')
-  const [audience, setAudience] = useState<Audience>(initial?.audience ?? 'all')
+  const [audience, setAudience] = useState<Audience>(initial?.audience ?? ALL)
   const [endsAt, setEndsAt] = useState(initial?.ends_at ? isoToLocalInput(initial.ends_at) : '') // datetime-local (local wall-clock)
   const [dismissible, setDismissible] = useState(initial?.dismissible ?? true)
 
@@ -191,8 +209,10 @@ function AnnouncementForm({
           </Select>
         </Field>
         <Field label={s.admin.fAudience}>
-          <Select value={audience} onChange={(e) => setAudience(e.target.value as Audience)}>
-            {AUDIENCES.map((a) => <option key={a} value={a}>{s.admin.audienceLabel(a)}</option>)}
+          <Select value={audience} onChange={(e) => setAudience(e.target.value)}>
+            {[ALL, ...roles.map((r) => r.slug)].map((a) => (
+              <option key={a} value={a}>{audienceName(a, roles, locale, s.admin.audienceLabel)}</option>
+            ))}
           </Select>
         </Field>
         <Field label={s.admin.fEndsAt}>

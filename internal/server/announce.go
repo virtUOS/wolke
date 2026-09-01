@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/virtuos/wolke/internal/announce"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/service"
 )
@@ -105,18 +106,19 @@ func parseTimePtr(s *string) (*time.Time, error) {
 	return &t, nil
 }
 
-func adminListAnnouncements(d AdminDeps) http.HandlerFunc {
+func adminListAnnouncements(d AdminDeps, roles config.RoleSet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		list, err := announce.AdminList(r.Context(), d.Store, 100)
 		if err != nil {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcements.")
 			return
 		}
+		flagUnknownAudiences(list, roles)
 		writeJSON(w, http.StatusOK, map[string]any{"announcements": list})
 	}
 }
 
-func adminCreateAnnouncement(d AdminDeps) http.HandlerFunc {
+func adminCreateAnnouncement(d AdminDeps, roles config.RoleSet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var b announcementBody
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
@@ -128,7 +130,7 @@ func adminCreateAnnouncement(d AdminDeps) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_time", "Timestamps must be RFC3339.")
 			return
 		}
-		a, err := service.CreateAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), in)
+		a, err := service.CreateAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), roles, in)
 		if err != nil {
 			writeServiceError(w, err)
 			return
@@ -137,7 +139,7 @@ func adminCreateAnnouncement(d AdminDeps) http.HandlerFunc {
 	}
 }
 
-func adminUpdateAnnouncement(d AdminDeps) http.HandlerFunc {
+func adminUpdateAnnouncement(d AdminDeps, roles config.RoleSet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := parseUUID(chi.URLParam(r, "id"))
 		if !ok {
@@ -154,7 +156,7 @@ func adminUpdateAnnouncement(d AdminDeps) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_time", "Timestamps must be RFC3339.")
 			return
 		}
-		a, err := service.UpdateAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), id, in)
+		a, err := service.UpdateAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), roles, id, in)
 		if err != nil {
 			writeServiceError(w, err)
 			return

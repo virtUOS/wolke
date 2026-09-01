@@ -100,9 +100,12 @@ wolke fills the user's display name from `name` (falling back to
 
 ## 3. Map Keycloak claims → roles and admin
 
-wolke has exactly three roles (`student`, `teacher`, `staff`) plus an `is_admin`
-flag, both re-derived **on every login** (revoke at Keycloak → gone at next
-login). You decide which Keycloak claim drives each and how its values map.
+wolke's roles are whatever this mapping produces — the distinct slugs in
+`values` ∪ `precedence` ∪ `{default}` are the role set (docs/02 §6), so the
+example below defines three roles simply by naming three. Alongside them sits an
+`is_admin` flag; both are re-derived **on every login** (revoke at Keycloak →
+gone at next login). You decide which Keycloak claim drives each and how its
+values map.
 
 The simplest single mechanism is **Keycloak groups**: one `groups` claim feeds
 both the role mapping and the admin check.
@@ -128,12 +131,16 @@ oidc:
   scopes: [openid, profile, email]
   role:
     claim: groups            # the Keycloak Group Membership claim
-    values:                  # Keycloak group name -> wolke role
+    values:                  # Keycloak group name -> role slug (these define the roles)
       teachers: teacher
       staff: staff
       students: student
     precedence: [teacher, staff, student]   # if a user is in several, first wins
     default: student                          # if none match
+    labels:                  # optional display names; default = the capitalized slug
+      teacher: { de: "Lehrende", en: "Teachers" }
+      staff:   { de: "Mitarbeitende", en: "Staff" }
+      student: { de: "Studierende", en: "Students" }
   admin:
     claim: groups
     match: dashboard-admins   # membership in this group ⇒ is_admin

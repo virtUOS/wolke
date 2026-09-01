@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/service"
 	"github.com/virtuos/wolke/internal/store"
@@ -154,7 +155,7 @@ func adminGetRoleDefaults(d AdminDeps) http.HandlerFunc {
 	}
 }
 
-func adminSetRoleDefaults(d AdminDeps) http.HandlerFunc {
+func adminSetRoleDefaults(d AdminDeps, roles config.RoleSet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		role := chi.URLParam(r, "role")
 		var b struct {
@@ -173,7 +174,7 @@ func adminSetRoleDefaults(d AdminDeps) http.HandlerFunc {
 			}
 			ids = append(ids, id)
 		}
-		if err := service.SetRoleDefaults(r.Context(), d.Store, actorFromContext(r.Context()), role, ids); err != nil {
+		if err := service.SetRoleDefaults(r.Context(), d.Store, actorFromContext(r.Context()), roles, role, ids); err != nil {
 			writeServiceError(w, err)
 			return
 		}

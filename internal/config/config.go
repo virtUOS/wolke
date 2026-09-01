@@ -54,12 +54,16 @@ type OIDC struct {
 	Admin AdminMapping `yaml:"admin"`
 }
 
-// RoleMapping maps an affiliation claim's values to the three internal roles.
+// RoleMapping maps an affiliation claim's values to this deployment's roles.
+// It is also what *defines* the role set: the distinct slugs in Values,
+// Precedence and Default are the roles (see roles.go / docs/02 §6). Labels are
+// optional display names; without them a role renders as its capitalized slug.
 type RoleMapping struct {
-	Claim      string            `yaml:"claim"`
-	Values     map[string]string `yaml:"values"`
-	Precedence []string          `yaml:"precedence"`
-	Default    string            `yaml:"default"`
+	Claim      string                       `yaml:"claim"`
+	Values     map[string]string            `yaml:"values"`
+	Precedence []string                     `yaml:"precedence"`
+	Default    string                       `yaml:"default"`
+	Labels     map[string]map[string]string `yaml:"labels"`
 }
 
 // AdminMapping detects a dashboard admin from a (possibly nested) claim.
@@ -122,6 +126,9 @@ func Defaults() Config {
 		AnnouncementRetentionDays: 60,
 		OIDC: OIDC{
 			Scopes: []string{"openid", "profile", "email"},
+			// The bundled role set is an example, like the bundled skin: a
+			// three-role university (docs/02 §6). A deployment replaces it —
+			// roles, labels and all — in its mounted config file.
 			Role: RoleMapping{
 				Claim:      "eduPersonAffiliation",
 				Values:     map[string]string{"faculty": "teacher", "employee": "staff", "member": "staff", "student": "student"},
@@ -177,8 +184,15 @@ func load(path string, lookupEnv func(string) (string, bool)) (*Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read config file %q: %w", path, err)
 		}
-		// Unmarshalling onto the defaulted struct overlays file values, fully
-		// replacing nested maps that the file specifies and leaving the rest.
+		// Unmarshalling onto the defaulted struct overlays file values, leaving
+		// untouched keys alone. For a map that means a *merge* — which is what a
+		// skin wants (override one theme token, inherit the rest) but never what
+		// a role mapping wants: a two-role deployment must be able to drop the
+		// bundled example's third role, not inherit it. So the role maps are
+		// cleared first whenever the file supplies them.
+		if err := clearOverriddenRoleMaps(data, &cfg); err != nil {
+			return nil, fmt.Errorf("parse config file %q: %w", path, err)
+		}
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
 			return nil, fmt.Errorf("parse config file %q: %w", path, err)
 		}
@@ -190,6 +204,30 @@ func load(path string, lookupEnv func(string) (string, bool)) (*Config, error) {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+// clearOverriddenRoleMaps empties cfg's role values/labels when the file sets
+// them, so the file's mapping replaces the bundled example instead of merging
+// with it (the role set is derived from exactly these keys — roles.go).
+func clearOverriddenRoleMaps(data []byte, cfg *Config) error {
+	var probe struct {
+		OIDC struct {
+			Role struct {
+				Values map[string]string            `yaml:"values"`
+				Labels map[string]map[string]string `yaml:"labels"`
+			} `yaml:"role"`
+		} `yaml:"oidc"`
+	}
+	if err := yaml.Unmarshal(data, &probe); err != nil {
+		return err
+	}
+	if probe.OIDC.Role.Values != nil {
+		cfg.OIDC.Role.Values = nil
+	}
+	if probe.OIDC.Role.Labels != nil {
+		cfg.OIDC.Role.Labels = nil
+	}
+	return nil
 }
 
 // applyEnv overrides top-level scalar fields from the environment. Nested map
@@ -248,6 +286,9 @@ func (c *Config) validate() error {
 	case "debug", "info", "warn", "error":
 	default:
 		return fmt.Errorf("config: log_level %q is not one of debug|info|warn|error", c.LogLevel)
+	}
+	if err := c.OIDC.Role.validateRoles(); err != nil {
+		return err
 	}
 	if c.AnnouncementRetentionDays < 0 {
 		return fmt.Errorf("config: announcement_retention_days must be >= 0 (0 disables purging)")

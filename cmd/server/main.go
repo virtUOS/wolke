@@ -142,6 +142,11 @@ func run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel(cfg.LogLevel)}))
 	slog.SetDefault(logger)
 
+	// The role set is derived from the claim mapping, so spell it out once at
+	// startup — it is also where a deployment learns it configured more roles
+	// than the admin screens are designed for.
+	cfg.Roles().LogSummary(logger)
+
 	// The DB is optional in local dev: with no DATABASE_URL the server still
 	// serves the shell and /readyz reports always-ready. When configured,
 	// /readyz pings the pool so a load balancer can gate on real readiness.

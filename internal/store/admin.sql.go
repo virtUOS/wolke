@@ -274,6 +274,33 @@ func (q *Queries) ListAudit(ctx context.Context, lim int32) ([]ListAuditRow, err
 	return items, nil
 }
 
+const listRoleDefaultRoles = `-- name: ListRoleDefaultRoles :many
+select distinct role from role_defaults order by role
+`
+
+// Distinct roles that currently have a stored default view. Used to purge rows
+// left behind by a role that the deployment's claim mapping no longer defines
+// (the role set is config, not schema — see internal/service/roles.go).
+func (q *Queries) ListRoleDefaultRoles(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listRoleDefaultRoles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var role string
+		if err := rows.Scan(&role); err != nil {
+			return nil, err
+		}
+		items = append(items, role)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listServiceCategorySlugs = `-- name: ListServiceCategorySlugs :many
 select c.slug
 from service_categories sc

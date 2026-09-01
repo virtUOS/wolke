@@ -23,23 +23,34 @@ and not an SSO replacement (Keycloak already is that). It is a *launcher and cat
 
 ## 3. Users and the role model
 
-Three audiences, each with a different **initial default view** that an admin curates and
-the user can then personalize:
+**The role set is configuration, not code.** A deployment's roles are whatever its OIDC claim
+mapping produces (doc 02 §6): the distinct values of `oidc.role.values`, `oidc.role.precedence`
+and `oidc.role.default`. Two roles, three, six — the admin screens, the per-role default views
+and the announcement audiences all scale with that set; above five roles the server warns at
+startup, because the per-role screens get crowded (they keep working).
+
+Each role has a different **initial default view** that an admin curates and the user can then
+personalize. The UOS launch deployment's IdM can only distinguish students from employees, so it
+configures two:
 
 | Role | Typical first need | Default view emphasis |
 |------|--------------------|-----------------------|
-| **Student** | learning, exams, Wi-Fi, account | Lernmanagement, Identifizierung, Netz & Daten |
-| **Teacher** | teaching tools, recordings, collaboration | Teaching, Lernmanagement, AI tools, Writing |
-| **Staff** | administration, communication, data | Administration, Communication, Netz & Daten |
+| **Studierende** (`student`) | learning, exams, Wi-Fi, account | Lernmanagement, Identifizierung, Netz & Daten |
+| **Mitarbeitende** (`staff`) | teaching, administration, communication, data | Teaching, Administration, Communication, Netz & Daten |
+
+An institution whose IdP tells teachers apart adds a `teacher` role by adding one line to its
+claim mapping — no code change, no migration. The bundled example config ships such a three-role
+set, and the dev seed is curated for it.
 
 Role comes from **OIDC claims** (see doc 02). A user may legitimately hold more than one role
-(a PhD student who also teaches); the system picks a primary role for the default view but the
-user can switch and personalize freely. **Admin** is a separate, orthogonal flag derived from a
-group claim — an admin is still a student/teacher/staff member for their normal view.
+(a PhD student who also teaches); the system picks a primary role by the configured precedence
+for the default view, and the user can switch and personalize freely. **Admin** is a separate,
+orthogonal flag derived from a group claim — an admin still holds their normal role for their
+normal view.
 
-> **Decision to confirm:** the exact claim that distinguishes student/teacher/staff, and the
-> rule when someone has several. Default assumption: a `eduPersonAffiliation`-style claim,
-> with a fixed precedence (teacher > staff > student) for choosing the primary view.
+Roles are re-resolved from the claims at every login, so a user whose stored role is no longer in
+the configured set simply reads as the configured default until their next login heals the row
+(doc 02 §4).
 
 ## 4. The core UX
 

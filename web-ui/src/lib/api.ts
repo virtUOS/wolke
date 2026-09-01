@@ -36,7 +36,9 @@ export interface Me {
   id: string
   display_name: string
   email?: string
-  primary_role: 'student' | 'teacher' | 'staff'
+  // A configured role slug — the role set is deployment config, served by
+  // GET /api/roles, so this is deliberately a plain string (docs/02 §6).
+  primary_role: string
   is_admin: boolean
   view_mode: 'list' | 'table' | 'auto'
   theme: 'light' | 'dark' | 'system'
@@ -110,6 +112,7 @@ async function send<T>(method: string, url: string, body?: unknown): Promise<T> 
 
 export const api = {
   me: (signal?: AbortSignal) => getJSON<Me>('/api/me', signal),
+  roles: (signal?: AbortSignal) => getJSON<Role[]>('/api/roles', signal),
   catalog: (signal?: AbortSignal) => getJSON<Catalog>('/api/catalog', signal),
   defaults: (signal?: AbortSignal) => getJSON<DefaultsView>('/api/catalog/defaults', signal),
   search: (q: string, signal?: AbortSignal) =>
@@ -192,7 +195,14 @@ export interface ServiceDraft {
 }
 
 export type Severity = 'info' | 'warning' | 'critical'
-export type Audience = 'all' | 'student' | 'teacher' | 'staff'
+// Role is one configured role: the slug stored server-side plus its labels.
+export interface Role {
+  slug: string
+  label: Localized
+}
+
+// An announcement audience: 'all' (reserved) or a configured role slug.
+export type Audience = string
 
 export interface Announcement {
   id: string
@@ -200,6 +210,9 @@ export interface Announcement {
   body: Localized
   severity: Severity
   audience: Audience
+  // Set by the admin list when the audience is no longer a configured role:
+  // the notice reaches nobody, and the admin view says so (docs/02 §6).
+  audience_unknown?: boolean
   starts_at?: string
   ends_at?: string
   dismissible: boolean
@@ -211,6 +224,9 @@ export interface AnnouncementInput {
   body: Localized
   severity: Severity
   audience: Audience
+  // Set by the admin list when the audience is no longer a configured role:
+  // the notice reaches nobody, and the admin view says so (docs/02 §6).
+  audience_unknown?: boolean
   starts_at?: string | null
   ends_at?: string | null
   dismissible: boolean

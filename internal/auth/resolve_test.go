@@ -6,6 +6,8 @@ import (
 	"github.com/virtuos/wolke/internal/config"
 )
 
+// defaultRoleMapping mirrors the bundled example mapping (config.Defaults) —
+// example deployment data, not a fixed role set.
 func defaultRoleMapping() config.RoleMapping {
 	return config.RoleMapping{
 		Claim:      "eduPersonAffiliation",
@@ -36,6 +38,40 @@ func TestResolveRole(t *testing.T) {
 				t.Errorf("ResolveRole = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// The launch deployment's shape: an IdM that can only tell students from
+// employees, so the whole role set is two roles (docs/specs/configurable-roles.md).
+func TestResolveRoleTwoRoleDeployment(t *testing.T) {
+	m := config.RoleMapping{
+		Claim:      "eduPersonAffiliation",
+		Values:     map[string]string{"student": "student", "employee": "staff"},
+		Precedence: []string{"staff", "student"},
+		Default:    "student",
+	}
+	tests := []struct {
+		name   string
+		claims map[string]any
+		want   string
+	}{
+		{"student", map[string]any{"eduPersonAffiliation": "student"}, "student"},
+		{"employee -> staff", map[string]any{"eduPersonAffiliation": "employee"}, "staff"},
+		{"both -> precedence picks staff", map[string]any{"eduPersonAffiliation": []any{"student", "employee"}}, "staff"},
+		{"a value from another deployment's set is unmapped -> default", map[string]any{"eduPersonAffiliation": "faculty"}, "student"},
+		{"missing claim -> default", map[string]any{}, "student"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ResolveRole(tt.claims, m); got != tt.want {
+				t.Errorf("ResolveRole = %q, want %q", got, tt.want)
+			}
+		})
+	}
+	// The resolved role is always one this deployment configures — that is what
+	// makes a stale users.primary_role self-heal at the next login (spec §2.2).
+	if set := m.RoleSet(); !set.Has(ResolveRole(map[string]any{"eduPersonAffiliation": "employee"}, m)) {
+		t.Error("resolved role must be a member of the configured role set")
 	}
 }
 
