@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AnnouncementsAdmin } from '@/components/admin/AnnouncementsAdmin'
 import { RoleDefaultsAdmin } from '@/components/admin/RoleDefaultsAdmin'
-import { api, type Announcement, type Role } from '@/lib/api'
+import { api, type Announcement, type Role, type Service } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { expectNoAxeViolations } from '@/test/axe'
 
@@ -101,6 +101,88 @@ describe('RoleDefaultsAdmin', () => {
       expect(screen.getByRole('button', { name: 'Mitarbeitende' })).toHaveAttribute('aria-current', 'true'),
     )
     expect(screen.queryByRole('button', { name: 'Studierende' })).not.toBeInTheDocument()
+  })
+
+  // The "add" picker re-offers whatever is not in the list, so a service name
+  // can be on screen as an <option> while absent from the list itself. Every
+  // assertion about the list is scoped to the list.
+  const rows = () => within(screen.getByRole('list')).queryAllByRole('listitem').map((li) => li.textContent ?? '')
+
+  // The defaults fetch is not instant and the picker is usable while it is in
+  // flight. It used to `setOrdered(response)` unconditionally — and to re-run on
+  // every catalog refetch — so an add made in that window vanished when the
+  // response landed. Local edits now sit on top of the server's list.
+  it('keeps an add made while the defaults fetch is still in flight', async () => {
+    const services: Service[] = [
+      { id: 'svc-a', name: 'Stud.IP', description: {}, icon: 'graduation-cap', categories: [], doc_only: false },
+      { id: 'svc-b', name: 'MyShare', description: {}, icon: 'hard-drive', categories: [], doc_only: false },
+    ]
+    stubApi(twoRoles)
+    vi.spyOn(api, 'catalog').mockResolvedValue({ services, categories: [] })
+    let resolveDefaults: (r: { service_ids: string[] }) => void = () => {}
+    vi.spyOn(api, 'roleDefaults').mockReturnValue(
+      new Promise((resolve) => {
+        resolveDefaults = resolve
+      }),
+    )
+    const user = userEvent.setup()
+    render(withClient(<RoleDefaultsAdmin locale="de" />))
+
+    // Add MyShare before the role's saved defaults have arrived.
+    const picker = await screen.findByLabelText(s.admin.add)
+    await user.selectOptions(picker, 'svc-b')
+    expect(rows().join('|')).toMatch(/MyShare/)
+
+    // The response arrives with Stud.IP as the role's saved default.
+    await act(async () => {
+      resolveDefaults({ service_ids: ['svc-a'] })
+    })
+
+    // Both are listed: the admin's add survived, and the saved default was not
+    // dropped from the list they are about to save.
+    await waitFor(() => expect(rows().join('|')).toMatch(/Stud\.IP/))
+    expect(rows().join('|'), 'the in-flight add must survive the response').toMatch(/MyShare/)
+  })
+
+  // The same fetch was keyed on catalog.data, so a catalog that actually changed
+  // (an admin adds a service; the catalog query invalidates) re-ran it and
+  // replaced the list wholesale. It must leave a local edit alone.
+  it('survives a changed catalog without re-fetching or replacing the list', async () => {
+    const services: Service[] = [
+      { id: 'svc-a', name: 'Stud.IP', description: {}, icon: 'graduation-cap', categories: [], doc_only: false },
+      { id: 'svc-b', name: 'MyShare', description: {}, icon: 'hard-drive', categories: [], doc_only: false },
+    ]
+    stubApi(twoRoles)
+    vi.spyOn(api, 'catalog').mockResolvedValue({ services, categories: [] })
+    const defaults = vi.spyOn(api, 'roleDefaults').mockResolvedValue({ service_ids: ['svc-a'] })
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const user = userEvent.setup()
+    render(
+      <QueryClientProvider client={qc}>
+        <RoleDefaultsAdmin locale="de" />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => expect(rows().join('|')).toMatch(/Stud\.IP/))
+    await user.selectOptions(await screen.findByLabelText(s.admin.add), 'svc-b')
+    const callsBefore = defaults.mock.calls.length
+
+    // A genuinely different catalog: identical data would be structurally
+    // shared by TanStack Query and never change the reference the old effect
+    // keyed on, so this is what the defect actually needed.
+    vi.spyOn(api, 'catalog').mockResolvedValue({
+      services: [...services, { id: 'svc-c', name: 'VPN', description: {}, icon: 'shield', categories: [], doc_only: false }],
+      categories: [],
+    })
+    await act(() => qc.refetchQueries({ queryKey: ['catalog'] }))
+
+    // Wait for the new catalog to actually reach the component — it arrives a
+    // render later, which is exactly when the old effect re-fired.
+    await screen.findByRole('option', { name: 'VPN' })
+
+    expect(defaults.mock.calls.length, 'a changed catalog must not re-fetch the defaults').toBe(callsBefore)
+    expect(rows().join('|'), 'a changed catalog must not replace the list').toMatch(/MyShare/)
+    expect(rows().join('|')).toMatch(/Stud\.IP/)
   })
 
   it('has no axe violations', async () => {

@@ -6,6 +6,7 @@ import { curatedIconNames } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { ChoiceChip } from '@/components/ui/choice-chip'
 import { Field } from '@/components/ui/field'
 import { IconButton } from '@/components/ui/icon-button'
 import { Input } from '@/components/ui/input'
@@ -193,10 +194,14 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
           <legend className="mb-1 text-sm font-medium">{s.admin.fCategories}</legend>
           <div className="flex flex-wrap gap-2">
             {categories.map((c) => (
-              <label key={c.slug} className={cn('inline-flex min-h-11 cursor-pointer items-center rounded-md border px-3 py-1 text-sm md:min-h-0 md:px-2', cats.has(c.slug) ? 'border-primary bg-primary text-white' : 'border-border text-text-muted')}>
-                <input type="checkbox" className="sr-only" checked={cats.has(c.slug)} onChange={() => toggleCat(c.slug)} />
-                {localized(c.label, locale)}
-              </label>
+              <ChoiceChip
+                key={c.slug}
+                type="checkbox"
+                active={cats.has(c.slug)}
+                checked={cats.has(c.slug)}
+                onChange={() => toggleCat(c.slug)}
+                label={localized(c.label, locale)}
+              />
             ))}
           </div>
         </fieldset>
@@ -207,7 +212,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
           {keywords.length > 0 && (
             <ul className="mb-2 flex flex-wrap gap-1.5">
               {keywords.map((kw) => (
-                <li key={kw} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface py-0.5 pl-2 text-sm">
+                <li key={kw} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface py-0.5 pl-2 pr-1 text-sm md:pr-2">
                   <span>{kw}</span>
                   {/* The chip's remove control is a real touch target on a phone
                       (44px) and collapses back to the tight 16px box from md: up
@@ -217,7 +222,10 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
                     variant="plain"
                     aria-label={s.admin.keywordRemove(kw)}
                     onClick={() => removeKeyword(kw)}
-                    className="md:h-4 md:w-4 md:p-0"
+                    // md: restores the original 16px box exactly, including its
+                    // ring: IconButton's offset ring is sized for a standalone
+                    // control and reads as a halo over a chip this small.
+                    className="focus-visible:ring-offset-0 md:h-4 md:w-4 md:p-0"
                   >
                     <X className="h-3 w-3" aria-hidden="true" />
                   </IconButton>
@@ -239,10 +247,16 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
           <legend className="mb-1 text-sm font-medium">{s.admin.fStatus}</legend>
           <div className="flex flex-wrap gap-2">
             {(['', 'beta', 'wartung'] as const).map((value) => (
-              <label key={value} className={cn('inline-flex min-h-11 cursor-pointer items-center rounded-md border px-3 py-1 text-sm md:min-h-0 md:px-2', tag === value ? 'border-primary bg-primary text-white' : 'border-border text-text-muted')}>
-                <input type="radio" name="tag" className="sr-only" value={value} checked={tag === value} onChange={() => setTag(value)} />
-                {value === '' ? s.admin.statusNone : value === 'beta' ? s.admin.statusBeta : s.admin.statusWartung}
-              </label>
+              <ChoiceChip
+                key={value}
+                type="radio"
+                name="tag"
+                value={value}
+                active={tag === value}
+                checked={tag === value}
+                onChange={() => setTag(value)}
+                label={value === '' ? s.admin.statusNone : value === 'beta' ? s.admin.statusBeta : s.admin.statusWartung}
+              />
             ))}
           </div>
         </fieldset>

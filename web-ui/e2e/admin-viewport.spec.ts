@@ -32,8 +32,7 @@ async function openSection(page: Page, label: string): Promise<void> {
 
 test.describe('the admin surface at every viewport', () => {
   for (const section of SECTIONS) {
-    test(`the ${section} section is viewport-healthy`, async ({ page }, testInfo) => {
-      const isMobile = testInfo.project.use.isMobile === true
+    test(`the ${section} section is viewport-healthy`, async ({ page }) => {
       await gotoAdmin(page)
       await openSection(page, section)
       // Wait for the section's own content, not just the tab state, so the
@@ -47,8 +46,8 @@ test.describe('the admin surface at every viewport', () => {
         await page.getByLabel('Hinzufügen').selectOption({ index: 1 })
         await expect(page.getByRole('button', { name: /Nach oben/ }).first()).toBeVisible()
       }
-
-      await expectViewportHealthy(page, { isMobile, label: `admin – ${section}` })
+      // No explicit check here: this *is* the test's final state, and the
+      // fixture in fixtures.ts runs the full check set against it.
     })
   }
 
@@ -75,6 +74,19 @@ test.describe('the admin surface at every viewport', () => {
 
     await page.getByRole('button', { name: 'Abbrechen' }).click()
 
+    // The *edit* form of a service that has a doc_url: its live preview renders
+    // the grid card, whose documentation chip is the one control only reachable
+    // at phone widths through this screen (issue #101).
+    await page
+      .getByRole('listitem')
+      .filter({ hasText: 'MyShare' })
+      .getByRole('button', { name: 'Bearbeiten' })
+      .click()
+    await expect(page.getByRole('heading', { level: 3, name: /bearbeiten/i })).toBeVisible()
+    await expect(page.getByRole('link', { name: /^Doku/ })).toBeVisible()
+    await expectViewportHealthy(page, { isMobile, label: 'admin – service edit form with preview' })
+    await page.getByRole('button', { name: 'Abbrechen' }).click()
+
     // The confirm dialog over the list.
     await page.getByRole('button', { name: 'Löschen' }).first().click()
     await expect(page.getByRole('dialog')).toBeVisible()
@@ -83,8 +95,7 @@ test.describe('the admin surface at every viewport', () => {
     await expect(page.getByRole('dialog')).toBeHidden()
   })
 
-  test('the announcement form is viewport-healthy', async ({ page }, testInfo) => {
-    const isMobile = testInfo.project.use.isMobile === true
+  test('the announcement form is viewport-healthy', async ({ page }) => {
     await gotoAdmin(page)
     await openSection(page, 'Ankündigungen')
 
@@ -93,6 +104,6 @@ test.describe('the admin surface at every viewport', () => {
     // Every control the issue lists lives on this one form: text inputs, two
     // selects, a datetime input, the dismissible checkbox and the buttons.
     await expect(page.getByLabel('Zielgruppe')).toBeVisible()
-    await expectViewportHealthy(page, { isMobile, label: 'admin – announcement form' })
+    // Final state again: the fixture checks it.
   })
 })

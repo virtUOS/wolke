@@ -110,8 +110,10 @@ restate it and no screen can forget it:
   `sm:` — that is a fourth breakpoint the layout does not otherwise use, and it leaves the
   640–767px band with desktop density under a phone layout.
 - **A control too small to be its own target puts the floor on its label.** A checkbox box stays a
-  box; the `<label>` around it is the 44px hit area (see the `checkbox` primitive). The viewport
-  suite measures exactly that shape — a padded click-target parent around one small control.
+  box; the `<label>` around it is the 44px hit area (the `checkbox` and `choice-chip` primitives —
+  the latter is a chip-shaped checkbox/radio, so the chip *is* the control rather than a button
+  pretending to be one). The viewport suite measures exactly that shape — a padded click-target
+  parent around one small control.
 - **Row heights follow.** A list row is ≥ 56px on a phone (`min-h-14`, `List`/`ListItem`) and the
   service list row ~72px, so the controls inside it clear each other.
 

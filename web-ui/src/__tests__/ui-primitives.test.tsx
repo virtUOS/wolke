@@ -7,7 +7,9 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { IconButton } from '@/components/ui/icon-button'
 import { Input } from '@/components/ui/input'
 import { PillButton } from '@/components/ui/pill-button'
+import { ChoiceChip } from '@/components/ui/choice-chip'
 import { Select } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 
 // Guards the UI-primitive convention (src/components/ui/README.md, rule #1):
 // primitives are pure presentation and must never fetch or own server state.
@@ -102,6 +104,7 @@ describe('interactive primitives carry the phone touch floor (issue #101)', () =
     { name: 'PillButton', render: () => render(<PillButton>Alle</PillButton>), role: 'button', floor: /\bmin-h-11\b/ },
     { name: 'Input', render: () => render(<Input aria-label="x" />), role: 'textbox', floor: /\bmin-h-11\b/ },
     { name: 'Select', render: () => render(<Select aria-label="x" />), role: 'combobox', floor: /\bh-11\b/ },
+    { name: 'Textarea', render: () => render(<Textarea aria-label="x" />), role: 'textbox', floor: /\bmin-h-11\b/ },
   ]
 
   it.each(cases)('$name meets the floor and hands back to md:', ({ render: renderIt, role, floor }) => {
@@ -111,10 +114,16 @@ describe('interactive primitives carry the phone touch floor (issue #101)', () =
     expect(className).toMatch(/\bmd:(h|w|min-h)-/)
   })
 
-  // Checkbox is the exception that proves the rule: the box stays a box and its
-  // label is the hit area (see checkbox.tsx).
-  it('Checkbox puts the floor on the label, not the box', () => {
-    render(<Checkbox label="Ausblendbar" />)
-    expect(screen.getByText('Ausblendbar').className).toMatch(/\bmin-h-11\b/)
+  // Checkbox and ChoiceChip are the exception that proves the rule: the control
+  // itself is too small to be a target at any sane size, so the label around it
+  // is the hit area (see checkbox.tsx, choice-chip.tsx).
+  it.each([
+    { name: 'Checkbox', render: () => render(<Checkbox label="Ausblendbar" />) },
+    { name: 'ChoiceChip', render: () => render(<ChoiceChip type="checkbox" label="Ausblendbar" />) },
+  ])('$name puts the floor on the label, not the control', ({ render: renderIt }) => {
+    renderIt()
+    const label = screen.getByText('Ausblendbar')
+    expect(label.className).toMatch(/\bmin-h-11\b/)
+    expect(label.className).toMatch(/\bmd:min-h-0\b/)
   })
 })

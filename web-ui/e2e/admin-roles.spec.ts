@@ -7,9 +7,10 @@
 // The viewport health check runs after every test (fixtures.ts), so this also
 // covers "wraps, never overflows" at 324px with the seeded roles.
 
+import { MIN_TOUCH_TARGET } from './helpers/rules'
 import { expect, test } from './fixtures'
 
-/** Asserts one control meets the 44px touch floor; a no-op off the phone projects. */
+/** Asserts one control meets the touch floor; a no-op off the phone projects. */
 async function expectTouchTarget(
   locator: import('@playwright/test').Locator,
   isMobile: boolean,
@@ -18,8 +19,8 @@ async function expectTouchTarget(
   if (!isMobile) return
   const box = await locator.boundingBox()
   expect(box, `${what} has no box`).not.toBeNull()
-  expect(box!.height, `${what} height`).toBeGreaterThanOrEqual(44)
-  expect(box!.width, `${what} width`).toBeGreaterThanOrEqual(44)
+  expect(box!.height, `${what} height`).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET)
+  expect(box!.width, `${what} width`).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET)
 }
 
 interface Role {

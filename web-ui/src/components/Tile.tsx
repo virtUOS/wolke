@@ -273,7 +273,11 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
                 onLaunch?.(service, 'documentation', false)
               }}
               style={{ pointerEvents: 'auto' }}
-              className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface-2 px-2 py-1 text-xs font-semibold text-text-muted no-underline transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+              // The grid card is the desktop layout, but it is reachable at
+              // phone widths through the admin service form's live preview, so
+              // the chip carries the 44px floor like every other control and
+              // collapses to its designed box from md: up (issue #101).
+              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface-2 px-3 py-1 text-xs font-semibold text-text-muted no-underline transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0 md:px-2"
             >
               <FileText className="h-[14px] w-[14px]" aria-hidden="true" />
               {s.tile.docsLink}

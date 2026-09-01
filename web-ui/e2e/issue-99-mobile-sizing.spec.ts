@@ -9,13 +9,18 @@
 // density they were designed with (so the pass can't quietly inflate desktop).
 
 import type { Page } from '@playwright/test'
+import { MIN_TOUCH_TARGET } from './helpers/rules'
 import { gotoApp } from './helpers/session'
 import { expect, test } from './fixtures'
 
 /** The row height the phone list is designed around: 44px icon chip + 2×14px. */
 const MIN_ROW_HEIGHT = 70
-/** The touch floor (helpers/rules.ts MIN_TOUCH_TARGET). */
-const MIN_TOUCH_TARGET = 44
+
+/** The row's own controls, by their real accessible names (src/lib/i18n.ts). */
+const ROW_CONTROLS = [
+  { what: 'documentation link', name: 'Doku (öffnet in neuem Tab)' },
+  { what: 'favourite star', name: /zu Favoriten hinzufügen$|aus Favoriten entfernen$/ },
+]
 
 async function heights(page: Page, selector: string): Promise<number[]> {
   return page.$$eval(selector, (els) => els.map((el) => el.getBoundingClientRect().height))
@@ -34,17 +39,25 @@ test.describe('issue #99 — the phone layout is comfortably sized', () => {
       expect(h, `service row ${i} height`).toBeGreaterThanOrEqual(MIN_ROW_HEIGHT)
     }
 
-    // The two controls inside a row (documentation link, favourite star). The
-    // fixture's touch-target check covers the whole page; this names them, so a
-    // regression reads as "the star shrank" rather than a generic violation.
+    // The two controls inside a row. The fixture's touch-target check covers
+    // the whole page; this names them, so a regression reads as "the star
+    // shrank" rather than a generic violation.
+    //
+    // `:not(.tile-focus-link)` excludes the row's full-coverage launch overlay:
+    // it is a link too, and for a doc-only entry its accessible name is
+    // "… – Dokumentation öffnen", which a loose /Dokumentation/ matcher hit
+    // instead of the docs chip. Every seeded service has a doc_url, so both
+    // controls must be there — a missing one is a failure, not a skip.
     const row = page.locator('.tile-list-item').first()
-    for (const name of [/Dokumentation/i, /Favoriten/i]) {
-      const control = row.getByRole('link', { name }).or(row.getByRole('button', { name }))
-      if ((await control.count()) === 0) continue
-      const box = await control.first().boundingBox()
-      expect(box, `${name} box`).not.toBeNull()
-      expect(box!.height, `${name} height`).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET)
-      expect(box!.width, `${name} width`).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET)
+    for (const { what, name } of ROW_CONTROLS) {
+      const control = row
+        .locator('a:not(.tile-focus-link), button')
+        .and(page.getByRole('link', { name }).or(page.getByRole('button', { name })))
+      await expect(control, `${what} is in the row`).toHaveCount(1)
+      await expect(control, `${what} is visible`).toBeVisible()
+      const box = (await control.boundingBox())!
+      expect(box.height, `${what} height`).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET)
+      expect(box.width, `${what} width`).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET)
     }
   })
 
@@ -90,5 +103,24 @@ test.describe('issue #99 — the phone layout is comfortably sized', () => {
       (await page.getByLabel(/Titel \(de\)/).boundingBox())!.height,
       'input height',
     ).toBeLessThanOrEqual(40)
+
+    // The keyword chip is the tightest spot the phone floor reaches into: its
+    // remove control is a 44px target on a phone, so md: has to hand back both
+    // the 16px box *and* the chip's own right inset, or the chip reads as
+    // lopsided on a desktop that was supposed to be untouched.
+    await page
+      .getByRole('navigation', { name: /Admin-Bereiche|Admin sections/i })
+      .getByRole('button', { name: 'Dienste', exact: true })
+      .click()
+    await page.getByRole('button', { name: 'Neuer Dienst' }).click()
+    const keywords = page.getByLabel('Suchbegriffe (optional)')
+    await keywords.fill('fernzugriff')
+    await keywords.press('Enter')
+    const chip = page.getByRole('listitem').filter({ hasText: 'fernzugriff' })
+    const removeButton = chip.getByRole('button', { name: /fernzugriff/ })
+    const box = (await removeButton.boundingBox())!
+    expect(box.height, 'chip remove-button height').toBeLessThanOrEqual(20)
+    expect(box.width, 'chip remove-button width').toBeLessThanOrEqual(20)
+    expect(await chip.evaluate((el) => getComputedStyle(el).paddingRight), 'chip right inset').toBe('8px')
   })
 })

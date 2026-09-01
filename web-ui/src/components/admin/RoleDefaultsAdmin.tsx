@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { api, localized, type Service } from '@/lib/api'
 import { t } from '@/lib/i18n'
@@ -33,27 +33,62 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
   const byID = new Map(services.map((s) => [s.id, s]))
   const name = (id: string) => byID.get(id)?.name ?? id
 
+  // True once the admin has touched the list since the current fetch started.
+  // The fetch is not instant, and the picker is usable while it is in flight, so
+  // an add made in that window must not be thrown away when the response lands.
+  const edited = useRef(false)
+
+  // Load the selected role's defaults. Keyed on `role` alone: keying it on
+  // catalog.data as well meant every catalog refetch re-ran the fetch and
+  // replaced the list under the admin's hands.
   useEffect(() => {
     if (!role) return
     let active = true
-    api.roleDefaults(role).then((r) => active && setOrdered(r.service_ids.filter((id) => byID.has(id))))
+    edited.current = false
+    api.roleDefaults(role).then((r) => {
+      if (!active) return
+      setOrdered((prev) => {
+        // No local edits: the server's list is the list.
+        if (!edited.current) return r.service_ids
+        // Otherwise the server's list is the base and the local edits sit on
+        // top of it — the admin's own change stays visible, and nothing the
+        // server already had is silently dropped from the list they will save.
+        return [...r.service_ids.filter((id) => !prev.includes(id)), ...prev]
+      })
+    })
     return () => {
       active = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, catalog.data])
+  }, [role])
 
+  // A service that has since left the catalog would render as a bare id, so it
+  // is filtered out of the view — and of what Save writes — rather than out of
+  // state. Derived, not stored: no effect to race with a local edit, and no
+  // dependency on the catalog arriving before the defaults do.
+  const visible = catalog.data ? ordered.filter((id) => byID.has(id)) : ordered
+
+  // The row indices the buttons pass in are indices into `visible`, so a swap
+  // is translated back onto the stored list.
   const move = (i: number, dir: -1 | 1) => {
     const j = i + dir
-    if (j < 0 || j >= ordered.length) return
+    if (j < 0 || j >= visible.length) return
+    edited.current = true
+    const a = ordered.indexOf(visible[i])
+    const b = ordered.indexOf(visible[j])
     const next = [...ordered]
-    ;[next[i], next[j]] = [next[j], next[i]]
+    ;[next[a], next[b]] = [next[b], next[a]]
     setOrdered(next)
   }
-  const remove = (id: string) => setOrdered((o) => o.filter((x) => x !== id))
-  const add = (id: string) => setOrdered((o) => (o.includes(id) ? o : [...o, id]))
+  const remove = (id: string) => {
+    edited.current = true
+    setOrdered((o) => o.filter((x) => x !== id))
+  }
+  const add = (id: string) => {
+    edited.current = true
+    setOrdered((o) => (o.includes(id) ? o : [...o, id]))
+  }
 
-  const available = services.filter((s: Service) => !ordered.includes(s.id))
+  const available = services.filter((s: Service) => !visible.includes(s.id))
 
   return (
     <div className="space-y-4">
@@ -72,7 +107,7 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
       </div>
 
       <ol className="space-y-1">
-        {ordered.map((id, i) => (
+        {visible.map((id, i) => (
           // The three row actions are IconButtons rather than hand-rolled
           // buttons, so they inherit the shared 44px phone touch floor (issue
           // #101) instead of the 24px boxes they used to be.
@@ -81,7 +116,7 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
             <IconButton size="sm" aria-label={`${s.admin.moveUp} – ${name(id)}`} disabled={i === 0} onClick={() => move(i, -1)} className="disabled:opacity-30">
               <ChevronUp className="h-4 w-4" aria-hidden="true" />
             </IconButton>
-            <IconButton size="sm" aria-label={`${s.admin.moveDown} – ${name(id)}`} disabled={i === ordered.length - 1} onClick={() => move(i, 1)} className="disabled:opacity-30">
+            <IconButton size="sm" aria-label={`${s.admin.moveDown} – ${name(id)}`} disabled={i === visible.length - 1} onClick={() => move(i, 1)} className="disabled:opacity-30">
               <ChevronDown className="h-4 w-4" aria-hidden="true" />
             </IconButton>
             <IconButton size="sm" variant="plain" aria-label={`${s.admin.remove} – ${name(id)}`} onClick={() => remove(id)} className="hover:text-primary">
@@ -89,7 +124,7 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
             </IconButton>
           </li>
         ))}
-        {ordered.length === 0 && <li className="text-sm text-text-muted">{s.admin.noRoleDefaults}</li>}
+        {visible.length === 0 && <li className="text-sm text-text-muted">{s.admin.noRoleDefaults}</li>}
       </ol>
 
       {available.length > 0 && (
@@ -110,7 +145,9 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
           onClick={() => {
             setError(undefined)
             actions.setRoleDefaults.mutate(
-              { role, serviceIDs: ordered },
+              // `visible`, not `ordered`: an id the catalog no longer knows is
+              // not shown, so it must not be silently re-saved either.
+              { role, serviceIDs: visible },
               {
                 onSuccess: () => setSaved(true),
                 onError: (e) => setError(e instanceof Error ? e.message : s.admin.saveFailed),

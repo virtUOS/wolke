@@ -8,7 +8,8 @@ Claude Design later. An enforcement test (`src/__tests__/ui-primitives.test.ts`)
 honest.
 
 The set: `button`, `icon-button`, `pill-button`, `card`, `badge`, `input`, `label`, `field`,
-`checkbox`, `select`, `alert`, `list` (List/ListItem), `dialog`, `popover`. The interactive overlays
+`checkbox`, `choice-chip`, `select`, `textarea`, `alert`, `list` (List/ListItem), `dialog`,
+`popover`. The interactive overlays
 (`dialog`, `popover`) are hand-rolled but implement the Radix behaviour set (focus trap/return,
 Escape + outside-click dismiss, ARIA) behind Radix-shaped APIs, so Radix can be swapped in later
 without touching callers. `select` is a styled native `<select>` and `list` is a styled `<ul>`
@@ -35,7 +36,9 @@ actually needs them.
    (`info`/`warning`/`success`/`danger`) for state.
 
 4. **Sized for a finger first.** A control's base classes meet the 44px touch floor (`h-11` /
-   `min-h-11`, `w-11` when it is square) and `md:` hands back to the compact pointer density —
+   `min-h-11`, `w-11` when it is square) — or, when the control is too small to be its own target
+   (`checkbox`, `choice-chip`), its label carries the floor — and `md:` hands back to the compact
+   pointer density —
    never `sm:`, which would leave the 640–767px band dense under a phone layout. See docs/03 §4
    "Control sizing"; `src/__tests__/ui-primitives.test.tsx` pins the convention and
    `e2e/admin-viewport.spec.ts` measures the geometry at every matrix resolution.
