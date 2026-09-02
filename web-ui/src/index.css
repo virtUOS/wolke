@@ -114,6 +114,23 @@ p {
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--primary);
 }
 
+/* Shared wrap convention for user-facing catalog text (issue #23, tightened by
+   #112): break-words + hyphens-auto so a long German compound
+   ("Identitätsmanagement") wraps instead of overflowing its box, but
+   hyphenate-limit-chars makes the browser prefer breaking at a whole word over
+   hyphenating a short one — without it, "Dokumente und Dateien" hyphenated to
+   "Dokumente und Da-teien" even though "Dateien" fits on its own line. The
+   three values are total-word-length / before-hyphen / after-hyphen minimums
+   (min 4 total is the CSS floor); tuned against real catalog strings, not
+   theoretical ones. Firefox does not support hyphenate-limit-chars and simply
+   keeps hyphenating every long word at the line-filling point — a
+   degradation, not a regression, since hyphens-auto still wraps correctly. */
+.hyphenate-compound {
+  overflow-wrap: break-word;
+  hyphens: auto;
+  hyphenate-limit-chars: 12 5 4;
+}
+
 /* Editorial tile hover — border wash, 1px lift, accent bg tint. */
 .tile-grid {
   transition: border-color .18s ease, transform .18s ease, background-color .18s ease;

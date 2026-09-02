@@ -31,13 +31,15 @@ function isPlainClick(e: MouseEvent): boolean {
   return e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey
 }
 
-// Shared by both layouts below (grid card + mobile list row): break-words +
-// hyphens-auto so a long German compound ("Identitätsmanagement") wraps
-// instead of overflowing its box (CLAUDE.md, issue #23).
+// Shared by both layouts below (grid card + mobile list row): the
+// hyphenate-compound convention (index.css) wraps a long German compound
+// ("Identitätsmanagement") instead of overflowing its box (CLAUDE.md, issue
+// #23), but only hyphenates as a last resort rather than a line-filler
+// (issue #112).
 function TileName({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <span
-      className="break-words hyphens-auto"
+      className="hyphenate-compound"
       style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)', letterSpacing: '-0.005em', ...style }}
     >
       {children}
@@ -48,7 +50,7 @@ function TileName({ children, style }: { children: React.ReactNode; style?: Reac
 function TileDescription({ children }: { children: React.ReactNode }) {
   return (
     <p
-      className="break-words hyphens-auto"
+      className="hyphenate-compound"
       style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-muted)' }}
     >
       {children}
@@ -251,8 +253,8 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
         </div>
 
         {/* Footer: category label + docs link. The label is the flexible half
-            (min-width:0 + break-words): a long German compound wraps inside its
-            own column instead of pushing the docs pill out of the corner —
+            (min-width:0 + hyphenate-compound): a long German compound wraps
+            inside its own column instead of pushing the docs pill out of the corner —
             uppercase + letter-spacing makes even a 31-character category wider
             than the narrowest grid column (issue #97). The pill never shrinks,
             so it stays anchored at the trailing edge at every viewport. */}
@@ -263,7 +265,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           }}
         >
           <span
-            className="text-xs break-words hyphens-auto"
+            className="text-xs hyphenate-compound"
             style={{
               fontWeight: 600, letterSpacing: '.1em',
               textTransform: 'uppercase', color: 'var(--text-muted)',
