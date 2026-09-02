@@ -278,7 +278,10 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
               that tall hides it completely. Not 156 (= padding + 3 rows +
               2 gaps): a scroll container's bottom padding does not hold the
               next row back, so those extra 4px are the top of row 4.
-              Unchanged from md: up, where the buttons are 28px. */}
+              From md: up the IconButton default size is 36px (not the 28px
+              sm variant used elsewhere), on a 40px pitch: row 4 begins at
+              8 + 3×36 + 3×4 = 128px, which is exactly md:max-h-32 — already
+              an exact fit, confirmed against the built app. */}
           <div className="flex max-h-[152px] flex-wrap gap-1 overflow-y-auto rounded-md border border-border p-2 md:max-h-32">
             {!iconSet ? (
               <p className="px-1 py-2 text-sm text-text-muted" aria-busy="true">{s.common.loading}</p>
