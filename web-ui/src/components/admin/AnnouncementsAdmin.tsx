@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { localized, localizedInput, type Announcement, type AnnouncementInput, type Audience, type Role, type Severity } from '@/lib/api'
 import { t } from '@/lib/i18n'
+import { cn } from '@/lib/utils'
 import { useAdminActions, useAdminAnnouncements } from '@/lib/admin-hooks'
 import { useRoles } from '@/lib/hooks'
 import { Alert } from '@/components/ui/alert'
@@ -13,6 +14,24 @@ import { Textarea } from '@/components/ui/textarea'
 import { Field } from '@/components/ui/field'
 import { Select } from '@/components/ui/select'
 import { List, ListItem } from '@/components/ui/list'
+
+/** An announcement's lifecycle state, computed client-side (docs/01 §4.7): at
+ *  most one row can be genuinely live — only the newest can be, since creating
+ *  a new one always retires whatever was active (internal/service/announce.go). */
+type AnnouncementStatus = 'active' | 'expired' | 'retired'
+
+function announcementStatus(a: Announcement, isNewest: boolean): AnnouncementStatus {
+  if (!isNewest) return 'retired'
+  const now = Date.now()
+  const started = !a.starts_at || new Date(a.starts_at).getTime() <= now
+  const ended = !!a.ends_at && new Date(a.ends_at).getTime() <= now
+  return started && !ended ? 'active' : 'expired'
+}
+
+function statusVariant(status: AnnouncementStatus): BadgeProps['variant'] {
+  if (status === 'active') return 'success'
+  return 'neutral'
+}
 
 const SEVERITIES: Severity[] = ['info', 'warning', 'critical']
 
@@ -51,13 +70,15 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
   const roles = useRoles()
   const roleList = roles.data ?? []
   const actions = useAdminActions()
-  // At most one announcement is active at a time; the newest row is the current
-  // one. Creating a new one retires the current into the user-facing history
+  // AdminList returns every retained (non-erased) announcement, newest first
+  // (announce.AdminList, limit 100) — the full management view, not just the
+  // current one. Creating a new one still retires the current into history
   // rather than destroying it (the server stamps its end time).
-  const current = list.data?.announcements?.[0] ?? null
+  const rows = list.data?.announcements ?? []
   const [editing, setEditing] = useState<Announcement | null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const pendingDelete = rows.find((a) => a.id === confirmDeleteId) ?? null
   const [formError, setFormError] = useState<string | undefined>()
 
   // Return focus to the heading when the form closes (else it's lost to <body>).
@@ -102,32 +123,55 @@ export function AnnouncementsAdmin({ locale }: { locale: string }) {
             }
           }}
         />
-      ) : current ? (
+      ) : rows.length > 0 ? (
         <List className="text-sm">
-          <ListItem className="flex-wrap">
-            <Badge variant={severityVariant(current.severity)}>{s.admin.severityLabel(current.severity)}</Badge>
-            <span className="min-w-0 flex-1 truncate">{localized(current.title, locale)}</span>
-            <span className="text-xs text-text-muted">{audienceName(current.audience, roleList, locale)}{current.ends_at ? ` · ${s.admin.until} ${isoToLocalInput(current.ends_at).replace('T', ' ')}` : ''}</span>
-            {current.audience_unknown && <Badge variant="warning">{s.admin.audienceUnknown}</Badge>}
-            <Button variant="ghost" size="sm" disabled={!roles.isSuccess} onClick={() => { setEditing(current); setFormError(undefined); setShowForm(true) }}>{s.common.edit}</Button>
-            <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(true)}>{s.common.delete}</Button>
-          </ListItem>
+          {rows.map((a, i) => {
+            const status = announcementStatus(a, i === 0)
+            const window = windowText(a, s)
+            return (
+              <ListItem
+                key={a.id}
+                className={cn('flex-wrap', status === 'active' && 'bg-[color-mix(in_srgb,var(--primary)_6%,var(--bg))]')}
+              >
+                <Badge variant={statusVariant(status)}>{s.admin.announcementStatusLabel(status)}</Badge>
+                <Badge variant={severityVariant(a.severity)}>{s.admin.severityLabel(a.severity)}</Badge>
+                <span className="min-w-0 flex-1 truncate hyphenate-compound">{localized(a.title, locale)}</span>
+                <span className="text-xs text-text-muted">
+                  {audienceName(a.audience, roleList, locale)}
+                  {window ? ` · ${window}` : ''}
+                </span>
+                {a.audience_unknown && <Badge variant="warning">{s.admin.audienceUnknown}</Badge>}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!roles.isSuccess}
+                  onClick={() => { setEditing(a); setFormError(undefined); setShowForm(true) }}
+                >
+                  {s.common.edit}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDeleteId(a.id)}>{s.common.delete}</Button>
+              </ListItem>
+            )
+          })}
         </List>
       ) : (
         <p className="text-sm text-text-muted">{s.admin.noAnnouncements}</p>
       )}
 
       <Dialog
-        open={confirmDelete}
-        onOpenChange={(o) => !o && setConfirmDelete(false)}
+        open={confirmDeleteId !== null}
+        onOpenChange={(o) => !o && setConfirmDeleteId(null)}
         title={s.admin.deleteAnnouncementTitle}
-        description={s.admin.deleteAnnouncementDesc}
+        description={s.admin.deleteAnnouncementDesc(pendingDelete ? localized(pendingDelete.title, locale) : '')}
         closeLabel={s.common.close}
         footer={
           <>
-            <Button variant="outline" onClick={() => setConfirmDelete(false)}>{s.common.cancel}</Button>
+            <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>{s.common.cancel}</Button>
             <Button
-              onClick={() => current && actions.deleteAnnouncement.mutate(current.id, { onSettled: () => setConfirmDelete(false) })}
+              onClick={() =>
+                confirmDeleteId &&
+                actions.deleteAnnouncement.mutate(confirmDeleteId, { onSettled: () => setConfirmDeleteId(null) })
+              }
             >
               {s.common.delete}
             </Button>
@@ -153,6 +197,15 @@ function severityVariant(s: Severity): BadgeProps['variant'] {
 function isoToLocalInput(iso: string): string {
   const d = new Date(iso)
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+}
+
+// The validity window shown on a list row: whichever bounds the announcement
+// actually has (either side can be open-ended).
+function windowText(a: Announcement, s: ReturnType<typeof t>): string {
+  const parts: string[] = []
+  if (a.starts_at) parts.push(`${s.admin.from} ${isoToLocalInput(a.starts_at).replace('T', ' ')}`)
+  if (a.ends_at) parts.push(`${s.admin.until} ${isoToLocalInput(a.ends_at).replace('T', ' ')}`)
+  return parts.join(' · ')
 }
 
 function AnnouncementForm({
