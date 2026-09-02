@@ -44,6 +44,11 @@ through. Treat responsive correctness like a11y: a floor, not a polish phase.
 
 - **Mobile-first, always.** Any UI change is designed and verified at the phone layout before
   the desktop one. Long German compounds and real content lengths, not lorem ipsum.
+- **Design for the standard phones; the Fold is a floor, not a target.** Tune layout, density
+  and aesthetics for **360×800 and 390×844** (what most users hold). **324×756** stays in the
+  matrix as a correctness floor — no overflow, readable, tappable — but don't optimize the
+  look for it, and never let the narrowest width drive a design that costs the standard sizes
+  (e.g. text columns squeezed by fixed-width controls).
 - **The viewport matrix is fixed.** Playwright e2e runs every UI-relevant flow at these
   resolutions (see `docs/specs/responsive-viewport-testing.md` for the harness):
   - Mobile: **324×756** (Galaxy Fold cover display — the narrowest we support), **360×800**
