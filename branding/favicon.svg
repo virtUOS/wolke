@@ -1,5 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="IT Service">
-  <!-- Placeholder default favicon. Replace with the official UOS mark (concept §8.1). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="wolke">
+  <!-- Placeholder default favicon — the cloud brand mark on the brand tile.
+       Replace with the official mark (concept §8.1). -->
   <rect width="32" height="32" rx="6" fill="#A6093D"/>
-  <text x="16" y="22" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">IT</text>
+  <g transform="translate(4 4)">
+    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"
+          fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 </svg>
