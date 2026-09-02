@@ -1,7 +1,10 @@
 # Concept — external links from the installed PWA (issue #113)
 
-Status: **CONCEPT — needs a device audit and one product decision before any
-implementation.** · Owner: supervisor session · Written 2026-09-02
+Status: **DECIDED 2026-09-02 — no action for now** (issue #113 closed with the
+findings). Revisit if installed-iOS users report the re-login pain in
+production, or when the W3C manifest proposal ships (the real fix). The §3
+device audit below remains the first step whenever this reopens.
+· Owner: supervisor session · Written 2026-09-02
 
 ## 1. The problem
 
