@@ -9,7 +9,10 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ 
   <textarea
     ref={ref}
     className={cn(
-      'w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-text placeholder:text-text-muted',
+      // Same floor and phone padding as Input, so a form's fields line up
+      // (docs/03 §4). A one-row textarea is otherwise under the floor.
+      'w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted',
+      'min-h-11 md:min-h-0 md:px-2 md:py-1.5',
       'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]',
       'disabled:cursor-not-allowed disabled:opacity-50',
       'aria-[invalid=true]:border-danger aria-[invalid=true]:focus-visible:ring-danger',

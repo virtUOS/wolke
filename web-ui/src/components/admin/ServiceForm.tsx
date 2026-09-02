@@ -6,6 +6,7 @@ import { curatedIconNames } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { ChoiceChip } from '@/components/ui/choice-chip'
 import { Field } from '@/components/ui/field'
 import { IconButton } from '@/components/ui/icon-button'
 import { Input } from '@/components/ui/input'
@@ -193,10 +194,14 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
           <legend className="mb-1 text-sm font-medium">{s.admin.fCategories}</legend>
           <div className="flex flex-wrap gap-2">
             {categories.map((c) => (
-              <label key={c.slug} className={cn('cursor-pointer rounded-md border px-2 py-1 text-sm', cats.has(c.slug) ? 'border-primary bg-primary text-white' : 'border-border text-text-muted')}>
-                <input type="checkbox" className="sr-only" checked={cats.has(c.slug)} onChange={() => toggleCat(c.slug)} />
-                {localized(c.label, locale)}
-              </label>
+              <ChoiceChip
+                key={c.slug}
+                type="checkbox"
+                active={cats.has(c.slug)}
+                checked={cats.has(c.slug)}
+                onChange={() => toggleCat(c.slug)}
+                label={localized(c.label, locale)}
+              />
             ))}
           </div>
         </fieldset>
@@ -207,16 +212,23 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
           {keywords.length > 0 && (
             <ul className="mb-2 flex flex-wrap gap-1.5">
               {keywords.map((kw) => (
-                <li key={kw} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-0.5 text-sm">
+                <li key={kw} className="inline-flex items-center gap-1 rounded-md border border-border bg-surface py-0.5 pl-2 pr-1 text-sm md:pr-2">
                   <span>{kw}</span>
-                  <button
-                    type="button"
+                  {/* The chip's remove control is a real touch target on a phone
+                      (44px) and collapses back to the tight 16px box from md: up
+                      — issue #101. */}
+                  <IconButton
+                    size="sm"
+                    variant="plain"
                     aria-label={s.admin.keywordRemove(kw)}
                     onClick={() => removeKeyword(kw)}
-                    className="grid h-4 w-4 cursor-pointer place-items-center rounded text-text-muted hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                    // md: restores the original 16px box exactly, including its
+                    // ring: IconButton's offset ring is sized for a standalone
+                    // control and reads as a halo over a chip this small.
+                    className="focus-visible:ring-offset-0 md:h-4 md:w-4 md:p-0"
                   >
                     <X className="h-3 w-3" aria-hidden="true" />
-                  </button>
+                  </IconButton>
                 </li>
               ))}
             </ul>
@@ -235,10 +247,16 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
           <legend className="mb-1 text-sm font-medium">{s.admin.fStatus}</legend>
           <div className="flex flex-wrap gap-2">
             {(['', 'beta', 'wartung'] as const).map((value) => (
-              <label key={value} className={cn('cursor-pointer rounded-md border px-2 py-1 text-sm', tag === value ? 'border-primary bg-primary text-white' : 'border-border text-text-muted')}>
-                <input type="radio" name="tag" className="sr-only" value={value} checked={tag === value} onChange={() => setTag(value)} />
-                {value === '' ? s.admin.statusNone : value === 'beta' ? s.admin.statusBeta : s.admin.statusWartung}
-              </label>
+              <ChoiceChip
+                key={value}
+                type="radio"
+                name="tag"
+                value={value}
+                active={tag === value}
+                checked={tag === value}
+                onChange={() => setTag(value)}
+                label={value === '' ? s.admin.statusNone : value === 'beta' ? s.admin.statusBeta : s.admin.statusWartung}
+              />
             ))}
           </div>
         </fieldset>
@@ -253,7 +271,15 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
             aria-label={s.admin.iconSearch}
             className="mb-2"
           />
-          <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto rounded-md border border-border p-2">
+          {/* The scroll box's height lands on a row boundary, so at rest it ends
+              between rows instead of showing a strip of half-drawn glyphs.
+              Phone rows are 44px on a 48px pitch (gap-1) and start 8px in
+              (p-2), so row 4 begins at 8 + 3×44 + 3×4 = 152px: a box exactly
+              that tall hides it completely. Not 156 (= padding + 3 rows +
+              2 gaps): a scroll container's bottom padding does not hold the
+              next row back, so those extra 4px are the top of row 4.
+              Unchanged from md: up, where the buttons are 28px. */}
+          <div className="flex max-h-[152px] flex-wrap gap-1 overflow-y-auto rounded-md border border-border p-2 md:max-h-32">
             {!iconSet ? (
               <p className="px-1 py-2 text-sm text-text-muted" aria-busy="true">{s.common.loading}</p>
             ) : (

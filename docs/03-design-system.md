@@ -89,11 +89,42 @@ structural device — keep it as the page-title motif.
 
 - **Phone (default):** single-column **List** view. Top bar collapses to logo + search + a menu;
   Services/Favorites as a segmented control; the theme/view toggles move into an overflow menu.
+  The list row is **two lines, not three columns**: the icon chip, the service name and the row's
+  controls (documentation, favourite) share the top line, and the description spans the row's
+  full width underneath. One line of controls beside the text left the description barely 40% of
+  a 360px row and hyphenated nearly every German word — a text column must not be what fixed-width
+  controls leave over (CLAUDE.md, "Design for the standard phones").
 - **Tablet:** two-column table view becomes available.
 - **Desktop:** **Table** view — categories as columns of compact tiles (the PDF "Tabelle" layout),
   max content width with comfortable gutters.
 - Touch targets ≥ 44px. The tile's two zones must each be an easily-tappable region with a clear
   divider so nobody mis-taps launch when they meant expand.
+
+### Control sizing: phone floor, pointer density from `md:`
+
+One convention across every shared primitive (`web-ui/src/components/ui/`), so no screen has to
+restate it and no screen can forget it:
+
+- **Phone is the default.** A control's base classes carry the 44px floor — `h-11` / `min-h-11`
+  (plus `w-11` for a square, icon-only control) and the roomier padding that goes with it. Users
+  reported the phone UI as cramped (issue #99); the answer is better defaults, **not** a
+  user-facing size setting.
+- **`md:` hands back to pointer density.** `md:` (768px, the app's single mobile/desktop
+  breakpoint — `web-ui/src/lib/breakpoints.ts`) restores the compact box: `md:h-10` for a button,
+  `md:h-9` for a select, `md:min-h-0` for a pill, the icon's own box for an icon button. Never
+  `sm:` — that is a fourth breakpoint the layout does not otherwise use, and it leaves the
+  640–767px band with desktop density under a phone layout.
+- **A control too small to be its own target puts the floor on its label.** A checkbox box stays a
+  box; the `<label>` around it is the 44px hit area (the `checkbox` and `choice-chip` primitives —
+  the latter is a chip-shaped checkbox/radio, so the chip *is* the control rather than a button
+  pretending to be one). The viewport suite measures exactly that shape — a padded click-target
+  parent around one small control.
+- **Row heights follow.** A list row is ≥ 56px on a phone (`min-h-14`, `List`/`ListItem`) and the
+  service list row ~72px, so the controls inside it clear each other.
+
+Both directions are tested: `e2e/admin-viewport.spec.ts` and `e2e/issue-99-mobile-sizing.spec.ts`
+assert the phone floor across the matrix *and* upper bounds on the desktop densities, so a future
+change cannot inflate the pointer layout either.
 
 ## 5. The signature component — the two-zone tile
 

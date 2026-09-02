@@ -1,7 +1,15 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
+import { X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { IconButton } from '@/components/ui/icon-button'
+import { Input } from '@/components/ui/input'
 import { PillButton } from '@/components/ui/pill-button'
+import { ChoiceChip } from '@/components/ui/choice-chip'
+import { Select } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 
 // Guards the UI-primitive convention (src/components/ui/README.md, rule #1):
 // primitives are pure presentation and must never fetch or own server state.
@@ -52,5 +60,70 @@ describe('PillButton cursor affordance (issue #30)', () => {
     const el = getByRole('button')
     expect(el.className).toMatch(/\bcursor-pointer\b/) // base class is still present…
     expect(el.className).toMatch(/\bdisabled:cursor-default\b/) // …but overridden when disabled
+  })
+})
+
+// Issue #101: the admin surface sat below the 44px touch floor because the
+// shared primitives did. The geometry itself is asserted in the browser
+// (e2e/admin-viewport.spec.ts, every matrix resolution); what this pins is the
+// *convention* those fixes established, so a new size variant can't quietly
+// ship without it: a phone-width floor plus an `md:` escape back to pointer
+// density (md: is the app's one mobile/desktop breakpoint — src/lib/breakpoints.ts).
+describe('interactive primitives carry the phone touch floor (issue #101)', () => {
+  const cases: { name: string; render: () => void; role: string; floor: RegExp }[] = [
+    { name: 'Button (default)', render: () => render(<Button>Speichern</Button>), role: 'button', floor: /\bh-11\b/ },
+    { name: 'Button (sm)', render: () => render(<Button size="sm">Neu</Button>), role: 'button', floor: /\bh-11\b/ },
+    {
+      name: 'Button (icon)',
+      render: () => render(<Button size="icon" aria-label="x" />),
+      role: 'button',
+      floor: /\bh-11 w-11\b/,
+    },
+    {
+      name: 'IconButton (md)',
+      render: () =>
+        render(
+          <IconButton aria-label="x">
+            <X />
+          </IconButton>,
+        ),
+      role: 'button',
+      floor: /\bh-11 w-11\b/,
+    },
+    {
+      name: 'IconButton (sm)',
+      render: () =>
+        render(
+          <IconButton aria-label="x" size="sm">
+            <X />
+          </IconButton>,
+        ),
+      role: 'button',
+      floor: /\bh-11 w-11\b/,
+    },
+    { name: 'PillButton', render: () => render(<PillButton>Alle</PillButton>), role: 'button', floor: /\bmin-h-11\b/ },
+    { name: 'Input', render: () => render(<Input aria-label="x" />), role: 'textbox', floor: /\bmin-h-11\b/ },
+    { name: 'Select', render: () => render(<Select aria-label="x" />), role: 'combobox', floor: /\bh-11\b/ },
+    { name: 'Textarea', render: () => render(<Textarea aria-label="x" />), role: 'textbox', floor: /\bmin-h-11\b/ },
+  ]
+
+  it.each(cases)('$name meets the floor and hands back to md:', ({ render: renderIt, role, floor }) => {
+    renderIt()
+    const className = screen.getByRole(role).className
+    expect(className).toMatch(floor)
+    expect(className).toMatch(/\bmd:(h|w|min-h)-/)
+  })
+
+  // Checkbox and ChoiceChip are the exception that proves the rule: the control
+  // itself is too small to be a target at any sane size, so the label around it
+  // is the hit area (see checkbox.tsx, choice-chip.tsx).
+  it.each([
+    { name: 'Checkbox', render: () => render(<Checkbox label="Ausblendbar" />) },
+    { name: 'ChoiceChip', render: () => render(<ChoiceChip type="checkbox" label="Ausblendbar" />) },
+  ])('$name puts the floor on the label, not the control', ({ render: renderIt }) => {
+    renderIt()
+    const label = screen.getByText('Ausblendbar')
+    expect(label.className).toMatch(/\bmin-h-11\b/)
+    expect(label.className).toMatch(/\bmd:min-h-0\b/)
   })
 })

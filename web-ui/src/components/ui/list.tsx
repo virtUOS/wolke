@@ -16,7 +16,15 @@ List.displayName = 'List'
 // (cn/twMerge resolves the conflicts).
 export const ListItem = React.forwardRef<HTMLLIElement, React.LiHTMLAttributes<HTMLLIElement>>(
   ({ className, ...props }, ref) => (
-    <li ref={ref} className={cn('flex items-center gap-3 px-3 py-2', className)} {...props} />
+    <li
+      ref={ref}
+      // A row is a comfortable 56px tall with roomier padding at phone widths
+      // (issue #99) and returns to the compact desktop row from md: up. Rows
+      // hold their own controls, so this is also what keeps a row's buttons
+      // clear of each other on a phone.
+      className={cn('flex min-h-14 items-center gap-3 px-3 py-3 md:min-h-0 md:py-2', className)}
+      {...props}
+    />
   ),
 )
 ListItem.displayName = 'ListItem'
