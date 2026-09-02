@@ -133,9 +133,11 @@ wholesale — provide all seven files**: `logo-light.svg`, `logo-dark.svg`,
 `apple-touch-icon.png` (a missing file 404s; there is no per-file fallback, and the
 manifest still advertises the icons, so the PWA install silently degrades). The
 logos and favicon are referenced from `config.yaml` (`branding.logo_light` etc.);
-the PNGs serve the PWA manifest and the apple-touch link. **The whole directory is
-served publicly** (unauthenticated, at `/branding/`) — keep only these assets in
-it, never drafts or working files.
+the PNGs serve the PWA manifest and the apple-touch link. **These seven names are
+served publicly** (unauthenticated, at `/branding/`) — only they are; any other
+filename in the directory, and `/branding/` itself, 404 rather than being listed
+or served. Keep only these assets in it anyway, never drafts, working files, or
+secrets — the allowlist is a floor, not a reason to get careless with the mount.
 
 **PWA updates reach open clients.** The app is an installable PWA whose service worker updates in *prompt* mode: a deploy never reloads anyone's tab by surprise, but every running client — a long-lived desktop tab or the installed app on a phone — checks for a new version hourly and on every resume, then offers an in-app "Neue Version verfügbar. / Reload" notice. So a fix ships to open clients within an hour, or on the next app resume, whichever comes first. See [docs/02 §11.1](docs/02-technical-spec.md).
 
