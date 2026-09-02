@@ -100,7 +100,7 @@ test.describe('issue #99 — the phone layout is comfortably sized', () => {
           parseFloat(style.paddingLeft || '0') -
           parseFloat(style.paddingRight || '0')
         const description = row.querySelector('p')
-        const name = row.querySelector('span.break-words')
+        const name = row.querySelector('span.hyphenate-compound')
         const lines = (el: Element | null) => {
           if (!el) return 0
           const range = document.createRange()

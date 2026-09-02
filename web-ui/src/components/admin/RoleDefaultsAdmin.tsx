@@ -112,7 +112,7 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
           // buttons, so they inherit the shared 44px phone touch floor (issue
           // #101) instead of the 24px boxes they used to be.
           <li key={id} className="flex flex-wrap items-center gap-2 rounded-md border border-surface px-2 py-1 text-sm">
-            <span className="min-w-0 flex-1 break-words hyphens-auto">{i + 1}. {name(id)}</span>
+            <span className="min-w-0 flex-1 hyphenate-compound">{i + 1}. {name(id)}</span>
             <IconButton size="sm" aria-label={`${s.admin.moveUp} – ${name(id)}`} disabled={i === 0} onClick={() => move(i, -1)} className="disabled:opacity-30">
               <ChevronUp className="h-4 w-4" aria-hidden="true" />
             </IconButton>
