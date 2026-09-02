@@ -89,6 +89,11 @@ structural device — keep it as the page-title motif.
 
 - **Phone (default):** single-column **List** view. Top bar collapses to logo + search + a menu;
   Services/Favorites as a segmented control; the theme/view toggles move into an overflow menu.
+  The list row is **two lines, not three columns**: the icon chip, the service name and the row's
+  controls (documentation, favourite) share the top line, and the description spans the row's
+  full width underneath. One line of controls beside the text left the description barely 40% of
+  a 360px row and hyphenated nearly every German word — a text column must not be what fixed-width
+  controls leave over (CLAUDE.md, "Design for the standard phones").
 - **Tablet:** two-column table view becomes available.
 - **Desktop:** **Table** view — categories as columns of compact tiles (the PDF "Tabelle" layout),
   max content width with comfortable gutters.

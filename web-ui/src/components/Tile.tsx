@@ -117,59 +117,71 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           style={{ position: 'absolute', inset: 0 }}
           className="tile-focus-link"
         />
-        {/* The row is the phone layout's primary control, and users found it
-            cramped (issue #99): 14px of vertical padding around a 44px icon chip
-            makes it a comfortable ~72px tall, and every control inside it
-            already meets the 44px floor. */}
+        {/* Two lines, not three columns (issue #99, second round).
+            
+            The row used to be icon | text | docs | star on one line, so on a
+            360px phone the text column was whatever the three fixed 44px blocks
+            left over — about 174px, which hyphenated nearly every German word.
+            The controls now share the *title* line, where a short service name
+            has width to spare, and the description owns the row's full width
+            underneath (~338px at 360px). Nothing shrank and nothing grew: the
+            same elements, positioned so the text gets the space.
+            
+            Tuned for 360×800 and 390×844; 324px is the correctness floor, where
+            the title takes a second line rather than the description losing its
+            column (CLAUDE.md, "Design for the standard phones"). */}
         <div
           style={{
             position: 'relative',
             display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-            padding: '14px 10px 14px 16px',
+            flexDirection: 'column',
+            gap: 6,
+            // The horizontal insets are the pre-pass ones: padding here is
+            // description width, and this row's problem was width.
+            padding: '12px 8px 12px 14px',
             pointerEvents: 'none',
           }}
         >
-          <div
-            aria-hidden="true"
-            style={{
-              width: 44, height: 44, borderRadius: 'var(--radius-md)', flexShrink: 0,
-              background: 'var(--surface-2)', display: 'grid', placeItems: 'center',
-              color: 'var(--text)',
-            }}
-          >
-            <ServiceIcon name={service.icon} className="h-[22px] w-[22px]" aria-hidden="true" />
-          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div
+              aria-hidden="true"
+              style={{
+                width: 44, height: 44, borderRadius: 'var(--radius-md)', flexShrink: 0,
+                background: 'var(--surface-2)', display: 'grid', placeItems: 'center',
+                color: 'var(--text)',
+              }}
+            >
+              <ServiceIcon name={service.icon} className="h-[22px] w-[22px]" aria-hidden="true" />
+            </div>
 
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <TileName style={{ minWidth: 0 }}>{service.name}</TileName>
               {service.tag === 'beta' && <Badge variant="info">{s.tile.beta}</Badge>}
               {service.tag === 'wartung' && <Badge variant="warning">{s.tile.maintenance}</Badge>}
               {docsOnly && <Badge variant="neutral">{s.tile.docs}</Badge>}
             </div>
-            <TileDescription>{description}</TileDescription>
+
+            <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'auto' }}>
+              {!docsOnly && service.doc_url && (
+                <a
+                  href={service.doc_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={s.tile.docsLink + s.tile.newTab}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onLaunch?.(service, 'documentation', false)
+                  }}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-border bg-surface-2 p-1.5 text-text-muted transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:h-auto md:w-auto"
+                >
+                  <FileText className="h-4 w-4" aria-hidden="true" />
+                </a>
+              )}
+              {starBtn}
+            </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'auto' }}>
-            {!docsOnly && service.doc_url && (
-              <a
-                href={service.doc_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={s.tile.docsLink + s.tile.newTab}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onLaunch?.(service, 'documentation', false)
-                }}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-border bg-surface-2 p-1.5 text-text-muted transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:h-auto md:w-auto"
-              >
-                <FileText className="h-4 w-4" aria-hidden="true" />
-              </a>
-            )}
-            {starBtn}
-          </div>
+          <TileDescription>{description}</TileDescription>
         </div>
       </div>
     )

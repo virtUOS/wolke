@@ -7,14 +7,32 @@
 // Both halves are asserted here: the phone rows and their controls are
 // comfortably large, and from `md:` up the shared primitives keep the compact
 // density they were designed with (so the pass can't quietly inflate desktop).
+//
+// The second review round moved the goalposts from *size* to *layout*: the row
+// used to be icon | text | docs | star on one line, which left the description
+// ~174px at 360px and hyphenated nearly every German word. The controls now
+// share the title line and the description owns the row's full width. So the
+// guarantee here is width, and it is asserted at the sizes CLAUDE.md names as
+// the design target — 360×800 and 390×844. 324×756 stays a correctness floor:
+// the shared gates run there (via the fixture), these design assertions do not.
 
 import type { Page } from '@playwright/test'
 import { MIN_TOUCH_TARGET } from './helpers/rules'
 import { gotoApp } from './helpers/session'
 import { expect, test } from './fixtures'
 
-/** The row height the phone list is designed around: 44px icon chip + 2×14px. */
+/** The row's floor: a 44px icon chip/controls line plus its vertical padding. */
 const MIN_ROW_HEIGHT = 70
+
+/** Below this width the layout only has to pass the gates, not read well. */
+const DESIGN_TARGET_MIN_WIDTH = 360
+
+/**
+ * The description must get essentially the whole row, not what three fixed
+ * 44px blocks leave over. 85% leaves room for the row's own padding while
+ * failing hard if the description is ever put back in a flanked column.
+ */
+const MIN_DESCRIPTION_SHARE = 0.85
 
 /** The row's own controls, by their real accessible names (src/lib/i18n.ts). */
 const ROW_CONTROLS = [
@@ -58,6 +76,59 @@ test.describe('issue #99 — the phone layout is comfortably sized', () => {
       const box = (await control.boundingBox())!
       expect(box.height, `${what} height`).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET)
       expect(box.width, `${what} width`).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET)
+    }
+  })
+
+  // The heart of the second round: the description's width at the sizes we
+  // design for.
+  test('the description gets the row’s full width at the standard phone sizes', async ({ page }, testInfo) => {
+    const width = testInfo.project.use.viewport?.width ?? 0
+    test.skip(testInfo.project.use.isMobile !== true, 'the list row is the phone layout')
+    test.skip(width < DESIGN_TARGET_MIN_WIDTH, `${width}px is the correctness floor, not the design target`)
+
+    await gotoApp(page, '/?tab=dienste')
+    await expect(page.locator('.tile-list-item').first()).toBeVisible()
+
+    // One walk: for each row, how wide is the description against the row's own
+    // content width, and how many line boxes do the description and the name
+    // each take? A Range reports one client rect per line box.
+    const rows = await page.$$eval('.tile-list-item', (els) =>
+      els.map((row) => {
+        const style = getComputedStyle(row)
+        const inner =
+          row.getBoundingClientRect().width -
+          parseFloat(style.paddingLeft || '0') -
+          parseFloat(style.paddingRight || '0')
+        const description = row.querySelector('p')
+        const name = row.querySelector('span.break-words')
+        const lines = (el: Element | null) => {
+          if (!el) return 0
+          const range = document.createRange()
+          range.selectNodeContents(el)
+          return range.getClientRects().length
+        }
+        return {
+          text: (description?.textContent ?? '').slice(0, 40),
+          inner,
+          descriptionWidth: description?.getBoundingClientRect().width ?? 0,
+          descriptionLines: lines(description),
+          nameLines: lines(name),
+        }
+      }),
+    )
+    expect(rows.length, 'service rows').toBeGreaterThan(3)
+
+    for (const row of rows) {
+      expect(
+        row.descriptionWidth / row.inner,
+        `"${row.text}" gets ${Math.round(row.descriptionWidth)}px of a ${Math.round(row.inner)}px row`,
+      ).toBeGreaterThanOrEqual(MIN_DESCRIPTION_SHARE)
+      // The seeded descriptions are real, full-length German sentences; at the
+      // design sizes they must not need more than two lines.
+      expect(row.descriptionLines, `"${row.text}" line count`).toBeLessThanOrEqual(2)
+      // And a service name belongs on one line here — a name broken across
+      // lines at 390px means the controls are eating the title again.
+      expect(row.nameLines, `name above "${row.text}" line count`).toBe(1)
     }
   })
 

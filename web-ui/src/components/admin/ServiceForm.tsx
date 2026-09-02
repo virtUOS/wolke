@@ -271,9 +271,15 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
             aria-label={s.admin.iconSearch}
             className="mb-2"
           />
-          {/* Taller at phone widths so two rows of the (now 44px) icon buttons
-              are visible without scrolling; unchanged from md: up. */}
-          <div className="flex max-h-44 flex-wrap gap-1 overflow-y-auto rounded-md border border-border p-2 md:max-h-32">
+          {/* The scroll box's height lands on a row boundary, so at rest it ends
+              between rows instead of showing a strip of half-drawn glyphs.
+              Phone rows are 44px on a 48px pitch (gap-1) and start 8px in
+              (p-2), so row 4 begins at 8 + 3×44 + 3×4 = 152px: a box exactly
+              that tall hides it completely. Not 156 (= padding + 3 rows +
+              2 gaps): a scroll container's bottom padding does not hold the
+              next row back, so those extra 4px are the top of row 4.
+              Unchanged from md: up, where the buttons are 28px. */}
+          <div className="flex max-h-[152px] flex-wrap gap-1 overflow-y-auto rounded-md border border-border p-2 md:max-h-32">
             {!iconSet ? (
               <p className="px-1 py-2 text-sm text-text-muted" aria-busy="true">{s.common.loading}</p>
             ) : (
