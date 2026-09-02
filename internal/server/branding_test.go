@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/virtuos/wolke/internal/config"
@@ -121,5 +122,124 @@ func TestBrandingAssetRouteAbsentWhenNoDir(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404 when no branding dir", rec.Code)
+	}
+}
+
+// TestBrandingAllowlistServesEveryKnownAsset asserts each of the seven
+// referenced asset filenames (README "Branding assets", docs/02 §11.1) serves
+// with a sane Content-Type when present in the mounted dir.
+func TestBrandingAllowlistServesEveryKnownAsset(t *testing.T) {
+	dir := t.TempDir()
+	assets := map[string]string{
+		"logo-light.svg":        "<svg/>",
+		"logo-dark.svg":         "<svg/>",
+		"favicon.svg":           "<svg/>",
+		"icon-192.png":          "fake-png-192",
+		"icon-512.png":          "fake-png-512",
+		"icon-maskable-512.png": "fake-png-maskable",
+		"apple-touch-icon.png":  "fake-png-apple",
+	}
+	for name, body := range assets {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatalf("write asset %s: %v", name, err)
+		}
+	}
+	cfg := config.Defaults()
+	cfg.BrandingDir = dir
+	h := newTestRouter(t, &cfg, Deps{})
+
+	wantContentType := map[string]string{
+		".svg": "image/svg+xml",
+		".png": "image/png",
+	}
+
+	for name, body := range assets {
+		req := httptest.NewRequest(http.MethodGet, "/branding/"+name, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("%s: status = %d, want 200", name, rec.Code)
+			continue
+		}
+		if rec.Body.String() != body {
+			t.Errorf("%s: body = %q, want %q", name, rec.Body.String(), body)
+		}
+		ext := filepath.Ext(name)
+		if want := wantContentType[ext]; want != "" {
+			if got := rec.Header().Get("Content-Type"); got != want {
+				t.Errorf("%s: content-type = %q, want %q", name, got, want)
+			}
+		}
+	}
+}
+
+// TestBrandingDirectoryRequestNotFound: GET /branding/ must never return a
+// directory listing, even when the mounted dir has files in it.
+func TestBrandingDirectoryRequestNotFound(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "logo-light.svg"), []byte("<svg/>"), 0o600); err != nil {
+		t.Fatalf("write asset: %v", err)
+	}
+	cfg := config.Defaults()
+	cfg.BrandingDir = dir
+	h := newTestRouter(t, &cfg, Deps{})
+
+	req := httptest.NewRequest(http.MethodGet, "/branding/", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for directory request", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), "logo-light.svg") {
+		t.Errorf("body = %q, must not list directory contents", rec.Body.String())
+	}
+}
+
+// TestBrandingUnknownFilenameNotServed: a stray file in the mounted dir that
+// isn't one of the allowlisted asset names must 404, not leak.
+func TestBrandingUnknownFilenameNotServed(t *testing.T) {
+	dir := t.TempDir()
+	stray := map[string]string{
+		"notes.txt":       "internal notes, not for the public",
+		"logo-draft.svg":  "<svg/>",
+		"logo-light.svg2": "<svg/>",
+	}
+	for name, body := range stray {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatalf("write stray %s: %v", name, err)
+		}
+	}
+	cfg := config.Defaults()
+	cfg.BrandingDir = dir
+	h := newTestRouter(t, &cfg, Deps{})
+
+	for name := range stray {
+		req := httptest.NewRequest(http.MethodGet, "/branding/"+name, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s: status = %d, want 404 (stray file must not be servable)", name, rec.Code)
+		}
+	}
+}
+
+// TestBrandingMissingAllowlistedFileNotFound: an allowlisted name that simply
+// isn't present in the dir still 404s — no per-file fallback (README).
+func TestBrandingMissingAllowlistedFileNotFound(t *testing.T) {
+	dir := t.TempDir()
+	// Dir exists but is otherwise empty.
+	cfg := config.Defaults()
+	cfg.BrandingDir = dir
+	h := newTestRouter(t, &cfg, Deps{})
+
+	req := httptest.NewRequest(http.MethodGet, "/branding/icon-512.png", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 for missing allowlisted file", rec.Code)
 	}
 }
