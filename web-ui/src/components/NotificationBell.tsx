@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { AlertTriangle, Bell, Info, OctagonAlert } from 'lucide-react'
 import type { VariantProps } from 'class-variance-authority'
-import { localized, type Severity } from '@/lib/api'
+import { localized, type Announcement, type Severity } from '@/lib/api'
 import { t, type Lang } from '@/lib/i18n'
 import { useAnnouncements, useAnnouncementHistory } from '@/lib/admin-hooks'
 import { useDismissAnnouncement } from '@/lib/hooks'
 import { Alert, type alertVariants } from '@/components/ui/alert'
+import { Dialog } from '@/components/ui/dialog'
 import { IconButton } from '@/components/ui/icon-button'
 import { focusFirst, trapTab } from '@/lib/focus'
 
@@ -18,6 +19,10 @@ import { focusFirst, trapTab } from '@/lib/focus'
 export function NotificationBell({ locale }: { locale: Lang }) {
   const s = t(locale)
   const [open, setOpen] = useState(false)
+  // The notice a history row opened, if any (issue #115) — a separate Dialog
+  // layered over the panel; the row that opened it is only the compact
+  // truncated/clamped preview, so this is where the full text lives.
+  const [selected, setSelected] = useState<Announcement | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -59,6 +64,15 @@ export function NotificationBell({ locale }: { locale: Lang }) {
   const fmtDate = (iso?: string) => {
     if (!iso) return ''
     return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(iso))
+  }
+
+  // The validity window shown in the history dialog: whichever bounds the
+  // notice actually has (a notice can be open-ended on either side).
+  const validity = (a: Announcement) => {
+    if (a.starts_at && a.ends_at) return s.announce.validRange(fmtDate(a.starts_at), fmtDate(a.ends_at))
+    if (a.starts_at) return s.announce.validFrom(fmtDate(a.starts_at))
+    if (a.ends_at) return s.announce.validUntil(fmtDate(a.ends_at))
+    return null
   }
 
   return (
@@ -127,17 +141,30 @@ export function NotificationBell({ locale }: { locale: Lang }) {
                   </h3>
                   <ul>
                     {pastList.map((a) => (
-                      <li key={a.id} className="flex items-start gap-2 rounded px-1 py-2">
-                        <span className={`mt-0.5 shrink-0 ${iconColorClass(a.severity)}`} aria-hidden="true">
-                          {severityIcon(a.severity, 'h-4 w-4')}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-text">{localized(a.title, locale)}</p>
-                          <p className="line-clamp-2 text-xs text-text-muted">{localized(a.body, locale)}</p>
-                        </div>
-                        <time className="shrink-0 text-xs text-text-muted" dateTime={a.created_at}>
-                          {fmtDate(a.created_at)}
-                        </time>
+                      <li key={a.id}>
+                        <button
+                          type="button"
+                          aria-haspopup="dialog"
+                          onClick={() => setSelected(a)}
+                          // 44px touch target on a phone; the row shrinks back to its
+                          // compact height from `md` up, same convention as the bell.
+                          className="flex min-h-11 w-full items-start gap-2 rounded px-1 py-2 text-left hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] md:min-h-0"
+                        >
+                          <span className={`mt-0.5 shrink-0 ${iconColorClass(a.severity)}`} aria-hidden="true">
+                            {severityIcon(a.severity, 'h-4 w-4')}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="hyphenate-compound truncate text-sm font-medium text-text">
+                              {localized(a.title, locale)}
+                            </p>
+                            <p className="hyphenate-compound line-clamp-2 text-xs text-text-muted">
+                              {localized(a.body, locale)}
+                            </p>
+                          </div>
+                          <time className="shrink-0 text-xs text-text-muted" dateTime={a.created_at}>
+                            {fmtDate(a.created_at)}
+                          </time>
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -147,6 +174,22 @@ export function NotificationBell({ locale }: { locale: Lang }) {
           )}
         </div>
       )}
+
+      <Dialog
+        open={selected !== null}
+        onOpenChange={(o) => !o && setSelected(null)}
+        title={selected ? localized(selected.title, locale) : ''}
+        closeLabel={s.common.close}
+      >
+        {selected && (
+          <div className="space-y-3">
+            <Alert variant={severityVariant(selected.severity)} icon={severityIcon(selected.severity)}>
+              <p className="hyphenate-compound whitespace-pre-wrap">{localized(selected.body, locale)}</p>
+            </Alert>
+            {validity(selected) && <p className="text-xs text-text-muted">{validity(selected)}</p>}
+          </div>
+        )}
+      </Dialog>
     </div>
   )
 }
