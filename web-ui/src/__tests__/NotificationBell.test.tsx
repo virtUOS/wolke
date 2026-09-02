@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -11,8 +11,9 @@ const active: Announcement = {
   severity: 'warning', audience: 'all', dismissible: true,
 }
 const past: Announcement = {
-  id: 'p1', title: { de: 'VPN-Störung' }, body: { de: 'Behoben.' },
+  id: 'p1', title: { de: 'VPN-Störung' }, body: { de: 'Behoben. Es gab eine längere Störung im VPN-Dienst, die inzwischen vollständig behoben wurde.' },
   severity: 'info', audience: 'all', dismissible: true, created_at: '2026-06-21T08:00:00Z',
+  starts_at: '2026-06-20T08:00:00Z', ends_at: '2026-06-21T08:00:00Z',
 }
 
 function withClient(ui: ReactNode) {
@@ -61,6 +62,47 @@ describe('NotificationBell', () => {
     const { container } = render(withClient(<NotificationBell locale="de" />))
     await user.click(await screen.findByRole('button', { name: /Mitteilungen/ }))
     await screen.findByText('VPN-Störung')
+    await expectNoAxeViolations(container)
+  })
+
+  it('opens a history row in a dialog with the full title, body and validity window', async () => {
+    const user = userEvent.setup()
+    render(withClient(<NotificationBell locale="de" />))
+    await user.click(await screen.findByRole('button', { name: /Mitteilungen/ }))
+    const row = await screen.findByRole('button', { name: /VPN-Störung/ })
+    expect(row).toHaveAttribute('aria-haspopup', 'dialog')
+
+    await user.click(row)
+    const dialog = await screen.findByRole('dialog', { name: 'VPN-Störung' })
+    const dialogScope = within(dialog)
+    expect(
+      dialogScope.getByText(
+        'Behoben. Es gab eine längere Störung im VPN-Dienst, die inzwischen vollständig behoben wurde.',
+      ),
+    ).toBeInTheDocument()
+    expect(dialogScope.getByText(/Gültig vom .* bis .*/)).toBeInTheDocument()
+  })
+
+  it('returns focus to the history row when its dialog closes', async () => {
+    const user = userEvent.setup()
+    render(withClient(<NotificationBell locale="de" />))
+    await user.click(await screen.findByRole('button', { name: /Mitteilungen/ }))
+    const row = await screen.findByRole('button', { name: /VPN-Störung/ })
+
+    await user.click(row)
+    await screen.findByRole('dialog', { name: 'VPN-Störung' })
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'VPN-Störung' })).not.toBeInTheDocument())
+    expect(row).toHaveFocus()
+  })
+
+  it('has no axe violations with the history dialog open', async () => {
+    const user = userEvent.setup()
+    const { container } = render(withClient(<NotificationBell locale="de" />))
+    await user.click(await screen.findByRole('button', { name: /Mitteilungen/ }))
+    await user.click(await screen.findByRole('button', { name: /VPN-Störung/ }))
+    await screen.findByRole('dialog', { name: 'VPN-Störung' })
     await expectNoAxeViolations(container)
   })
 })
