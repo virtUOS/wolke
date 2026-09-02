@@ -16,7 +16,7 @@ COPY web-ui/ ./
 RUN npm run build
 
 # --- Stage 2: build the Go binary (server embeds the SPA + the SQL migrations) ---
-FROM docker.io/library/golang:1.26 AS build
+FROM docker.io/library/golang:1.27 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
