@@ -31,7 +31,11 @@ test.describe('issue #35 — the accessibility tree matches what is on screen', 
     // result set changes. The announcement clears itself after a few seconds, so
     // this assertion has to land inside that window — toHaveText retries.
     await gotoApp(page, '/?tab=dienste')
-    const liveRegion = page.locator('[aria-live="polite"]')
+    // Scoped to the result-count region specifically (role="status"): an
+    // unscoped [aria-live="polite"] locator also matches the announcement
+    // banner and the PWA install hint, so it goes strict-mode-ambiguous the
+    // moment either is present in local DB state.
+    const liveRegion = page.locator('[aria-live="polite"][role="status"]')
     await expect(liveRegion).toHaveText('')
 
     await page.getByRole('searchbox').fill('Netzspeicher')
