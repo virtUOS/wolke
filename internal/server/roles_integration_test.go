@@ -23,7 +23,7 @@ import (
 // resolves into that set, /api/roles reports it, the admin writes accept only
 // it, and rows left behind by a *different* configuration degrade instead of
 // breaking (docs/specs/configurable-roles.md §2.2, §4). This also covers
-// migration 00016: every "stale row" below is one the dropped check
+// the flattened baseline: every "stale row" below is one the dropped check
 // constraints would have refused to let the test write.
 //
 // Needs the mock IdP and a migrated database:
@@ -129,16 +129,16 @@ func TestTwoRoleDeployment(t *testing.T) {
 
 	// 5. Stale rows written under a previous configuration.
 	if _, err := db.Pool.Exec(ctx, "update users set primary_role = 'teacher' where id = $1", user.ID); err != nil {
-		t.Fatalf("write a stale primary_role (did migration 00016 run?): %v", err)
+		t.Fatalf("write a stale primary_role (is the baseline schema missing its check-constraint drop?): %v", err)
 	}
 	if _, err := db.Pool.Exec(ctx,
 		`insert into announcements (title, body, severity, audience, starts_at, dismissible)
 		 values ('{"de":"Rollen-Test alt","en":"Roles test old"}', '{"de":"Alt.","en":"Old."}', 'info', 'teacher', now(), true)`); err != nil {
-		t.Fatalf("write a stale audience (did migration 00016 run?): %v", err)
+		t.Fatalf("write a stale audience (is the baseline schema missing its check-constraint drop?): %v", err)
 	}
 	if _, err := db.Pool.Exec(ctx,
 		`insert into role_defaults (role, service_id, sort) select 'phd', id, 0 from services limit 1`); err != nil {
-		t.Fatalf("write a stale role_defaults row (did migration 00016 run?): %v", err)
+		t.Fatalf("write a stale role_defaults row (is the baseline schema missing its check-constraint drop?): %v", err)
 	}
 
 	// 5a. The user's stale role reads as the configured default.
