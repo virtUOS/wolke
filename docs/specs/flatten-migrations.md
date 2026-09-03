@@ -1,7 +1,8 @@
 # Spec — Flatten migrations to a v1 baseline
 
-Status: **DRAFTED, POSTPONED — execute immediately before going to production / the first
-release.** · Owner: supervisor session · Written 2026-08-28
+Status: **EXECUTED 2026-09-03** (unmerged pending user go-ahead — merging resets every
+test/staging database, dropped volume). `migrations/00001_init.sql` is now the v1 baseline;
+00002-00016 are deleted, history lives in git. · Owner: supervisor session · Written 2026-08-28
 Run with: **sonnet, new session off `main`.**
 
 ## Why (and why the timing is rigid)

@@ -13,7 +13,8 @@ the IdP telling wolke that a session ended. On shared and pool computers this is
 security gap, so it's a production requirement, not polish.
 
 Confirmed by reading `internal/auth` (2026-08-28):
-- Sessions: `sessions(id, user_id, data, created_at, expires_at)` (migration 00001), token
+- Sessions: `sessions(id, user_id, data, created_at, expires_at)` (originally migration 00001,
+  now part of the flattened `migrations/00001_init.sql` baseline), token
   hashed via `hashToken`; `SessionStore` has `New/Lookup/Delete` **by token only**.
 - The `sid` claim from the ID token is **not captured anywhere** — there is currently no way
   to find "the wolke session belonging to this IdP session".
@@ -27,7 +28,7 @@ third-party-cookie behavior that browsers are killing, and Keycloak supports bac
 ## 2. Design
 
 ### 2.1 Capture the IdP session at login
-- Migration `00015`: `alter table sessions add column oidc_sid text`, plus
+- Migration `00015` (now flattened into `migrations/00001_init.sql`): `alter table sessions add column oidc_sid text`, plus
   `create index sessions_oidc_sid_idx on sessions (oidc_sid) where oidc_sid is not null`.
   Nullable — not every IdP sends `sid`, and old rows have none.
 - In `Callback`, extract the `sid` claim from the verified ID-token claims (it's already a

@@ -7,8 +7,9 @@ Run with: **opus, new session off `main`.**
 
 ## 1. Why
 
-The role set is hardcoded to `student|teacher|staff` (DB check constraints in
-migrations 00001/00002/00007, comments in `internal/auth/resolve.go`, TS types,
+The role set is hardcoded to `student|teacher|staff` (DB check constraints, originally in
+migrations 00001/00002/00007 — since flattened into `migrations/00001_init.sql`, see
+`docs/specs/flatten-migrations.md`; comments in `internal/auth/resolve.go`, TS types,
 two admin components). The UOS IdM can only distinguish **student vs employee**,
 so the fixed triple doesn't match the launch deployment — and any other adopter
 has yet another set. Roles must become **data derived from the OIDC claim
@@ -44,7 +45,7 @@ oidc:
   configs keep working unchanged.
 
 ### 2.2 Database: constraints move to the service layer
-Migration 00016 drops the three check constraints (`users.primary_role`,
+Migration 00016 (now flattened into `migrations/00001_init.sql`) drops the three check constraints (`users.primary_role`,
 `role_defaults.role`, `announcements.audience` — `click_events`/`usage_daily`
 `user_role` are already free text). Validation against the *configured* set
 happens where all validation lives: `/internal/service` (CLAUDE.md rule 3), for
@@ -98,4 +99,5 @@ role-scoped catalog visibility (that's issue #36's territory).
 - No `student|teacher|staff` literal remains in Go/TS code or new SQL (dev
   seed/config keep them as the example deployment's data).
 - Full gates green; `docs/specs/flatten-migrations.md` note added that 00016 is
-  part of the future flatten.
+  part of the future flatten. **Done** — 00016 is now part of the flattened
+  `migrations/00001_init.sql` baseline.

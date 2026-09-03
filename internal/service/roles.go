@@ -2,8 +2,8 @@ package service
 
 // Role validation for the write paths. The role set is deployment config
 // (docs/specs/configurable-roles.md), so it cannot be a schema-time check
-// constraint — migration 00016 dropped those and the rules live here instead,
-// shared by the HTTP handlers and the MCP tools (CLAUDE.md rule 3).
+// constraint — migrations/00001_init.sql has none, and the rules live here
+// instead, shared by the HTTP handlers and the MCP tools (CLAUDE.md rule 3).
 
 import (
 	"strings"

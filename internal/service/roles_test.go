@@ -26,7 +26,7 @@ func exampleRoles() config.RoleSet {
 	return cfg.Roles()
 }
 
-// The DB check constraints are gone (migration 00016): the configured role set
+// The DB check constraints are gone (migrations/00001_init.sql): the configured role set
 // is what the write paths validate against, in this one shared layer, so the
 // HTTP handlers and the MCP tools cannot disagree (CLAUDE.md rule 3).
 func TestValidateRoleAgainstTheConfiguredSet(t *testing.T) {

@@ -187,7 +187,7 @@ create table usage_daily (
 -- replace. "One ACTIVE notice at a time" is enforced in the service layer —
 -- creating a new announcement retires the current active one (stamps ends_at =
 -- now()). A retention sweep (announcement_retention_days, default 60) purges
--- expired rows past the window. (Migrations 00007/00011/00012.)
+-- expired rows past the window. (Part of the v1 baseline, migrations/00001_init.sql.)
 create table announcements (
   id          uuid primary key default gen_random_uuid(),
   title       jsonb not null,
@@ -222,7 +222,7 @@ create table audit_log (
 );
 ```
 
-**Why no role check constraints (migration 00016).** The role set comes from the deployment's
+**Why no role check constraints.** The role set comes from the deployment's
 claim mapping (§6), and a config-time set cannot be a schema-time constraint — a two-role or
 six-role deployment would fail its own writes. Role validation lives in `/internal/service`
 instead, shared by the HTTP handlers and the MCP tools (CLAUDE.md rule 3). Rows written under a
