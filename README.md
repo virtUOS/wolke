@@ -145,6 +145,111 @@ secrets — the allowlist is a floor, not a reason to get careless with the moun
 
 ---
 
+## Backups
+
+The catalog (services, categories, role defaults) and favorites are the
+irreplaceable data — everything else regenerates (`users` from OIDC on next
+login) or is disposable (`sessions`, analytics). `compose.prod.yaml` ships an
+**opt-in `backup` service** that keeps them safe: a `pg_dump -Fc` of the `wolke`
+database, pushed to a **restic** repository (an S3 bucket in the tested setup),
+followed by `restic forget --prune`. restic encrypts client-side and
+de-duplicates, so a daily full dump costs little more than the delta.
+
+It is deliberately boring: one pinned image (`postgres:17-alpine`, whose
+`pg_dump` therefore always matches the server's major version) running
+[`deploy/backup/backup.sh`](deploy/backup/backup.sh) — a POSIX shell loop. No
+cron daemon, no scheduler, no second datastore.
+
+### Enabling it
+
+Nothing to enable by default: without `--profile backup` the service does not
+exist and the stack runs exactly as before. To turn it on, set the variables in
+your `.env` (the annotated block is at the bottom of
+[`.env.example`](.env.example)) and add the profile:
+
+```bash
+# .env
+RESTIC_REPOSITORY=s3:https://s3.example.org/wolke-backups
+RESTIC_PASSWORD=$(openssl rand -base64 32)   # store this OFF the server
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+```
+
+```bash
+docker compose -f compose.prod.yaml --profile backup up -d
+docker compose -f compose.prod.yaml --profile backup logs -f backup
+```
+
+The repository is created on first run (`BACKUP_INIT_REPO=false` to do it
+yourself). Nothing institution-specific is committed — every value above is
+env, and the bucket, endpoint and credentials are yours.
+
+### Knobs and defaults
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `RESTIC_REPOSITORY` | — | restic repository URL, e.g. `s3:https://host/bucket`. Required |
+| `RESTIC_PASSWORD` | — | Encrypts the repository. Required. **Losing it loses every backup** |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | — | Required for `s3:` repositories |
+| `AWS_DEFAULT_REGION` | `us-east-1` | Region; MinIO and most S3-compatibles ignore it |
+| `BACKUP_INTERVAL_SECONDS` | `86400` | Seconds between backups (daily) |
+| `BACKUP_RUN_ON_START` | `true` | Back up immediately at container start |
+| `BACKUP_KEEP_DAILY` | `7` | `restic forget --keep-daily` |
+| `BACKUP_KEEP_WEEKLY` | `4` | `restic forget --keep-weekly` |
+| `BACKUP_KEEP_MONTHLY` | `6` | `restic forget --keep-monthly` |
+| `BACKUP_TAG` | `wolke-db` | Snapshot tag; also scopes the retention policy |
+| `BACKUP_INIT_REPO` | `true` | Create the repository on first run |
+| `BACKUP_PROBE_TIMEOUT` | `45` | Seconds before the repository is called unreachable |
+| `BACKUP_RESTIC_VERSION` | — | Pin the restic Alpine package, e.g. `0.18.1-r7` |
+
+`PGHOST`/`PGUSER`/`PGDATABASE` are fixed to the stack's `postgres` service and
+`PGPASSWORD` reuses `POSTGRES_PASSWORD`; there is nothing to set for those.
+
+### It never fails quietly
+
+A backup job that silently stops is worse than none. Every failure path logs at
+`ERROR` and exits non-zero, so the container crash-loops under
+`restart: unless-stopped` and shows up in `docker compose ps` and your log
+alerting. The distinguishable cases, each with its own message:
+
+| Situation | Logged as |
+|---|---|
+| Enabled but unconfigured | `missing required environment: …` — refuses to start |
+| S3 endpoint unreachable | `cannot reach the backup repository: …` |
+| Wrong S3 credentials | `the backup repository rejected our credentials: …` |
+| Wrong `RESTIC_PASSWORD` | `RESTIC_PASSWORD does not open this repository` — refuses rather than start a second repo |
+| Postgres unreachable / wrong password | `pg_dump failed — is postgres reachable …` |
+| `pg_dump` produced an empty file | `pg_dump produced an empty file` |
+
+A cycle only logs `backup cycle ok` when `pg_dump`, `restic backup` **and**
+`restic forget --prune` all succeeded.
+
+> Because the backup service is enabled by a profile, Compose cannot fail closed
+> on its variables the way it does for `SESSION_SECRET` and friends — it
+> interpolates the file before it applies profiles, so a `:?` default would
+> break stacks that never enable backups. The check therefore lives in
+> `backup.sh`, which refuses to start when the configuration is incomplete.
+
+### Networking
+
+The service joins `backend` (to reach Postgres) and a dedicated `egress`
+network for the S3 endpoint. It deliberately does **not** join `edge`: that
+subnet is what the app trusts for `X-Forwarded-*` headers, and a backup job has
+no business being in it. Postgres itself stays internal-only, as before.
+
+`restic` is installed from the Alpine community repository at container start
+rather than baked into a second published image — so the container needs
+outbound access to the Alpine mirrors at start-up as well as to your S3
+endpoint. If it can't reach them it says so and exits (`could not install
+restic`); pin `BACKUP_RESTIC_VERSION` if you need a reproducible version.
+
+### Restoring
+
+See the runbook: **[Restore PostgreSQL from backup](docs/runbooks/restore-postgres.md)**.
+Backups you have never restored are a hypothesis, not a backup — rehearse it.
+
+---
+
 ## Metrics & monitoring
 
 The app exposes Prometheus metrics at `GET /metrics` on its own listener (`:8080`), in the standard Prometheus text format. The endpoint is mounted only when the metrics collector is wired (the default for the server binary).
@@ -362,7 +467,7 @@ actually does (not just what the spec aspires to):
 
 - [Post / retire an outage announcement](docs/runbooks/outage-announcement.md)
 - [Add / edit / remove a catalog service (form + MCP)](docs/runbooks/manage-service.md)
-- [Restore PostgreSQL from backup](docs/runbooks/restore-postgres.md)
+- [Restore PostgreSQL from backup](docs/runbooks/restore-postgres.md) (see also [Backups](#backups) for the scheduled job)
 - [Revoke a compromised admin](docs/runbooks/revoke-admin.md)
 
 ---

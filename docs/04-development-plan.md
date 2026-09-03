@@ -146,7 +146,9 @@ Caddy, take `PUBLIC_URL` from config for OIDC redirects and `Secure` cookies.
 - **Data hygiene:** scheduled rollup of `click_events` → `usage_daily`; purge raw events past the
   retention window (concept §8.9); keep aggregates. Coordinate the privacy notice with the DSB.
 - **Backups:** regular Postgres backups + a tested restore. The catalog and favorites are the
-  irreplaceable data.
+  irreplaceable data. **Shipped:** the opt-in `backup` service in `compose.prod.yaml`
+  (`--profile backup`) dumps with `pg_dump -Fc` and pushes to a restic/S3 repository with a
+  `restic forget --prune` retention policy — see README → Backups and the restore runbook.
 - **Dependencies:** Dependabot/Renovate for Go modules and npm; pin and review. Keep Go and Node LTS current.
 - **Runbooks:** (1) [post an outage announcement](runbooks/outage-announcement.md);
   (2) [add/remove a service via form and via MCP](runbooks/manage-service.md);
