@@ -158,6 +158,7 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 			}
 			pr.With(requireUserJSON).Post("/api/favorites/items", addFavorite(deps.Favorites))
 			pr.With(requireUserJSON).Delete("/api/favorites/items", removeFavorite(deps.Favorites))
+			pr.With(requireUserJSON).Put("/api/favorites/order", setFavoritesOrder(deps.Favorites))
 		}
 		if deps.Usage != nil {
 			pr.With(requireUserJSON).Post("/api/events/click", recordClick(deps.Usage, deps.Catalog, deps.Metrics))

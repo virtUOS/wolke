@@ -35,10 +35,13 @@ type Prefs struct {
 }
 
 var (
-	validThemes          = map[string]bool{"light": true, "dark": true, "system": true}
-	validViewModes       = map[string]bool{"list": true, "table": true, "auto": true}
-	validLocales         = map[string]bool{"auto": true, "de": true, "en": true}
-	validFavoritesOrders = map[string]bool{"usage": true, "alpha": true}
+	validThemes    = map[string]bool{"light": true, "dark": true, "system": true}
+	validViewModes = map[string]bool{"list": true, "table": true, "auto": true}
+	validLocales   = map[string]bool{"auto": true, "de": true, "en": true}
+	// 'manual' is the user's own arrangement, stored in favorites.sort
+	// (issue #125). Keep in sync with the users_favorites_order_check
+	// constraint (migration 00002).
+	validFavoritesOrders = map[string]bool{"usage": true, "alpha": true, FavoritesOrderManual: true}
 )
 
 // UpdatePrefs validates and persists a user's display preferences. Validation
@@ -55,7 +58,7 @@ func UpdatePrefs(ctx context.Context, db PrefsStore, userID pgtype.UUID, p Prefs
 		return store.User{}, &ValidationError{Field: "locale", Msg: "must be one of auto, de, en"}
 	}
 	if !validFavoritesOrders[p.FavoritesOrder] {
-		return store.User{}, &ValidationError{Field: "favorites_order", Msg: "must be one of usage, alpha"}
+		return store.User{}, &ValidationError{Field: "favorites_order", Msg: "must be one of usage, alpha, manual"}
 	}
 	return db.UpdateUserPrefs(ctx, store.UpdateUserPrefsParams{
 		ID:                   userID,

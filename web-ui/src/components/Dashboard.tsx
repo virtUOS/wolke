@@ -13,6 +13,7 @@ import {
   useDebouncedValue,
   useFavoriteActions,
   useFavorites,
+  useFavoritesOrderMutation,
   usePrefersDark,
   usePrefsMutation,
   useResultAnnouncement,
@@ -25,6 +26,7 @@ import { AssistantWidget } from './AssistantWidget'
 import { PwaInstallHint } from './PwaInstallHint'
 import { CatalogView } from './CatalogView'
 import { DashboardShell } from './DashboardShell'
+import { FavoritesArrange, FavoritesOrderBar } from './FavoritesOrder'
 import { Greeting } from './Greeting'
 import { type TileActions } from './Tile'
 import { type Tab } from './TopBar'
@@ -119,6 +121,12 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const catalog = useCatalog()
   const favorites = useFavorites()
   const fav = useFavoriteActions()
+  const favOrder = useFavoritesOrderMutation()
+  // The user asked for the arrange edit mode. Whether it is actually *open* is
+  // derived below rather than corrected in an effect: it only exists in manual
+  // mode and only with something to arrange, so leaving the mode (or
+  // un-starring the last favorite) closes it without a second state to sync.
+  const [arrangeRequested, setArrangeRequested] = useState(false)
 
   // View invariants, enforced during render (the repo's adjust-during-render
   // pattern — the lint rule forbids sync setState in effects). All corrections
@@ -244,6 +252,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   )
 
   const favCount = favoriteServices.length
+  const arranging = arrangeRequested && me.favorites_order === 'manual' && favCount > 0
   const firstName = me.display_name.split(' ')[0]
 
   const adminOpen = view.admin && me.is_admin
@@ -397,6 +406,21 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         </div>
       )}
 
+      {/* Favorites order: the selector makes usage/alpha discoverable (they
+          weren't) and manual reachable, and it owns the Anordnen edit mode
+          (issue #125). Hidden while searching — a search is global, so it is
+          not the favorites list being ordered. */}
+      {!searching && tab === 'favoriten' && (
+        <FavoritesOrderBar
+          locale={locale}
+          order={me.favorites_order}
+          onSetOrder={(next) => prefs.mutate({ favorites_order: next })}
+          arranging={arranging}
+          onToggleArrange={() => setArrangeRequested((open) => !open)}
+          canArrange={favCount > 0}
+        />
+      )}
+
       {/* Polite live region: announces the result count when a search/filter/tab
           change alters what's shown, then goes quiet again — see
           useResultAnnouncement. Silent on first render. */}
@@ -408,14 +432,22 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           active tab/filter. Favorites render their own list; everything else
           needs the catalog. */}
       {!searching && tab === 'favoriten' ? (
-        <CatalogView
-          services={results}
-          categories={allCategories}
-          locale={locale}
-          layout={layout}
-          actions={actions}
-          emptyMessage={tr.dash.favEmpty}
-        />
+        arranging ? (
+          <FavoritesArrange
+            services={favoriteServices}
+            locale={locale}
+            onReorder={(serviceIDs) => favOrder.mutate(serviceIDs)}
+          />
+        ) : (
+          <CatalogView
+            services={results}
+            categories={allCategories}
+            locale={locale}
+            layout={layout}
+            actions={actions}
+            emptyMessage={tr.dash.favEmpty}
+          />
+        )
       ) : searchFailed ? (
         <p style={{ fontSize: 14, color: 'var(--danger)' }} role="alert">{tr.dash.searchError}</p>
       ) : searchPending ? (

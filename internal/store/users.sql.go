@@ -12,7 +12,7 @@ import (
 )
 
 const getUserByID = `-- name: GetUserByID :one
-select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale from users where id = $1
+select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded from users where id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -33,12 +33,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 		&i.FavoritesSeparateTab,
 		&i.FavoritesSeeded,
 		&i.Locale,
+		&i.FavoritesManualSeeded,
 	)
 	return i, err
 }
 
 const getUserBySub = `-- name: GetUserBySub :one
-select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale from users where oidc_sub = $1
+select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded from users where oidc_sub = $1
 `
 
 func (q *Queries) GetUserBySub(ctx context.Context, oidcSub string) (User, error) {
@@ -59,6 +60,7 @@ func (q *Queries) GetUserBySub(ctx context.Context, oidcSub string) (User, error
 		&i.FavoritesSeparateTab,
 		&i.FavoritesSeeded,
 		&i.Locale,
+		&i.FavoritesManualSeeded,
 	)
 	return i, err
 }
@@ -71,7 +73,7 @@ set view_mode              = $1,
     favorites_order        = $4,
     favorites_separate_tab = $5
 where id = $6
-returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale
+returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded
 `
 
 type UpdateUserPrefsParams struct {
@@ -109,6 +111,7 @@ func (q *Queries) UpdateUserPrefs(ctx context.Context, arg UpdateUserPrefsParams
 		&i.FavoritesSeparateTab,
 		&i.FavoritesSeeded,
 		&i.Locale,
+		&i.FavoritesManualSeeded,
 	)
 	return i, err
 }
@@ -122,7 +125,7 @@ set display_name = excluded.display_name,
     primary_role = excluded.primary_role,
     is_admin     = excluded.is_admin,
     last_seen_at = now()
-returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale
+returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded
 `
 
 type UpsertUserParams struct {
@@ -160,6 +163,7 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		&i.FavoritesSeparateTab,
 		&i.FavoritesSeeded,
 		&i.Locale,
+		&i.FavoritesManualSeeded,
 	)
 	return i, err
 }

@@ -101,6 +101,20 @@ const de = {
     searching: 'Suchen…',
     searchError: 'Suche momentan nicht verfügbar. Bitte erneut versuchen.',
     resultCount: (n: number) => `${n} ${n === 1 ? 'Dienst' : 'Dienste'}`,
+    // Favoriten-Reihenfolge (Issue #125). „Eigene Reihenfolge" schaltet den
+    // Anordnen-Modus frei; sortiert wird ausschließlich per Tastendruck.
+    favOrder: 'Reihenfolge',
+    favOrderUsage: 'Häufig genutzt',
+    favOrderAlpha: 'Alphabetisch',
+    favOrderManual: 'Eigene Reihenfolge',
+    favArrange: 'Anordnen',
+    favArrangeDone: 'Fertig',
+    favArrangeHint: 'Verschiebe Favoriten mit den Pfeiltasten-Schaltflächen.',
+    favMoveUp: 'Nach oben',
+    favMoveDown: 'Nach unten',
+    favMoveTop: 'An den Anfang',
+    favMoved: (name: string, position: number, total: number) =>
+      `${name} an Position ${position} von ${total}`,
   },
   tile: {
     open: (name: string, docsOnly: boolean) => (docsOnly ? `${name} – Dokumentation öffnen` : `${name} öffnen`),
@@ -310,6 +324,17 @@ const en: Strings = {
     searching: 'Searching…',
     searchError: 'Search is temporarily unavailable. Please try again.',
     resultCount: (n: number) => `${n} ${n === 1 ? 'service' : 'services'}`,
+    favOrder: 'Order',
+    favOrderUsage: 'Most used',
+    favOrderAlpha: 'Alphabetical',
+    favOrderManual: 'Custom order',
+    favArrange: 'Arrange',
+    favArrangeDone: 'Done',
+    favArrangeHint: 'Move favorites with the arrow buttons.',
+    favMoveUp: 'Move up',
+    favMoveDown: 'Move down',
+    favMoveTop: 'Move to top',
+    favMoved: (name: string, position: number, total: number) => `${name} at position ${position} of ${total}`,
   },
   tile: {
     open: (name: string, docsOnly: boolean) => (docsOnly ? `${name} – open documentation` : `Open ${name}`),

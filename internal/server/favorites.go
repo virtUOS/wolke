@@ -68,6 +68,38 @@ func removeFavorite(db service.FavoritesStore) http.HandlerFunc {
 	}
 }
 
+// setFavoritesOrder handles PUT /api/favorites/order: the whole ordered list of
+// the caller's favorites, written to favorites.sort (issue #125). A whole-list
+// write rather than a move-one-step call, so a client and the server can never
+// end up with two different notions of the order; sending the same list twice
+// is a no-op. Validation (permutation, no duplicates) lives in internal/service.
+func setFavoritesOrder(db service.FavoritesStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, _ := userFromContext(r.Context())
+		var body struct {
+			ServiceIDs []string `json:"service_ids"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
+			return
+		}
+		ids := make([]pgtype.UUID, 0, len(body.ServiceIDs))
+		for _, s := range body.ServiceIDs {
+			id, ok := parseUUID(s)
+			if !ok {
+				httpx.WriteProblem(w, http.StatusBadRequest, "invalid_id", "Invalid service id in list.")
+				return
+			}
+			ids = append(ids, id)
+		}
+		if err := service.SetFavoritesOrder(r.Context(), db, user.ID, ids); err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 // decodeServiceID reads {service_id} from the body and parses it, writing the
 // error response itself on failure.
 func decodeServiceID(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool) {

@@ -12,8 +12,11 @@ import (
 )
 
 const addFavorite = `-- name: AddFavorite :exec
-insert into favorites (user_id, service_id, sort)
-values ($1, $2, $3)
+insert into favorites (user_id, service_id, sort, manual_sort)
+values (
+    $1, $2, $3,
+    (select coalesce(max(f.manual_sort) + 1, 0) from favorites f where f.user_id = $1)
+)
 on conflict (user_id, service_id) do nothing
 `
 
@@ -23,9 +26,43 @@ type AddFavoriteParams struct {
 	Sort      int32       `json:"sort"`
 }
 
+// manual_sort is computed here rather than passed in: a favorite starred while
+// the user is in manual mode has to land at the end of *their* arrangement,
+// which is a different sequence from `sort` (issue #125).
 func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) error {
 	_, err := q.db.Exec(ctx, addFavorite, arg.UserID, arg.ServiceID, arg.Sort)
 	return err
+}
+
+const listActiveFavoriteIDs = `-- name: ListActiveFavoriteIDs :many
+select f.service_id
+from favorites f
+join services s on s.id = f.service_id
+where f.user_id = $1 and s.is_active = true
+`
+
+// The favorites the API actually exposes: /api/favorites resolves ids through
+// the catalog snapshot, which holds active services only, so this is the set a
+// manual-order write has to be a permutation of. A favorite whose service was
+// soft-deleted keeps its row (and its sort) and simply isn't part of that set.
+func (q *Queries) ListActiveFavoriteIDs(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listActiveFavoriteIDs, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var service_id pgtype.UUID
+		if err := rows.Scan(&service_id); err != nil {
+			return nil, err
+		}
+		items = append(items, service_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listFavoritesAlpha = `-- name: ListFavoritesAlpha :many
@@ -92,6 +129,45 @@ func (q *Queries) ListFavoritesByUsage(ctx context.Context, userID pgtype.UUID) 
 	return items, nil
 }
 
+const listFavoritesManual = `-- name: ListFavoritesManual :many
+select f.service_id
+from favorites f
+where f.user_id = $1
+order by f.manual_sort, f.created_at
+`
+
+// Favorites in the order the user arranged them (favorites_order = 'manual').
+// created_at is the tiebreaker for rows that still share a manual_sort, which
+// is only the case before the one-time seeding below has run.
+func (q *Queries) ListFavoritesManual(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listFavoritesManual, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.UUID{}
+	for rows.Next() {
+		var service_id pgtype.UUID
+		if err := rows.Scan(&service_id); err != nil {
+			return nil, err
+		}
+		items = append(items, service_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markFavoritesManualSeeded = `-- name: MarkFavoritesManualSeeded :exec
+update users set favorites_manual_seeded = true where id = $1
+`
+
+func (q *Queries) MarkFavoritesManualSeeded(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markFavoritesManualSeeded, userID)
+	return err
+}
+
 const markFavoritesSeeded = `-- name: MarkFavoritesSeeded :exec
 update users set favorites_seeded = true where id = $1
 `
@@ -148,4 +224,55 @@ type SeedFavoritesFromRoleDefaultsParams struct {
 func (q *Queries) SeedFavoritesFromRoleDefaults(ctx context.Context, arg SeedFavoritesFromRoleDefaultsParams) error {
 	_, err := q.db.Exec(ctx, seedFavoritesFromRoleDefaults, arg.UserID, arg.Role)
 	return err
+}
+
+const seedManualFavoritesOrder = `-- name: SeedManualFavoritesOrder :exec
+update favorites f
+set manual_sort = ranked.rn
+from (
+    select f2.service_id,
+           (row_number() over (order by coalesce(cc.c, 0) desc, f2.sort, f2.created_at) - 1)::int as rn
+    from favorites f2
+    left join (
+        select click_events.service_id, count(*) as c
+        from click_events
+        where click_events.user_id = $1
+        group by click_events.service_id
+    ) cc on cc.service_id = f2.service_id
+    where f2.user_id = $1
+) ranked
+where f.user_id = $1 and f.service_id = ranked.service_id
+`
+
+// One-time initialization of the manual order: number manual_sort to the order
+// the user currently sees in usage mode, so switching to manual starts from
+// what they effectively have (issue #125). The ranking deliberately mirrors
+// ListFavoritesByUsage above — the two must not drift.
+func (q *Queries) SeedManualFavoritesOrder(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, seedManualFavoritesOrder, userID)
+	return err
+}
+
+const setFavoritesOrder = `-- name: SetFavoritesOrder :execrows
+update favorites f
+set manual_sort = (o.ord - 1)::int
+from unnest($2::uuid[]) with ordinality as o (service_id, ord)
+where f.user_id = $1 and f.service_id = o.service_id
+`
+
+type SetFavoritesOrderParams struct {
+	UserID     pgtype.UUID   `json:"user_id"`
+	ServiceIds []pgtype.UUID `json:"service_ids"`
+}
+
+// Whole-list manual order write: one statement, so the renumbering is atomic
+// without a transaction. `with ordinality` numbers the incoming array, and the
+// join means an id that is not the caller's favorite updates nothing — the
+// service layer has already rejected that case, this is just the second lock.
+func (q *Queries) SetFavoritesOrder(ctx context.Context, arg SetFavoritesOrderParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setFavoritesOrder, arg.UserID, arg.ServiceIds)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

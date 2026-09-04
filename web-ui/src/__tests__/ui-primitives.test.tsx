@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { IconButton } from '@/components/ui/icon-button'
 import { Input } from '@/components/ui/input'
+import { OptionGroup } from '@/components/ui/option-group'
 import { PillButton } from '@/components/ui/pill-button'
 import { ChoiceChip } from '@/components/ui/choice-chip'
 import { Select } from '@/components/ui/select'
@@ -102,6 +103,20 @@ describe('interactive primitives carry the phone touch floor (issue #101)', () =
       floor: /\bh-11 w-11\b/,
     },
     { name: 'PillButton', render: () => render(<PillButton>Alle</PillButton>), role: 'button', floor: /\bmin-h-11\b/ },
+    {
+      name: 'OptionGroup option',
+      render: () =>
+        render(
+          <OptionGroup
+            label="Reihenfolge"
+            value="usage"
+            onChange={() => {}}
+            options={[['usage', 'Häufig genutzt']] as const}
+          />,
+        ),
+      role: 'button',
+      floor: /\bmin-h-11\b/,
+    },
     { name: 'Input', render: () => render(<Input aria-label="x" />), role: 'textbox', floor: /\bmin-h-11\b/ },
     { name: 'Select', render: () => render(<Select aria-label="x" />), role: 'combobox', floor: /\bh-11\b/ },
     { name: 'Textarea', render: () => render(<Textarea aria-label="x" />), role: 'textbox', floor: /\bmin-h-11\b/ },

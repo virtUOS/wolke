@@ -11,6 +11,9 @@ import (
 )
 
 type Querier interface {
+	// manual_sort is computed here rather than passed in: a favorite starred while
+	// the user is in manual mode has to land at the end of *their* arrangement,
+	// which is a different sequence from `sort` (issue #125).
 	AddFavorite(ctx context.Context, arg AddFavoriteParams) error
 	AddRoleDefault(ctx context.Context, arg AddRoleDefaultParams) error
 	AddServiceCategory(ctx context.Context, arg AddServiceCategoryParams) error
@@ -63,6 +66,11 @@ type Querier interface {
 	// Active = within its time window, addressed to the user's role (or all), and
 	// not already dismissed by the user, most-severe first (docs/01 §4.7).
 	ListActiveAnnouncements(ctx context.Context, arg ListActiveAnnouncementsParams) ([]Announcement, error)
+	// The favorites the API actually exposes: /api/favorites resolves ids through
+	// the catalog snapshot, which holds active services only, so this is the set a
+	// manual-order write has to be a permutation of. A favorite whose service was
+	// soft-deleted keeps its row (and its sort) and simply isn't part of that set.
+	ListActiveFavoriteIDs(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
 	// (service_id, category slug) pairs for active services, to assemble the
 	// many-to-many in Go when building the catalog snapshot.
 	ListActiveServiceCategories(ctx context.Context) ([]ListActiveServiceCategoriesRow, error)
@@ -86,10 +94,15 @@ type Querier interface {
 	// Favorites ordered by the user's click count (most-used first), then by the
 	// stored order as a stable tiebreaker.
 	ListFavoritesByUsage(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
+	// Favorites in the order the user arranged them (favorites_order = 'manual').
+	// created_at is the tiebreaker for rows that still share a manual_sort, which
+	// is only the case before the one-time seeding below has run.
+	ListFavoritesManual(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
 	ListServiceCategorySlugs(ctx context.Context, serviceID pgtype.UUID) ([]string, error)
 	// Most-searched queries that returned nothing within the last @days days — the
 	// admin worklist for adding keywords (docs/01 §4.6). Aggregate-only.
 	ListZeroResultSearches(ctx context.Context, arg ListZeroResultSearchesParams) ([]ListZeroResultSearchesRow, error)
+	MarkFavoritesManualSeeded(ctx context.Context, userID pgtype.UUID) error
 	MarkFavoritesSeeded(ctx context.Context, userID pgtype.UUID) error
 	NextFavoriteSort(ctx context.Context, userID pgtype.UUID) (int32, error)
 	// Permanently delete expired announcements that started before the retention
@@ -129,6 +142,16 @@ type Querier interface {
 	// One-time pre-fill: copy the user's role defaults into favorites as real,
 	// editable entries (concept §4.4).
 	SeedFavoritesFromRoleDefaults(ctx context.Context, arg SeedFavoritesFromRoleDefaultsParams) error
+	// One-time initialization of the manual order: number manual_sort to the order
+	// the user currently sees in usage mode, so switching to manual starts from
+	// what they effectively have (issue #125). The ranking deliberately mirrors
+	// ListFavoritesByUsage above — the two must not drift.
+	SeedManualFavoritesOrder(ctx context.Context, userID pgtype.UUID) error
+	// Whole-list manual order write: one statement, so the renumbering is atomic
+	// without a transaction. `with ordinality` numbers the incoming array, and the
+	// join means an id that is not the caller's favorite updates nothing — the
+	// service layer has already rejected that case, this is just the second lock.
+	SetFavoritesOrder(ctx context.Context, arg SetFavoritesOrderParams) (int64, error)
 	SoftDeleteService(ctx context.Context, id pgtype.UUID) (int64, error)
 	UpdateAnnouncement(ctx context.Context, arg UpdateAnnouncementParams) (Announcement, error)
 	UpdateService(ctx context.Context, arg UpdateServiceParams) (Service, error)
