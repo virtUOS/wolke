@@ -93,11 +93,19 @@ user's favorited services, grouped by category, alongside the "frequently used" 
 
 The list's order is the user's choice, persisted as a pref so it follows them across devices:
 **häufig genutzt** (default — derived from their click counts), **alphabetisch**, or **eigene
-Reihenfolge**. The last one reveals an explicit "Anordnen" mode in which each favorite carries
-▲ / ▼ / "an den Anfang" buttons. Switching to it starts from the order the user effectively had
-(their usage order), so they adjust rather than build from scratch; a newly starred service appends
-at the end. The two computed orders are never affected by a stored arrangement, and switching away
-from manual and back never loses it.
+Reihenfolge**. It is chosen from a compact trigger beside the "Favoriten" heading that shows the
+active order and opens a small panel holding the three as a radio group — a popover on a pointer
+layout, a bottom sheet on a phone. Picking one applies immediately; there is no confirm step.
+
+**Eigene Reihenfolge** reveals an "Anordnen" button inside that panel, and it alone leads to the
+explicit arrange mode, where each favorite carries ▲ / ▼ / "an den Anfang" buttons under its own
+*Abbrechen · Anordnen · Fertig* bar (no drag & drop — buttons are what make reordering work on
+touch, by keyboard and with a screen reader). "Abbrechen" restores the arrangement the mode was
+entered with; every move is written through as it happens, so there is no draft to lose.
+Switching to manual starts from the order the user effectively had (their usage order), so they
+adjust rather than build from scratch; a newly starred service appends at the end. The two
+computed orders are never affected by a stored arrangement, and switching away from manual and
+back never loses it.
 
 > **Decision (supersedes the earlier Figma mockup):** the named-lists idea ("Täglicher Gebrauch",
 > "+ Neue Liste", a default list, add-to-list dialog) was dropped. Keep favorites a single flat set.

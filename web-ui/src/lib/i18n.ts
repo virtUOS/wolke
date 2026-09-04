@@ -109,7 +109,12 @@ const de = {
     favOrderManual: 'Eigene Reihenfolge',
     favArrange: 'Anordnen',
     favArrangeDone: 'Fertig',
+    favArrangeCancel: 'Abbrechen',
     favArrangeHint: 'Verschiebe Favoriten mit den Pfeiltasten-Schaltflächen.',
+    // Sichtbares Label des Sortier-Auslösers ist die aktive Reihenfolge; der
+    // zugängliche Name nennt zusätzlich, worum es geht (und enthält den
+    // sichtbaren Text, „label in name").
+    favOrderTrigger: (active: string) => `Reihenfolge: ${active}`,
     favMoveUp: 'Nach oben',
     favMoveDown: 'Nach unten',
     favMoveTop: 'An den Anfang',
@@ -330,7 +335,9 @@ const en: Strings = {
     favOrderManual: 'Custom order',
     favArrange: 'Arrange',
     favArrangeDone: 'Done',
+    favArrangeCancel: 'Cancel',
     favArrangeHint: 'Move favorites with the arrow buttons.',
+    favOrderTrigger: (active: string) => `Order: ${active}`,
     favMoveUp: 'Move up',
     favMoveDown: 'Move down',
     favMoveTop: 'Move to top',

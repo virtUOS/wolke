@@ -1,8 +1,13 @@
-// Issue #125: the favorites order selector and the "Anordnen" edit mode, at
-// every resolution in the matrix (docs/specs/responsive-viewport-testing.md).
-// The edit mode is three 44px targets plus a service name per row, which is the
-// exact shape that overflows a 324px phone — hence the full matrix, and hence
-// the explicit touch-target measurements below.
+// Issue #125: the favorites sort menu and the "Anordnen" edit mode, at every
+// resolution in the matrix (docs/specs/responsive-viewport-testing.md).
+//
+// The order now lives behind a compact trigger beside the "Favoriten" heading:
+// a popover from the md: breakpoint up, a bottom sheet below it. Both open
+// states are asserted healthy at every resolution — a panel that opens is a
+// layout state like any other, and the sheet in particular is new geometry at
+// the narrowest widths. The edit mode is three 44px targets plus a service name
+// per row, which is the exact shape that overflows a 324px phone — hence the
+// full matrix, and hence the explicit touch-target measurements below.
 //
 // Writes are stubbed, for the reason account-menu.spec.ts stubs prefs: the mock
 // IdP maps every viewport project onto the same test user, so six workers share
@@ -82,32 +87,110 @@ async function arrangedNames(page: Page): Promise<string[]> {
   return (await rows.allInnerTexts()).map((t) => t.replace(/^\d+\.\s*/, '').split('\n')[0].trim())
 }
 
+/** The sort trigger. Its accessible name carries the order it currently shows. */
+function sortTrigger(page: Page, active: string): Locator {
+  return page.getByRole('button', { name: `Reihenfolge: ${active}` })
+}
+
+/**
+ * Opens the sort menu and returns its panel. The popover and the sheet are the
+ * same dialog to a user (and to a screen reader): one named "Reihenfolge" that
+ * holds the radio group — so every assertion below reads identically at both
+ * layouts, which is the point of the shared contract.
+ */
+async function openSortMenu(page: Page, active: string): Promise<Locator> {
+  await sortTrigger(page, active).click()
+  const panel = page.getByRole('dialog', { name: 'Reihenfolge' })
+  await expect(panel).toBeVisible()
+  return panel
+}
+
+/** The three orders as (radio value, visible label). */
+const ORDER_OPTIONS = [
+  ['usage', 'Häufig genutzt'],
+  ['alpha', 'Alphabetisch'],
+  ['manual', 'Eigene Reihenfolge'],
+] as const
+
+/**
+ * A radio's row. The radio itself is sr-only (the platform control inside its
+ * own label, the ChoiceChip idiom), so the <label> is both the hit area and
+ * what a user actually clicks — never the inner text span, which is only as
+ * tall as the text.
+ */
+function orderRow(panel: Locator, value: string): Locator {
+  return panel.locator(`label:has(input[value="${value}"])`)
+}
+
+async function pickOrder(panel: Locator, value: string, label: string) {
+  await orderRow(panel, value).click()
+  await expect(panel.getByRole('radio', { name: label })).toBeChecked()
+}
+
 async function openFavorites(page: Page) {
   await gotoApp(page)
   await page.getByRole('button', { name: 'Favoriten', exact: true }).first().click()
-  await expect(page.getByRole('group', { name: 'Reihenfolge' })).toBeVisible()
+  // 'usage' is the default the server ships; nothing has been written yet.
+  await expect(sortTrigger(page, 'Häufig genutzt')).toBeVisible()
 }
 
-test('the order selector offers the three modes and stays inside the viewport', async ({ page }, testInfo) => {
+test('the sort menu offers the three modes and stays inside the viewport', async ({ page }, testInfo) => {
   const isMobile = testInfo.project.use.isMobile === true
   await stubPrefs(page)
   await stubFavorites(page)
   await openFavorites(page)
 
-  const group = page.getByRole('group', { name: 'Reihenfolge' })
-  for (const label of ['Häufig genutzt', 'Alphabetisch', 'Eigene Reihenfolge']) {
-    const option = group.getByRole('button', { name: label, exact: true })
-    await expect(option).toBeVisible()
-    await expectTouchTarget(option, isMobile, `order option ${label}`)
-  }
-  // 'usage' is the default the server ships; nothing has been written yet.
-  await expect(group.getByRole('button', { name: 'Häufig genutzt' })).toHaveAttribute('aria-pressed', 'true')
-  await expectViewportHealthy(page, { isMobile, label: 'favorites order selector' })
+  // The trigger is a real touch target at phone widths and shows the active
+  // order as its visible label (the design's icon-only variant was rejected).
+  const trigger = sortTrigger(page, 'Häufig genutzt')
+  await expect(trigger).toHaveText(/Häufig genutzt/)
+  await expectTouchTarget(trigger, isMobile, 'sort trigger')
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  await expectViewportHealthy(page, { isMobile, label: 'favorites heading with the sort trigger' })
 
-  // Alphabetical is a computed mode: no edit mode is offered for it.
-  await group.getByRole('button', { name: 'Alphabetisch' }).click()
-  await expect(group.getByRole('button', { name: 'Alphabetisch' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('button', { name: 'Anordnen' })).toHaveCount(0)
+  const panel = await openSortMenu(page, 'Häufig genutzt')
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  const group = panel.getByRole('radiogroup', { name: 'Reihenfolge' })
+  for (const [value, label] of ORDER_OPTIONS) {
+    await expect(group.getByRole('radio', { name: label })).toBeAttached()
+    // The sr-only radio's hit area is its label, so that is what gets measured.
+    await expectTouchTarget(orderRow(panel, value), isMobile, `order option ${label}`)
+  }
+  await expect(group.getByRole('radio', { name: 'Häufig genutzt' })).toBeChecked()
+  // The open panel is a layout state: sheet at phone widths, popover above.
+  await expectViewportHealthy(page, { isMobile, label: 'favorites sort menu, open' })
+
+  // Alphabetical is a computed mode: no edit mode is offered for it, and the
+  // pick applies immediately with the panel still open.
+  await pickOrder(panel, 'alpha', 'Alphabetisch')
+  await expect(panel.getByRole('button', { name: 'Anordnen' })).toHaveCount(0)
+  await expect(sortTrigger(page, 'Alphabetisch')).toBeVisible()
+})
+
+test('the sort menu is keyboard-operable and closes with a named control', async ({ page }, testInfo) => {
+  const isMobile = testInfo.project.use.isMobile === true
+  await stubPrefs(page)
+  await stubFavorites(page)
+  await openFavorites(page)
+
+  const panel = await openSortMenu(page, 'Häufig genutzt')
+  // Arrow keys move *and* select: real radios, not buttons pretending to be.
+  await panel.getByRole('radio', { name: 'Häufig genutzt' }).focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(panel.getByRole('radio', { name: 'Alphabetisch' })).toBeChecked()
+
+  if (isMobile) {
+    // A phone has no Escape key and a scrim tap has no accessible name, so the
+    // sheet must carry a focusable, named way out (the drag handle).
+    const close = panel.getByRole('button', { name: 'Schließen' })
+    await expectTouchTarget(close, isMobile, 'sheet close control')
+    await close.click()
+  } else {
+    await page.keyboard.press('Escape')
+    // Focus returns to the trigger — the panel was a focus-managed disclosure.
+    await expect(sortTrigger(page, 'Alphabetisch')).toBeFocused()
+  }
+  await expect(page.getByRole('dialog', { name: 'Reihenfolge' })).toHaveCount(0)
 })
 
 test('the first switch to manual starts from the usage order', async ({ page }, testInfo) => {
@@ -122,16 +205,20 @@ test('the first switch to manual starts from the usage order', async ({ page }, 
   const usageOrder = favorites.order()
   expect(usageOrder.length).toBeGreaterThan(1)
 
-  const group = page.getByRole('group', { name: 'Reihenfolge' })
-  await group.getByRole('button', { name: 'Eigene Reihenfolge' }).click()
-  await expect(group.getByRole('button', { name: 'Eigene Reihenfolge' })).toHaveAttribute('aria-pressed', 'true')
+  const panel = await openSortMenu(page, 'Häufig genutzt')
+  await pickOrder(panel, 'manual', 'Eigene Reihenfolge')
+  // "Anordnen" appears only once a manual order is what is being shown.
+  const arrange = panel.getByRole('button', { name: 'Anordnen' })
+  await expect(arrange).toBeVisible()
+  await expectTouchTarget(arrange, isMobile, 'Anordnen')
+  await expectViewportHealthy(page, { isMobile, label: 'favorites sort menu, manual order' })
 
   // Entering the edit mode shows the same sequence the user just had — the
   // seeded-from-usage promise. (The server-side seeding of manual_sort itself is
   // asserted against a real database in internal/server's integration test;
   // here the writes are stubbed, so what this pins is that the UI does not
   // reshuffle the list on the way into the mode.)
-  await page.getByRole('button', { name: 'Anordnen' }).click()
+  await arrange.click()
   await expect.poll(() => arrangedNames(page)).toEqual(usageOrder)
   await expectViewportHealthy(page, { isMobile, label: 'favorites arrange mode' })
 })
@@ -142,8 +229,9 @@ test('reordering with the buttons is keyboard-operable and sends the whole list'
   const favorites = await stubFavorites(page)
   await openFavorites(page)
 
-  await page.getByRole('group', { name: 'Reihenfolge' }).getByRole('button', { name: 'Eigene Reihenfolge' }).click()
-  await page.getByRole('button', { name: 'Anordnen' }).click()
+  const panel = await openSortMenu(page, 'Häufig genutzt')
+  await pickOrder(panel, 'manual', 'Eigene Reihenfolge')
+  await panel.getByRole('button', { name: 'Anordnen' }).click()
 
   const before = await arrangedNames(page)
   expect(before.length).toBeGreaterThan(1)
@@ -190,7 +278,37 @@ test('reordering with the buttons is keyboard-operable and sends the whole list'
 
   await expectViewportHealthy(page, { isMobile, label: 'favorites arrange mode, after reordering' })
 
-  // Leaving the edit mode returns the normal favorites view.
+  // Leaving the edit mode through "Fertig" keeps the arrangement and returns
+  // the normal favorites view, with the trigger showing the manual order.
   await page.getByRole('button', { name: 'Fertig' }).click()
-  await expect(page.getByRole('button', { name: 'Anordnen' })).toBeVisible()
+  await expect(sortTrigger(page, 'Eigene Reihenfolge')).toBeVisible()
+  expect(favorites.order()[0]).toBe(first)
+})
+
+// "Abbrechen" is not a discarded draft — every move already wrote through — so
+// it restores the arrangement the screen was entered with, via the same write.
+test('Abbrechen restores the order the edit mode was entered with', async ({ page }, testInfo) => {
+  const isMobile = testInfo.project.use.isMobile === true
+  await stubPrefs(page)
+  const favorites = await stubFavorites(page)
+  await openFavorites(page)
+
+  const panel = await openSortMenu(page, 'Häufig genutzt')
+  await pickOrder(panel, 'manual', 'Eigene Reihenfolge')
+  await panel.getByRole('button', { name: 'Anordnen' }).click()
+
+  const before = await arrangedNames(page)
+  expect(before.length).toBeGreaterThan(1)
+
+  await page.getByRole('button', { name: `Nach unten – ${before[0]}` }).click()
+  await expect.poll(async () => (await arrangedNames(page)).slice(0, 2)).toEqual([before[1], before[0]])
+
+  const cancel = page.getByRole('button', { name: 'Abbrechen' })
+  await expectTouchTarget(cancel, isMobile, 'Abbrechen')
+  await cancel.click()
+
+  // Back on the favorites view, holding exactly what it held before — on the
+  // server, not just on screen.
+  await expect(sortTrigger(page, 'Eigene Reihenfolge')).toBeVisible()
+  await expect.poll(() => favorites.order()).toEqual(before)
 })

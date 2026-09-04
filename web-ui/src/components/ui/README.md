@@ -12,7 +12,10 @@ The set: `button`, `icon-button`, `pill-button`, `card`, `badge`, `input`, `labe
 `popover`. The interactive overlays
 (`dialog`, `popover`) are hand-rolled but implement the Radix behaviour set (focus trap/return,
 Escape + outside-click dismiss, ARIA) behind Radix-shaped APIs, so Radix can be swapped in later
-without touching callers. `select` is a styled native `<select>` and `list` is a styled `<ul>`
+without touching callers. `dialog` also does the phone-width bottom sheet (`variant="sheet"`),
+which keeps a *named* close control (its drag handle) because a scrim tap has no accessible name
+and a phone has no Escape key; `popover` takes either its built-in icon trigger or a
+caller-supplied button via `trigger` (Radix's `asChild` shape — the element must forward refs). `select` is a styled native `<select>` and `list` is a styled `<ul>`
 (not a `<table>`) — reach for richer primitives (Radix Select, a real Table) only when the data
 actually needs them.
 

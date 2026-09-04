@@ -26,7 +26,7 @@ import { AssistantWidget } from './AssistantWidget'
 import { PwaInstallHint } from './PwaInstallHint'
 import { CatalogView } from './CatalogView'
 import { DashboardShell } from './DashboardShell'
-import { FavoritesArrange, FavoritesOrderBar } from './FavoritesOrder'
+import { FavoritesArrange, FavoritesSortMenu } from './FavoritesOrder'
 import { Greeting } from './Greeting'
 import { type TileActions } from './Tile'
 import { type Tab } from './TopBar'
@@ -255,6 +255,22 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const arranging = arrangeRequested && me.favorites_order === 'manual' && favCount > 0
   const firstName = me.display_name.split(' ')[0]
 
+  // The sort trigger belongs to the favorites heading (issue #125): it makes
+  // usage/alpha discoverable and manual reachable, and it is what opens the
+  // Anordnen edit mode. Hidden while searching — a search is global, so it is
+  // not the favorites list being ordered.
+  const showSortMenu = !searching && tab === 'favoriten'
+  const sortMenu = showSortMenu && (
+    <FavoritesSortMenu
+      locale={locale}
+      order={me.favorites_order}
+      onSetOrder={(next) => prefs.mutate({ favorites_order: next })}
+      onArrange={() => setArrangeRequested(true)}
+      canArrange={favCount > 0}
+      isMobile={isMobile}
+    />
+  )
+
   const adminOpen = view.admin && me.is_admin
 
   const shellProps = {
@@ -327,46 +343,66 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         </div>
       )}
 
-      {/* Section head. Mobile is intentionally minimal — just the search box on
-          both tabs (no heading, no category chips); discovery relies on search.
-          Desktop keeps the heading + search and the category filters. */}
-      {isMobile ? (
-        <div style={{ marginBottom: 16 }}>
-          <SearchBox
-            value={query}
-            onChange={onSearch}
-            placeholder={tr.dash.searchPlaceholder}
-            label={tr.dash.searchLabel}
-            clearLabel={tr.dash.searchClear}
-            width="100%"
-          />
-        </div>
-      ) : (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 20,
-            marginBottom: 18,
-          }}
-        >
-          <h2
-            style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em', flexShrink: 0 }}
+      {/* Section head. Mobile is intentionally minimal — the search box, plus
+          (on the favorites tab) the heading row that carries the sort trigger;
+          no category chips, discovery relies on search. Desktop keeps the
+          heading + search and the category filters.
+
+          The arrange edit mode brings its own Abbrechen · Anordnen · Fertig
+          bar and owns the view while it is open, so the section head steps
+          aside rather than stacking a second header above it. */}
+      {!arranging &&
+        (isMobile ? (
+          <div style={{ marginBottom: 16 }}>
+            {showSortMenu && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <h2 className="m-0 min-w-0 truncate text-base font-medium text-text">{heading}</h2>
+                {sortMenu}
+              </div>
+            )}
+            <div style={{ marginTop: showSortMenu ? 14 : 0 }}>
+              <SearchBox
+                value={query}
+                onChange={onSearch}
+                placeholder={tr.dash.searchPlaceholder}
+                label={tr.dash.searchLabel}
+                clearLabel={tr.dash.searchClear}
+                width="100%"
+              />
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 20,
+              marginBottom: 18,
+            }}
           >
-            {heading}
-          </h2>
-          <SearchBox
-            value={query}
-            onChange={onSearch}
-            placeholder={tr.dash.searchPlaceholder}
-            label={tr.dash.searchLabel}
-            clearLabel={tr.dash.searchClear}
-            width={260}
-          />
-        </div>
-      )}
+            {/* Heading + sort trigger are one group: the trigger labels how
+                the list below it is ordered, so it belongs to the heading and
+                not to the search field on the other side of the row. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <h2
+                style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em', flexShrink: 0 }}
+              >
+                {heading}
+              </h2>
+              {sortMenu}
+            </div>
+            <SearchBox
+              value={query}
+              onChange={onSearch}
+              placeholder={tr.dash.searchPlaceholder}
+              label={tr.dash.searchLabel}
+              clearLabel={tr.dash.searchClear}
+              width={260}
+            />
+          </div>
+        ))}
 
       {/* Single-select filters: desktop only (mobile relies on search). Hidden
           while searching, since a search is global and deactivates filters.
@@ -406,21 +442,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         </div>
       )}
 
-      {/* Favorites order: the selector makes usage/alpha discoverable (they
-          weren't) and manual reachable, and it owns the Anordnen edit mode
-          (issue #125). Hidden while searching — a search is global, so it is
-          not the favorites list being ordered. */}
-      {!searching && tab === 'favoriten' && (
-        <FavoritesOrderBar
-          locale={locale}
-          order={me.favorites_order}
-          onSetOrder={(next) => prefs.mutate({ favorites_order: next })}
-          arranging={arranging}
-          onToggleArrange={() => setArrangeRequested((open) => !open)}
-          canArrange={favCount > 0}
-        />
-      )}
-
       {/* Polite live region: announces the result count when a search/filter/tab
           change alters what's shown, then goes quiet again — see
           useResultAnnouncement. Silent on first render. */}
@@ -437,6 +458,8 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             services={favoriteServices}
             locale={locale}
             onReorder={(serviceIDs) => favOrder.mutate(serviceIDs)}
+            onDone={() => setArrangeRequested(false)}
+            onCancel={() => setArrangeRequested(false)}
           />
         ) : (
           <CatalogView

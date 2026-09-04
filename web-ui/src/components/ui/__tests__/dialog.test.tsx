@@ -65,3 +65,54 @@ describe('Dialog', () => {
     expect(document.activeElement).toBe(trigger)
   })
 })
+
+// variant="sheet" — the phone-width bottom sheet. Same behaviour set as the
+// centred card; what it must not lose is a *named* way out: a scrim tap has no
+// accessible name and a phone has no Escape key, so the drag handle is a real
+// button carrying `closeLabel`.
+describe('Dialog variant="sheet"', () => {
+  function Sheet({ initial = true }: { initial?: boolean }) {
+    const [open, setOpen] = useState(initial)
+    return (
+      <>
+        <button onClick={() => setOpen(true)}>open</button>
+        <Dialog variant="sheet" open={open} onOpenChange={setOpen} title="Reihenfolge" closeLabel="Schließen">
+          <button>eine Option</button>
+        </Dialog>
+      </>
+    )
+  }
+
+  it('is a modal dialog named by its title', () => {
+    render(<Sheet />)
+    const sheet = screen.getByRole('dialog', { name: 'Reihenfolge' })
+    expect(sheet).toHaveAttribute('aria-modal', 'true')
+  })
+
+  it('closes through a labelled, focusable control rather than the scrim alone', async () => {
+    render(<Sheet />)
+    const close = screen.getByRole('button', { name: 'Schließen' })
+    close.focus()
+    expect(document.activeElement).toBe(close)
+    await userEvent.keyboard('{Enter}')
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('keeps the ✕ header out of the sheet but not the close affordance', () => {
+    render(<Sheet />)
+    const sheet = screen.getByRole('dialog')
+    // One way out, and it is the handle — not a second ✕ button in a header.
+    expect(sheet.querySelectorAll('svg')).toHaveLength(0)
+    expect(screen.getByRole('button', { name: 'Schließen' })).toBeInTheDocument()
+  })
+
+  it('still traps focus and restores it to the trigger', async () => {
+    render(<Sheet initial={false} />)
+    const trigger = screen.getByText('open')
+    trigger.focus()
+    await userEvent.click(trigger)
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true)
+    await userEvent.keyboard('{Escape}')
+    expect(document.activeElement).toBe(trigger)
+  })
+})

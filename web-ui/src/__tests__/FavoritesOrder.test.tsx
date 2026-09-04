@@ -3,11 +3,13 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { expectNoAxeViolations } from '@/test/axe'
 import type { FavoritesOrder, Service } from '@/lib/api'
-import { FavoritesArrange, FavoritesOrderBar } from '@/components/FavoritesOrder'
+import { FavoritesArrange, FavoritesSortMenu } from '@/components/FavoritesOrder'
 
-// Issue #125: the favorites order selector and the explicit "Anordnen" edit
-// mode. Both are prop-driven — the mutations live in Dashboard — so they can be
-// driven here without a QueryClient.
+// Issue #125: the favorites sort menu (the compact trigger beside the
+// "Favoriten" heading, opening a popover on desktop and a bottom sheet on a
+// phone) and the explicit "Anordnen" edit mode. Both are prop-driven — the
+// mutations live in Dashboard — so they can be driven here without a
+// QueryClient.
 //
 // Deliberately no drag & drop anywhere: the whole point of the feature is that
 // reordering is button-operable, which is also what makes it testable at this
@@ -35,37 +37,52 @@ const SERVICES: Service[] = [
 const names = () =>
   screen.getAllByRole('listitem').map((li) => li.textContent?.replace(/^\d+\.\s*/, '').trim() ?? '')
 
-/** The bar, with the order pref held locally so a click actually switches it. */
-function Bar({
+/** The menu, with the order pref held locally so a pick actually switches it. */
+function Menu({
   initial = 'usage',
   onSetOrder = () => {},
+  onArrange = () => {},
+  isMobile = false,
+  canArrange = true,
 }: {
   initial?: FavoritesOrder
   onSetOrder?: (next: FavoritesOrder) => void
+  onArrange?: () => void
+  isMobile?: boolean
+  canArrange?: boolean
 }) {
   const [order, setOrder] = useState<FavoritesOrder>(initial)
-  const [arranging, setArranging] = useState(false)
   return (
-    <FavoritesOrderBar
+    <FavoritesSortMenu
       locale="de"
       order={order}
       onSetOrder={(next) => {
         setOrder(next)
         onSetOrder(next)
       }}
-      arranging={arranging}
-      onToggleArrange={() => setArranging((a) => !a)}
-      canArrange
+      onArrange={onArrange}
+      canArrange={canArrange}
+      isMobile={isMobile}
     />
   )
+}
+
+/** Opens the menu and returns its panel (popover or sheet — both role=dialog). */
+async function openMenu(initialLabel = 'Häufig genutzt') {
+  await userEvent.click(screen.getByRole('button', { name: `Reihenfolge: ${initialLabel}` }))
+  return screen.getByRole('dialog')
 }
 
 /** The edit mode, with the list held locally the way Dashboard's cache holds it. */
 function Arrange({
   onReorder = () => {},
+  onDone = () => {},
+  onCancel = () => {},
   initial = SERVICES,
 }: {
   onReorder?: (serviceIDs: string[]) => void
+  onDone?: () => void
+  onCancel?: () => void
   initial?: Service[]
 }) {
   const [services, setServices] = useState(initial)
@@ -77,45 +94,145 @@ function Arrange({
         setServices(ids.map((id) => initial.find((s) => s.id === id)!))
         onReorder(ids)
       }}
+      onDone={onDone}
+      onCancel={onCancel}
     />
   )
 }
 
-describe('FavoritesOrderBar', () => {
-  it('offers the three order modes, marking the active one', async () => {
-    render(<Bar />)
-    const group = screen.getByRole('group', { name: 'Reihenfolge' })
-    expect(within(group).getByRole('button', { name: 'Häufig genutzt' })).toHaveAttribute('aria-pressed', 'true')
-    expect(within(group).getByRole('button', { name: 'Alphabetisch' })).toHaveAttribute('aria-pressed', 'false')
-    expect(within(group).getByRole('button', { name: 'Eigene Reihenfolge' })).toHaveAttribute('aria-pressed', 'false')
+describe('FavoritesSortMenu', () => {
+  // The trigger's visible text is the active order; its accessible name has to
+  // say what that text *is* while still containing it ("label in name").
+  it('labels the trigger with the active order', async () => {
+    render(<Menu initial="alpha" />)
+    const trigger = screen.getByRole('button', { name: 'Reihenfolge: Alphabetisch' })
+    expect(trigger).toHaveTextContent('Alphabetisch')
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('persists the pick through onSetOrder', async () => {
+  it('opens a popover with the three order modes, marking the active one', async () => {
+    render(<Menu />)
+    const panel = await openMenu()
+    const group = within(panel).getByRole('radiogroup', { name: 'Reihenfolge' })
+    expect(within(group).getByRole('radio', { name: 'Häufig genutzt' })).toBeChecked()
+    expect(within(group).getByRole('radio', { name: 'Alphabetisch' })).not.toBeChecked()
+    expect(within(group).getByRole('radio', { name: 'Eigene Reihenfolge' })).not.toBeChecked()
+  })
+
+  it('persists the pick through onSetOrder and keeps the panel open', async () => {
     const onSetOrder = vi.fn()
-    render(<Bar onSetOrder={onSetOrder} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Alphabetisch' }))
+    render(<Menu onSetOrder={onSetOrder} />)
+    const panel = await openMenu()
+    await userEvent.click(within(panel).getByRole('radio', { name: 'Alphabetisch' }))
+    expect(onSetOrder).toHaveBeenCalledWith('alpha')
+    // Applied immediately, no confirm step — and the panel is still there.
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Alphabetisch' })).toBeChecked()
+    // The trigger relabels to what was just picked.
+    expect(screen.getByRole('button', { name: 'Reihenfolge: Alphabetisch' })).toBeInTheDocument()
+  })
+
+  // The radios are real inputs precisely so this comes from the platform:
+  // arrow keys move *and* select, which is what "applies immediately" means.
+  it('selects with the arrow keys', async () => {
+    const onSetOrder = vi.fn()
+    render(<Menu onSetOrder={onSetOrder} />)
+    const panel = await openMenu()
+    within(panel).getByRole('radio', { name: 'Häufig genutzt' }).focus()
+    await userEvent.keyboard('{ArrowDown}')
     expect(onSetOrder).toHaveBeenCalledWith('alpha')
   })
 
-  // The edit mode is explicit (the admin role-defaults idiom) and only exists
-  // where it means something: there is nothing to arrange in a computed order.
-  it('reveals the Anordnen toggle only in manual mode', async () => {
-    render(<Bar />)
-    expect(screen.queryByRole('button', { name: 'Anordnen' })).not.toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole('button', { name: 'Eigene Reihenfolge' }))
-    const arrange = screen.getByRole('button', { name: 'Anordnen' })
-    expect(arrange).toHaveAttribute('aria-pressed', 'false')
-
-    await userEvent.click(arrange)
-    expect(screen.getByRole('button', { name: 'Fertig' })).toHaveAttribute('aria-pressed', 'true')
+  // A sr-only input's own ring renders nowhere, so the visible indicator has to
+  // carry it — the bug ChoiceChip fixed for the category chips.
+  it('puts the focus ring on the visible radio indicator', async () => {
+    render(<Menu />)
+    const panel = await openMenu()
+    const radio = within(panel).getByRole('radio', { name: 'Häufig genutzt' })
+    expect(radio.className).toMatch(/\bsr-only\b/)
+    expect(radio.className).toMatch(/\bpeer\b/)
+    const indicator = radio.nextElementSibling as HTMLElement
+    expect(indicator.className).toMatch(/peer-focus-visible:ring-2/)
+    expect(indicator.className).toMatch(/peer-focus-visible:ring-\[var\(--primary\)\]/)
   })
 
-  it('has no axe violations in either state', async () => {
-    const { baseElement } = render(<Bar initial="manual" />)
-    await expectNoAxeViolations(baseElement, ['region'])
+  // The edit mode only exists where it means something: there is nothing to
+  // arrange in a computed order.
+  it('reveals Anordnen only in manual mode', async () => {
+    render(<Menu />)
+    const panel = await openMenu()
+    expect(within(panel).queryByRole('button', { name: 'Anordnen' })).not.toBeInTheDocument()
+
+    await userEvent.click(within(panel).getByRole('radio', { name: 'Eigene Reihenfolge' }))
+    expect(screen.getByRole('button', { name: 'Anordnen' })).toBeInTheDocument()
+  })
+
+  it('hides Anordnen in manual mode when there is nothing to arrange', async () => {
+    render(<Menu initial="manual" canArrange={false} />)
+    await openMenu('Eigene Reihenfolge')
+    expect(screen.queryByRole('button', { name: 'Anordnen' })).not.toBeInTheDocument()
+  })
+
+  it('opens the edit mode through onArrange', async () => {
+    const onArrange = vi.fn()
+    render(<Menu initial="manual" onArrange={onArrange} />)
+    await openMenu('Eigene Reihenfolge')
     await userEvent.click(screen.getByRole('button', { name: 'Anordnen' }))
+    expect(onArrange).toHaveBeenCalled()
+  })
+
+  it('closes the popover on Escape and returns focus to the trigger', async () => {
+    render(<Menu />)
+    await openMenu()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Reihenfolge: Häufig genutzt' })).toHaveFocus()
+  })
+
+  it('has no axe violations, closed and open', async () => {
+    const { baseElement } = render(<Menu initial="manual" />)
     await expectNoAxeViolations(baseElement, ['region'])
+    await openMenu('Eigene Reihenfolge')
+    await expectNoAxeViolations(baseElement, ['region'])
+  })
+
+  describe('on a phone', () => {
+    it('opens a bottom sheet with the same radio group', async () => {
+      render(<Menu isMobile />)
+      const sheet = await openMenu()
+      expect(sheet).toHaveAttribute('aria-modal', 'true')
+      expect(within(sheet).getByRole('radiogroup', { name: 'Reihenfolge' })).toBeInTheDocument()
+      expect(within(sheet).getAllByRole('radio')).toHaveLength(3)
+    })
+
+    // A scrim tap has no accessible name and a phone has no Escape key, so the
+    // sheet must carry a real, named, focusable way out (it is the drag handle).
+    it('offers a labelled close control', async () => {
+      render(<Menu isMobile />)
+      const sheet = await openMenu()
+      const close = within(sheet).getByRole('button', { name: 'Schließen' })
+      close.focus()
+      expect(close).toHaveFocus()
+      await userEvent.keyboard('{Enter}')
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('closes the sheet when the edit mode opens', async () => {
+      const onArrange = vi.fn()
+      render(<Menu initial="manual" isMobile onArrange={onArrange} />)
+      await openMenu('Eigene Reihenfolge')
+      await userEvent.click(screen.getByRole('button', { name: 'Anordnen' }))
+      expect(onArrange).toHaveBeenCalled()
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('has no axe violations with the sheet open', async () => {
+      const { baseElement } = render(<Menu initial="manual" isMobile />)
+      await openMenu('Eigene Reihenfolge')
+      await expectNoAxeViolations(baseElement, ['region'])
+    })
   })
 })
 
@@ -203,6 +320,46 @@ describe('FavoritesArrange', () => {
   it('has no axe violations', async () => {
     const { baseElement } = render(<Arrange />)
     await expectNoAxeViolations(baseElement, ['region'])
+  })
+
+  // The Abbrechen · Anordnen · Fertig bar owns the view: it is the only way out
+  // of the edit mode now that the order pills are gone.
+  it('leaves the edit mode through Fertig, keeping the arrangement', async () => {
+    const onDone = vi.fn()
+    const onReorder = vi.fn()
+    render(<Arrange onDone={onDone} onReorder={onReorder} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Nach unten – Speicherwolke' }))
+    onReorder.mockClear()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Fertig' }))
+    expect(onDone).toHaveBeenCalled()
+    // Nothing is written on the way out: every move already wrote through.
+    expect(onReorder).not.toHaveBeenCalled()
+  })
+
+  // Abbrechen is not a discarded draft — the moves were already persisted — so
+  // it restores the order the screen was entered with, through the same write.
+  it('restores the entry order through Abbrechen', async () => {
+    const onCancel = vi.fn()
+    const onReorder = vi.fn()
+    render(<Arrange onCancel={onCancel} onReorder={onReorder} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'An den Anfang – Lernmanagementsystem' }))
+    expect(names()).toEqual(['Lernmanagementsystem', 'Speicherwolke', 'Videokonferenzsystem'])
+    onReorder.mockClear()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
+    expect(onReorder).toHaveBeenCalledWith(['s1', 's2', 's3'])
+    expect(onCancel).toHaveBeenCalled()
+  })
+
+  it('writes nothing when Abbrechen follows no move at all', async () => {
+    const onCancel = vi.fn()
+    const onReorder = vi.fn()
+    render(<Arrange onCancel={onCancel} onReorder={onReorder} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
+    expect(onReorder).not.toHaveBeenCalled()
+    expect(onCancel).toHaveBeenCalled()
   })
 
   it('shows the favorites empty copy instead of an empty list', () => {
