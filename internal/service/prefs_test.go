@@ -38,6 +38,20 @@ func TestUpdatePrefsValid(t *testing.T) {
 	}
 }
 
+// 'manual' is the third favorites order (issue #125) — accepted here, and
+// backed by the relaxed check constraint in migration 00002.
+func TestUpdatePrefsAcceptsManualFavoritesOrder(t *testing.T) {
+	f := &fakePrefs{}
+	if _, err := UpdatePrefs(context.Background(), f, pgtype.UUID{}, Prefs{
+		Theme: "system", ViewMode: "auto", Locale: "de", FavoritesOrder: "manual",
+	}); err != nil {
+		t.Fatalf("UpdatePrefs(manual): %v", err)
+	}
+	if f.got.FavoritesOrder != "manual" {
+		t.Errorf("persisted favorites_order = %q, want manual", f.got.FavoritesOrder)
+	}
+}
+
 func TestUpdatePrefsRejectsInvalid(t *testing.T) {
 	tests := []struct {
 		name  string

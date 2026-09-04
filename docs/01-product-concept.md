@@ -91,8 +91,29 @@ Favorites are a **flat per-user set** — no named lists. Tapping the star on a 
 service as a favorite (one tap, no dialog); tapping again removes it. The Favorites tab shows the
 user's favorited services, grouped by category, alongside the "frequently used" strip (§4.5).
 
+The list's order is the user's choice, persisted as a pref so it follows them across devices:
+**häufig genutzt** (default — derived from their click counts), **alphabetisch**, or **eigene
+Reihenfolge**. It is chosen from a compact trigger beside the "Favoriten" heading that shows the
+active order and opens a small panel holding the three as a radio group — a popover on a pointer
+layout, a bottom sheet on a phone. Picking one applies immediately; there is no confirm step.
+
+**Eigene Reihenfolge** reveals an "Anordnen" button inside that panel, and it alone leads to the
+explicit arrange mode, where each favorite carries ▲ / ▼ / "an den Anfang" buttons under its own
+*Abbrechen · Anordnen · Fertig* bar (no drag & drop — buttons are what make reordering work on
+touch, by keyboard and with a screen reader). "Abbrechen" restores the arrangement the mode was
+entered with; every move is written through as it happens, so there is no draft to lose.
+Switching to manual starts from the order the user effectively had (their usage order), so they
+adjust rather than build from scratch; a newly starred service appends at the end. The two
+computed orders are never affected by a stored arrangement, and switching away from manual and
+back never loses it.
+
 > **Decision (supersedes the earlier Figma mockup):** the named-lists idea ("Täglicher Gebrauch",
 > "+ Neue Liste", a default list, add-to-list dialog) was dropped. Keep favorites a single flat set.
+
+> **Decision (issue #125): no drag & drop**, here or anywhere. It is poor on touch, hostile to
+> keyboards and screen readers, and the button idiom the admin role-defaults editor established
+> works for everyone. Reordering is button-operable, focus follows the row it moves, and each move
+> is announced.
 
 ### 4.5 "Frequently used"
 A surfaced section (top of Favorites, or its own strip on the Services page) showing the user's

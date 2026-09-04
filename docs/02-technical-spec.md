@@ -156,11 +156,17 @@ create table role_defaults (
 );
 
 -- Favorites: a flat per-user set of services (no named lists — see concept §4.4).
+-- Two orderings, deliberately in two columns: `sort` is the insertion / seeded
+-- order (the tiebreaker when usage mode has equal click counts, and where the
+-- role-default pre-fill copies role_defaults.sort), `manual_sort` is the
+-- arrangement the user made themselves in favorites_order = 'manual'. Sharing
+-- one column would make the usage order a function of the manual one.
 create table favorites (
-  user_id    uuid references users(id) on delete cascade,
-  service_id uuid references services(id) on delete cascade,
-  sort       int not null default 0,
-  created_at timestamptz not null default now(),
+  user_id     uuid references users(id) on delete cascade,
+  service_id  uuid references services(id) on delete cascade,
+  sort        int not null default 0,
+  manual_sort int not null default 0,
+  created_at  timestamptz not null default now(),
   primary key (user_id, service_id)
 );
 
@@ -595,10 +601,13 @@ GET    /api/catalog/defaults       → role-ordered default view for the current
 GET    /api/search?q=              → grouped search results
 
 # personalization
-PATCH  /api/me/prefs               → theme, view_mode, locale
-GET    /api/favorites              → the user's favorited services
+PATCH  /api/me/prefs               → theme, view_mode, locale, favorites_order (usage|alpha|manual)
+GET    /api/favorites              → the user's favorited services, in favorites_order
 POST   /api/favorites/items        → add a service to favorites {service_id}
 DELETE /api/favorites/items        → remove a service from favorites {service_id}
+PUT    /api/favorites/order        → the manual order, whole list {service_ids: [...]}
+                                     idempotent; must be a permutation of exactly
+                                     the caller's favorites (400 otherwise)
 GET    /api/usage/frequent         → the user's frequently-used services
 
 # events

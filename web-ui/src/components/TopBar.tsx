@@ -4,6 +4,7 @@ import { assistantEnabled, contactHref, type Branding } from '@/lib/branding'
 import { t, type Lang } from '@/lib/i18n'
 import type { Me } from '@/lib/api'
 import { iconButtonVariants } from '@/components/ui/icon-button'
+import { OptionGroup } from '@/components/ui/option-group'
 import { PillButton } from '@/components/ui/pill-button'
 import { focusFirst, trapTab } from '@/lib/focus'
 import { NotificationBell } from './NotificationBell'
@@ -190,52 +191,6 @@ interface AccountMenuProps {
   isAdmin: boolean
   onAdmin: () => void
   onLogout: () => void
-}
-
-// The theme and language switchers are both a labelled group of pill buttons
-// over a small set of (value, label) options, differing only in the options
-// and the setter — one component instead of two near-identical button blocks.
-function OptionGroup<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string
-  options: readonly (readonly [T, string])[]
-  value: T
-  onChange: (next: T) => void
-}) {
-  return (
-    <div role="group" aria-label={label} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, width: '100%' }}>
-      {options.map(([optionValue, optionLabel]) => {
-        const active = value === optionValue
-        return (
-          <button
-            key={optionValue}
-            type="button"
-            aria-pressed={active}
-            onClick={() => onChange(optionValue)}
-            style={{
-              display: 'grid', placeItems: 'center',
-              // nowrap is the hard guarantee of issue #98: an option's label
-              // never breaks mid-word, whatever the language or the viewport.
-              // The group may still wrap *between* options if a future label set
-              // outgrows the panel — that degrades, it doesn't shatter a word.
-              flex: '1 1 auto', whiteSpace: 'nowrap', padding: '5px 6px', fontSize: 12.5, lineHeight: 1.2,
-              borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-              border: '1px solid var(--border)',
-              background: active ? 'color-mix(in srgb, var(--accent) 38%, var(--surface))' : 'transparent',
-              color: 'var(--text)', fontWeight: active ? 600 : 400,
-            }}
-            className="min-h-11 min-w-11 hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0 md:min-w-0"
-          >
-            {optionLabel}
-          </button>
-        )
-      })}
-    </div>
-  )
 }
 
 function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, theme, onSetTheme, initials, name, email, isAdmin, onAdmin, onLogout }: AccountMenuProps) {

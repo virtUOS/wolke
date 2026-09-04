@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type Announcement, type Catalog, type Me, type Service } from './api'
 
@@ -56,7 +56,7 @@ export const ANNOUNCEMENT_MS = 5000
  *   results are still two separate results a screen-reader user typed for.
  */
 export function useResultAnnouncement(count: number | null, message: string, settleKey: string): string {
-  const [announcement, setAnnouncement] = useState('')
+  const { announcement, announce } = useTransientAnnouncement()
   const previous = useRef<{ key: string; count: number } | null>(null)
 
   useEffect(() => {
@@ -67,20 +67,38 @@ export function useResultAnnouncement(count: number | null, message: string, set
     // search nor its count changed (a locale switch re-runs this with a new
     // message, not new news).
     if (last === null || (last.key === settleKey && last.count === count)) return
-    setAnnouncement(message)
-  }, [count, message, settleKey])
+    announce(message)
+  }, [count, message, settleKey, announce])
 
-  // The hide timer belongs to the *announcement*, not to the count. Owned by the
-  // effect above it was cleared whenever the count changed again — including
-  // count → null when the next keystroke put a query in flight — and the early
-  // return then set no replacement, leaving the region populated for good.
+  return announcement
+}
+
+/**
+ * useTransientAnnouncement is the app's polite-live-region primitive: a message
+ * that is announced when it is set and then goes quiet again.
+ *
+ * Empty at rest is the point (issue #35) — a permanently populated sr-only node
+ * is a stop in the screen reader's reading order with nothing on screen to
+ * match it. The hide timer belongs to the *announcement*, not to whatever
+ * produced it: owned by the producing effect it gets cleared whenever the
+ * source changes again, and an early return then leaves the region populated
+ * for good.
+ *
+ * Used for the result count (above) and for each favorites reorder move
+ * (issue #125).
+ */
+export function useTransientAnnouncement(): { announcement: string; announce: (message: string) => void } {
+  const [announcement, setAnnouncement] = useState('')
+
   useEffect(() => {
     if (announcement === '') return
     const timer = setTimeout(() => setAnnouncement(''), ANNOUNCEMENT_MS)
     return () => clearTimeout(timer)
   }, [announcement])
 
-  return announcement
+  // Stable, so callers can name it in an effect's dependency list.
+  const announce = useCallback((message: string) => setAnnouncement(message), [])
+  return { announcement, announce }
 }
 
 // useSearch runs the server-side search for a (trimmed) query. It's the single
@@ -117,12 +135,58 @@ export function usePrefsMutation() {
     onError: (_e, _patch, ctx) => {
       if (ctx?.prev) qc.setQueryData(['me'], ctx.prev)
     },
-    onSuccess: (me) => qc.setQueryData(['me'], me),
+    onSuccess: (me, patch) => {
+      qc.setQueryData(['me'], me)
+      // favorites_order is the one pref the server reads while answering
+      // /api/favorites, so the cached list is stale the moment it changes —
+      // and switching *to* manual is also what seeds the arrangement
+      // server-side, so the refetch is what surfaces the seeded order.
+      if (patch.favorites_order !== undefined) qc.invalidateQueries({ queryKey: ['favorites'] })
+    },
   })
 }
 
 export function useFavorites() {
   return useQuery({ queryKey: ['favorites'], queryFn: ({ signal }) => api.favorites(signal) })
+}
+
+/**
+ * useFavoritesOrderMutation persists the user's manual favorites order
+ * (issue #125). It sends the whole ordered list — the server validates it as a
+ * permutation of exactly the caller's favorites — and patches the favorites
+ * cache optimistically so a row moves the instant the button is pressed.
+ *
+ * `scope` serializes the writes: the payload is a whole list, so two moves
+ * landing out of order would persist the earlier arrangement over the later
+ * one. One shared scope means the second move waits for the first.
+ */
+export function useFavoritesOrderMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    scope: { id: 'favorites-order' },
+    mutationFn: (serviceIDs: string[]) => api.setFavoritesOrder(serviceIDs),
+    onMutate: async (serviceIDs: string[]) => {
+      await qc.cancelQueries({ queryKey: ['favorites'] })
+      const prev = qc.getQueryData<FavoritesData>(['favorites'])
+      if (prev) {
+        const byID = new Map(prev.services.map((s) => [s.id, s]))
+        const reordered = serviceIDs
+          .map((id) => byID.get(id))
+          .filter((s): s is Service => s !== undefined)
+        // Anything the caller didn't name keeps its place at the end rather
+        // than vanishing from the view — the list on screen is never a lie,
+        // even if a concurrent star made the two disagree.
+        const named = new Set(serviceIDs)
+        const rest = prev.services.filter((s) => !named.has(s.id))
+        qc.setQueryData<FavoritesData>(['favorites'], { services: [...reordered, ...rest] })
+      }
+      return { prev }
+    },
+    onError: (_e, _ids, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['favorites'], ctx.prev)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['favorites'] }),
+  })
 }
 
 // useDismissAnnouncement persists a dismissal so the banner stays gone across

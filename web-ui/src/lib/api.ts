@@ -32,6 +32,10 @@ export interface Catalog {
   categories: Category[]
 }
 
+// How the favorites list is ordered: by the user's click counts, by name, or
+// by the arrangement they made themselves (issue #125).
+export type FavoritesOrder = 'usage' | 'alpha' | 'manual'
+
 export interface Me {
   id: string
   display_name: string
@@ -43,7 +47,8 @@ export interface Me {
   view_mode: 'list' | 'table' | 'auto'
   theme: 'light' | 'dark' | 'system'
   locale: 'auto' | 'de' | 'en'
-  favorites_order: 'usage' | 'alpha'
+  // 'manual' is the user's own arrangement, reordered via PUT /api/favorites/order.
+  favorites_order: FavoritesOrder
   favorites_separate_tab: boolean
 }
 
@@ -124,6 +129,9 @@ export const api = {
   favorites: (signal?: AbortSignal) => getJSON<{ services: Service[] }>('/api/favorites', signal),
   addFavorite: (serviceID: string) => send<void>('POST', '/api/favorites/items', { service_id: serviceID }),
   removeFavorite: (serviceID: string) => send<void>('DELETE', '/api/favorites/items', { service_id: serviceID }),
+  // The whole ordered list, not a move: an idempotent write the server
+  // validates as a permutation of exactly the caller's favorites.
+  setFavoritesOrder: (serviceIDs: string[]) => send<void>('PUT', '/api/favorites/order', { service_ids: serviceIDs }),
 
   // usage
   frequent: (signal?: AbortSignal) => getJSON<{ services: Service[] }>('/api/usage/frequent', signal),

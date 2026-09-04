@@ -54,10 +54,11 @@ type ClickEvent struct {
 }
 
 type Favorite struct {
-	UserID    pgtype.UUID        `json:"user_id"`
-	ServiceID pgtype.UUID        `json:"service_id"`
-	Sort      int32              `json:"sort"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	ServiceID  pgtype.UUID        `json:"service_id"`
+	Sort       int32              `json:"sort"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ManualSort int32              `json:"manual_sort"`
 }
 
 type RoleDefault struct {
@@ -110,18 +111,19 @@ type UsageDaily struct {
 }
 
 type User struct {
-	ID                   pgtype.UUID        `json:"id"`
-	OidcSub              string             `json:"oidc_sub"`
-	DisplayName          string             `json:"display_name"`
-	Email                pgtype.Text        `json:"email"`
-	PrimaryRole          string             `json:"primary_role"`
-	IsAdmin              bool               `json:"is_admin"`
-	ViewMode             string             `json:"view_mode"`
-	Theme                string             `json:"theme"`
-	CreatedAt            pgtype.Timestamptz `json:"created_at"`
-	LastSeenAt           pgtype.Timestamptz `json:"last_seen_at"`
-	FavoritesOrder       string             `json:"favorites_order"`
-	FavoritesSeparateTab bool               `json:"favorites_separate_tab"`
-	FavoritesSeeded      bool               `json:"favorites_seeded"`
-	Locale               string             `json:"locale"`
+	ID                    pgtype.UUID        `json:"id"`
+	OidcSub               string             `json:"oidc_sub"`
+	DisplayName           string             `json:"display_name"`
+	Email                 pgtype.Text        `json:"email"`
+	PrimaryRole           string             `json:"primary_role"`
+	IsAdmin               bool               `json:"is_admin"`
+	ViewMode              string             `json:"view_mode"`
+	Theme                 string             `json:"theme"`
+	CreatedAt             pgtype.Timestamptz `json:"created_at"`
+	LastSeenAt            pgtype.Timestamptz `json:"last_seen_at"`
+	FavoritesOrder        string             `json:"favorites_order"`
+	FavoritesSeparateTab  bool               `json:"favorites_separate_tab"`
+	FavoritesSeeded       bool               `json:"favorites_seeded"`
+	Locale                string             `json:"locale"`
+	FavoritesManualSeeded bool               `json:"favorites_manual_seeded"`
 }

@@ -13,19 +13,53 @@ import { IconButton } from './icon-button'
 // wired. It does NOT make the rest of the page inert (no aria-modal / inert) —
 // appropriate for a small settings panel, not a blocking modal; use Dialog for
 // content that must own the whole screen.
-interface PopoverProps {
-  /** Accessible name for the icon trigger and the panel. */
+//
+// The trigger comes in two shapes, exactly one of which a caller picks:
+//   `icon`    — the built-in icon-only IconButton, named by `label`.
+//   `trigger` — a button element of the caller's own (a labelled Button, say),
+//               cloned with the ref and the ARIA wiring. This is Radix's
+//               `<Popover.Trigger asChild>` shape, so the swap to Radix later
+//               still doesn't touch callers. The element must forward refs to
+//               its underlying <button> (Button and IconButton do).
+interface PopoverBaseProps {
+  /** Accessible name for the panel (and for the built-in icon trigger). */
   label: string
-  /** The trigger's icon (marked aria-hidden by the caller). */
-  icon: React.ReactNode
   children: React.ReactNode
   /** Which edge the panel aligns to. */
   align?: 'start' | 'end'
-  /** Extra classes for the panel (e.g. a width). */
+  /**
+   * The panel's width in px. Worth passing for `align="start"`: the panel is
+   * absolutely positioned, so a left-aligned one wider than its trigger sticks
+   * out to the right of the anchor, and this reserves that width on the anchor
+   * so it doesn't. That is not cosmetic — an out-of-flow child past its
+   * positioned ancestor's content edge is exactly what the viewport suite
+   * measures as clipped content (e2e/helpers/rules.ts), and it is also what
+   * would genuinely clip inside any scrolling ancestor. An `align="end"` panel
+   * extends leftwards instead and needs nothing (the account menu's shape).
+   * The anchor only ever *reserves* space in a row that has slack; it never
+   * moves the trigger, which stays at the anchor's start edge.
+   */
+  panelWidth?: number
+  /** Extra classes for the panel (e.g. padding). */
   panelClassName?: string
 }
 
-export function Popover({ label, icon, children, align = 'end', panelClassName }: PopoverProps) {
+/** A button element Popover can clone: it must accept a ref to its <button>. */
+type TriggerElement = React.ReactElement<
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { ref?: React.Ref<HTMLButtonElement> }
+>
+
+type PopoverProps = PopoverBaseProps &
+  (
+    | {
+        /** The trigger's icon (marked aria-hidden by the caller). */
+        icon: React.ReactNode
+        trigger?: never
+      }
+    | { trigger: TriggerElement; icon?: never }
+  )
+
+export function Popover({ label, icon, trigger, children, align = 'end', panelWidth, panelClassName }: PopoverProps) {
   const [open, setOpen] = React.useState(false)
   const rootRef = React.useRef<HTMLDivElement>(null)
   const triggerRef = React.useRef<HTMLButtonElement>(null)
@@ -56,19 +90,35 @@ export function Popover({ label, icon, children, align = 'end', panelClassName }
     }
   }, [open])
 
+  // The wiring both trigger shapes share. A cloned trigger keeps its own
+  // onClick (it runs first), so a caller can still react to the press.
+  const toggle = () => setOpen((o) => !o)
+  const ariaProps = {
+    'aria-haspopup': 'dialog' as const,
+    'aria-expanded': open,
+    'aria-controls': open ? panelId : undefined,
+  }
+
   return (
-    <div ref={rootRef} className="relative">
-      <IconButton
-        ref={triggerRef}
-        aria-label={label}
-        title={label}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-        onClick={() => setOpen((o) => !o)}
-      >
-        {icon}
-      </IconButton>
+    <div
+      ref={rootRef}
+      className="relative"
+      style={panelWidth !== undefined && align === 'start' ? { minWidth: panelWidth } : undefined}
+    >
+      {trigger ? (
+        React.cloneElement(trigger, {
+          ref: triggerRef,
+          ...ariaProps,
+          onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
+            trigger.props.onClick?.(e)
+            toggle()
+          },
+        })
+      ) : (
+        <IconButton ref={triggerRef} aria-label={label} title={label} {...ariaProps} onClick={toggle}>
+          {icon}
+        </IconButton>
+      )}
       {open && (
         <div
           id={panelId}
@@ -76,6 +126,7 @@ export function Popover({ label, icon, children, align = 'end', panelClassName }
           role="dialog"
           aria-label={label}
           tabIndex={-1}
+          style={panelWidth !== undefined ? { width: panelWidth } : undefined}
           className={cn(
             'absolute z-20 mt-1 rounded-md border border-border bg-bg p-3 text-sm shadow-lg focus:outline-hidden',
             align === 'end' ? 'right-0' : 'left-0',
