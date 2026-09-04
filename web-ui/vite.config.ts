@@ -42,6 +42,15 @@ export default defineConfig({
           /^\/sw\.js$/,
         ],
         cleanupOutdatedCaches: true,
+        // `clientsClaim` stays off (the generateSW default). It was evaluated
+        // for issue #120 — a freshly activated worker would take over pages
+        // that are running uncontrolled — and rejected: the Reload button now
+        // navigates on its own (lib/pwa-update `applyUpdate`), and any new
+        // navigation is served by the active worker regardless, so claiming
+        // buys nothing. It would only add a mid-session control change for a
+        // page that deliberately loaded without a worker (first load, hard
+        // reload), whose already-loaded bundle would then start fetching lazy
+        // chunks through a worker precaching a *different* build.
       },
       devOptions: { enabled: false },
     }),

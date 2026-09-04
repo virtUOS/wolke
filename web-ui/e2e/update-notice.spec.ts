@@ -58,6 +58,31 @@ test.describe('PWA update notice', () => {
     expect(box.y + box.height, 'the notice extends past the bottom edge').toBeLessThanOrEqual(height + 1)
   })
 
+  // Issue #120: on desktop the click could visibly do nothing, because
+  // vite-plugin-pwa only reloads from a `controllerchange` that an uncontrolled
+  // tab never sees. The genuine update path can't be produced here (one
+  // embedded binary, one worker version — see the seam note above), but the
+  // guarantee the fix makes is testable through the seam: the click navigates.
+  test('the Reload button navigates the page', async ({ page }) => {
+    await gotoApp(page)
+    await triggerUpdate(page)
+    const notice = page.getByRole('status').filter({ hasText: NOTICE })
+    await expect(notice).toBeVisible()
+
+    // Survives only if the page is never navigated away from.
+    await page.evaluate(() => {
+      ;(window as unknown as { __beforeReload?: boolean }).__beforeReload = true
+    })
+
+    await page.getByRole('button', { name: 'Neu laden' }).click()
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __beforeReload?: boolean }).__beforeReload ?? false), {
+        message: 'the Reload click never navigated the page',
+      })
+      .toBe(false)
+    await expect(notice).toHaveCount(0)
+  })
+
   test('the dismiss control restores the clean layout', async ({ page, isMobile }) => {
     await gotoApp(page)
     await triggerUpdate(page)

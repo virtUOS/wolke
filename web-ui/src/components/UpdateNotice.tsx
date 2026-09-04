@@ -4,35 +4,56 @@
 // then *waits*. This notice is the only way a long-lived tab or an installed
 // PWA learns about it. It never reloads on its own — admin forms exist, and a
 // reload the user didn't ask for eats input — so it stays passive until the
-// Reload button is clicked.
+// Reload button is clicked. That click must always visibly do something: the
+// worker's own reload only happens on a `controllerchange`, which an
+// uncontrolled desktop tab never sees, so applying an update goes through
+// lib/pwa-update's applyUpdate, which navigates itself if the worker doesn't
+// (issue #120).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { t, type Lang } from '@/lib/i18n'
-import { SW_NEED_REFRESH_EVENT, startUpdateChecks } from '@/lib/pwa-update'
+import { SW_NEED_REFRESH_EVENT, applyUpdate, startUpdateChecks } from '@/lib/pwa-update'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 
 export function UpdateNotice({ locale }: { locale: Lang }) {
   const s = t(locale)
-  const {
-    needRefresh: [needRefresh],
-    updateServiceWorker,
-  } = useRegisterSW({
+
+  // How many waiting workers this page load has been told about. Counted from
+  // the callback rather than read off the hook's `needRefresh` flag, because
+  // that flag is already true when a *second* deploy arrives in a long-lived
+  // tab — so a dismissal would silence every later update (issue #95 review).
+  const [swUpdates, setSwUpdates] = useState(0)
+  // The e2e seam (lib/pwa-update): the same notice, without a waiting worker.
+  const [seamUpdates, setSeamUpdates] = useState(0)
+  const [dismissedAt, setDismissedAt] = useState(0)
+  const [applying, setApplying] = useState(false)
+
+  const stopChecks = useRef<(() => void) | null>(null)
+  const cancelReload = useRef<(() => void) | null>(null)
+
+  const { updateServiceWorker } = useRegisterSW({
+    onNeedRefresh: () => setSwUpdates((n) => n + 1),
     onRegisteredSW: (_swUrl, registration) => {
-      if (registration) startUpdateChecks(registration)
+      if (!registration) return
+      // Keep the teardown: registration can be reported more than once (React's
+      // dev-mode double invocation, a re-registration), and each call would
+      // otherwise leave an orphaned interval and visibility listener behind.
+      stopChecks.current?.()
+      stopChecks.current = startUpdateChecks(registration)
     },
   })
 
-  // The e2e seam (lib/pwa-update): the same notice, without a waiting worker.
-  const [seamCount, setSeamCount] = useState(0)
-  const [dismissedAt, setDismissedAt] = useState(0)
-
   useEffect(() => {
-    const onSeam = () => setSeamCount((n) => n + 1)
+    const onSeam = () => setSeamUpdates((n) => n + 1)
     window.addEventListener(SW_NEED_REFRESH_EVENT, onSeam)
-    return () => window.removeEventListener(SW_NEED_REFRESH_EVENT, onSeam)
+    return () => {
+      window.removeEventListener(SW_NEED_REFRESH_EVENT, onSeam)
+      stopChecks.current?.()
+      cancelReload.current?.()
+    }
   }, [])
 
   // How many updates this page load has been told about. A dismissal just
@@ -41,14 +62,18 @@ export function UpdateNotice({ locale }: { locale: Lang }) {
   // a *later* update raises the count and so shows the notice again. Derived
   // rather than synced through an effect, so there is no render-then-correct
   // pass and no state to keep consistent.
-  const updates = (needRefresh ? 1 : 0) + seamCount
+  const updates = swUpdates + seamUpdates
   if (updates === 0 || updates === dismissedAt) return null
 
   const reload = () => {
-    // With a worker waiting, updateServiceWorker(true) activates it and reloads.
-    // Reached through the seam there is none, so a plain reload is the honest
+    // Ignore a second click: the first one is already taking the page away, and
+    // a repeat skip-waiting message would race its own reload.
+    if (applying) return
+    setApplying(true)
+    // With a worker waiting, apply it and navigate (lib/pwa-update). Reached
+    // through the seam there is none, so a plain reload is the honest
     // equivalent: fetch whatever the server serves now.
-    if (needRefresh) void updateServiceWorker(true)
+    if (swUpdates > 0) cancelReload.current = applyUpdate(updateServiceWorker)
     else window.location.reload()
   }
 
@@ -81,7 +106,7 @@ export function UpdateNotice({ locale }: { locale: Lang }) {
     >
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
         <p className="text-sm">{s.update.available}</p>
-        <Button size="sm" className="min-h-11 md:min-h-9" onClick={reload}>
+        <Button size="sm" className="min-h-11 md:min-h-9" onClick={reload} disabled={applying}>
           {s.update.reload}
         </Button>
       </div>

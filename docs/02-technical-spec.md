@@ -548,7 +548,19 @@ The app is an installable PWA. Like the rest of branding, this stays white-label
   Version verfügbar." + a Reload button — and only that click activates the waiting worker and
   reloads. Nothing reloads on its own: admin forms exist, and an unrequested reload eats input. A
   dismissal lasts for the current page load only; nothing is persisted (the next load already runs
-  the new version), and a later update re-shows the notice.
+  the new version), and a later update re-shows the notice — including a later update after a
+  dismissal in the same long-lived tab (the notice counts the reports it has had, rather than
+  reading a flag that is already set).
+- **The Reload click always acts** (issue #120). `vite-plugin-pwa` only reloads from a
+  `controllerchange`, and a desktop tab is regularly *uncontrolled* — the first load after the
+  worker registers, and any hard reload — so on desktop the button could visibly do nothing at
+  all. Applying an update therefore goes through `applyUpdate` (`web-ui/src/lib/pwa-update.ts`):
+  message the waiting worker to skip waiting, and navigate ourselves after 1.5s if the worker's
+  own reload hasn't already taken the page away. The button is disabled while that is in flight, so
+  a second click can't race it. `clientsClaim` was evaluated as the alternative and **rejected**: it
+  changes nothing about the auth-safe caching rules above, but it buys nothing either (the explicit
+  reload is served by the active worker regardless) while making a page that deliberately loaded
+  without a worker start fetching lazy chunks through a worker that precaches a different build.
 - **Open tabs learn about deploys.** A page that is never navigated would otherwise run a
   superseded bundle forever, which is exactly the case that breaks iterating in production. So the
   registration is re-checked (`registration.update()`) **every 60 minutes** — a constant, not a
