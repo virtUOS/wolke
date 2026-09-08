@@ -38,7 +38,8 @@ nothing in this runbook applies to them.
    ```
 
    `claim` supports nested dot-paths (`realm_access.roles`), exactly like
-   `oidc.admin.claim`. Adding or changing an entry needs a restart —
+   `oidc.admin.claim`. `label` is optional — leave it out and the tile badge
+   and the admin selector both read as the capitalized slug. Adding or changing an entry needs a restart —
    `config.yaml` is read at startup, and an invalid slug fails startup loudly.
 2. **Create the group at the IdP** with the name in `match`, and make sure the
    claim in `claim` actually reaches the **ID token**. This is the one trap:

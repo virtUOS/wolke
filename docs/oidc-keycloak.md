@@ -202,6 +202,13 @@ catalog, not in search, and the category they sit in disappears for them.
        match: it-service-admins             # membership in this group ⇒ the slug
    ```
 
+   Only `slug`, `grant`, `claim` and `match` are needed — the mapping is
+   `claim` + `match`, and the slug is just the internal name. `label` is
+   optional and plays no part in the mapping, but it *is* what holders read on
+   the tile badge and what admins pick in the service form's **Sichtbarkeit**
+   selector; without it both fall back to the capitalized slug ("It-infra"),
+   which reads poorly for a hyphenated slug.
+
    Realm roles work the same way — `claim: realm_access.roles` with the role
    name as `match`, once that mapper has **Add to ID token: On** (step 3b's
    alternative).
