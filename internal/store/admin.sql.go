@@ -43,7 +43,7 @@ func (q *Queries) AddServiceCategory(ctx context.Context, arg AddServiceCategory
 }
 
 const adminListServices = `-- name: AdminListServices :many
-select id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords from services order by name
+select id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords, visibility from services order by name
 `
 
 // Full catalog including soft-deleted (inactive) services.
@@ -68,6 +68,7 @@ func (q *Queries) AdminListServices(ctx context.Context) ([]Service, error) {
 			&i.UpdatedAt,
 			&i.Tag,
 			&i.Keywords,
+			&i.Visibility,
 		); err != nil {
 			return nil, err
 		}
@@ -102,9 +103,9 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 }
 
 const createService = `-- name: CreateService :one
-insert into services (name, description, service_url, doc_url, icon, tag, keywords)
-values ($1, $2, $3, $4, $5, $6, $7)
-returning id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords
+insert into services (name, description, service_url, doc_url, icon, tag, keywords, visibility)
+values ($1, $2, $3, $4, $5, $6, $7, $8)
+returning id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords, visibility
 `
 
 type CreateServiceParams struct {
@@ -115,6 +116,7 @@ type CreateServiceParams struct {
 	Icon        string      `json:"icon"`
 	Tag         pgtype.Text `json:"tag"`
 	Keywords    []string    `json:"keywords"`
+	Visibility  pgtype.Text `json:"visibility"`
 }
 
 func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (Service, error) {
@@ -126,6 +128,7 @@ func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (S
 		arg.Icon,
 		arg.Tag,
 		arg.Keywords,
+		arg.Visibility,
 	)
 	var i Service
 	err := row.Scan(
@@ -140,6 +143,7 @@ func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (S
 		&i.UpdatedAt,
 		&i.Tag,
 		&i.Keywords,
+		&i.Visibility,
 	)
 	return i, err
 }
@@ -179,7 +183,7 @@ func (q *Queries) GetCategoryBySlug(ctx context.Context, slug string) (Category,
 }
 
 const getServiceByID = `-- name: GetServiceByID :one
-select id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords from services where id = $1
+select id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords, visibility from services where id = $1
 `
 
 func (q *Queries) GetServiceByID(ctx context.Context, id pgtype.UUID) (Service, error) {
@@ -197,6 +201,7 @@ func (q *Queries) GetServiceByID(ctx context.Context, id pgtype.UUID) (Service, 
 		&i.UpdatedAt,
 		&i.Tag,
 		&i.Keywords,
+		&i.Visibility,
 	)
 	return i, err
 }
@@ -354,9 +359,10 @@ set name        = $1,
     icon        = $5,
     tag         = $6,
     keywords    = $7,
+    visibility  = $8,
     updated_at  = now()
-where id = $8
-returning id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords
+where id = $9
+returning id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords, visibility
 `
 
 type UpdateServiceParams struct {
@@ -367,6 +373,7 @@ type UpdateServiceParams struct {
 	Icon        string      `json:"icon"`
 	Tag         pgtype.Text `json:"tag"`
 	Keywords    []string    `json:"keywords"`
+	Visibility  pgtype.Text `json:"visibility"`
 	ID          pgtype.UUID `json:"id"`
 }
 
@@ -379,6 +386,7 @@ func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) (S
 		arg.Icon,
 		arg.Tag,
 		arg.Keywords,
+		arg.Visibility,
 		arg.ID,
 	)
 	var i Service
@@ -394,6 +402,7 @@ func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) (S
 		&i.UpdatedAt,
 		&i.Tag,
 		&i.Keywords,
+		&i.Visibility,
 	)
 	return i, err
 }

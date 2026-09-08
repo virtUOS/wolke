@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -59,7 +60,7 @@ func TestFavoritesFlow(t *testing.T) {
 		return rec
 	}
 	listIDs := func() []string {
-		rec := call(listFavorites(cache, db), http.MethodGet, "")
+		rec := call(listFavorites(cache, db, config.VisibilitySet{}), http.MethodGet, "")
 		if rec.Code != http.StatusOK {
 			t.Fatalf("list favorites = %d, want 200", rec.Code)
 		}
@@ -164,7 +165,7 @@ func TestFavoritesManualOrderFlow(t *testing.T) {
 		return rec
 	}
 	listIDs := func() []string {
-		rec := call(listFavorites(cache, db), http.MethodGet, "/api/favorites", "")
+		rec := call(listFavorites(cache, db, config.VisibilitySet{}), http.MethodGet, "/api/favorites", "")
 		if rec.Code != http.StatusOK {
 			t.Fatalf("list favorites = %d, want 200: %s", rec.Code, rec.Body)
 		}

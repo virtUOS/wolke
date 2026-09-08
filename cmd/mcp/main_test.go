@@ -8,6 +8,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/virtuos/wolke/internal/adminmcp"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/service"
 	"github.com/virtuos/wolke/internal/store"
 )
@@ -35,7 +36,7 @@ func clientFor(ctx context.Context, t *testing.T, mgr *adminmcp.Manager) *mcp.Cl
 func TestToolRegistration(t *testing.T) {
 	ctx := context.Background()
 	srv := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	registerTools(srv, adminmcp.New(nil, service.Actor{}))
+	registerTools(srv, adminmcp.New(nil, service.Actor{}, config.VisibilitySet{}))
 
 	t1, t2 := mcp.NewInMemoryTransports()
 	if _, err := srv.Connect(ctx, t1, nil); err != nil {
@@ -57,7 +58,7 @@ func TestToolRegistration(t *testing.T) {
 		got[tool.Name] = true
 	}
 	want := []string{
-		"service.list", "service.get", "category.list", "search.insights",
+		"service.list", "service.get", "category.list", "search.insights", "visibility.list",
 		"service.propose_create", "service.propose_update", "service.propose_delete",
 		"change.confirm", "change.discard",
 	}
@@ -94,7 +95,7 @@ func TestProposeConfirmOverProtocol(t *testing.T) {
 		db.Close()
 	})
 
-	cs := clientFor(ctx, t, adminmcp.New(db, service.Actor{ID: admin.ID, Kind: service.ActorMCP}))
+	cs := clientFor(ctx, t, adminmcp.New(db, service.Actor{ID: admin.ID, Kind: service.ActorMCP}, config.VisibilitySet{}))
 
 	// propose_create → token in structured output; nothing written yet.
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{

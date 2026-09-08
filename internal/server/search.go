@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/store"
 )
@@ -41,7 +42,10 @@ func normalizeSearchQuery(q string) string {
 // search serves GET /api/search?q= — fuzzy/substring matches over name,
 // description, and category labels, resolved to full services via the cache
 // (docs/01 §4.6, docs/02 §12). The SPA groups results by category.
-func search(c *catalog.Cache, s SearchStore) http.HandlerFunc {
+//
+// Visibility needs no SQL change: a restricted id the user does not hold simply
+// fails to resolve through the narrowed view, and the result count follows.
+func search(c *catalog.Cache, s SearchStore, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := strings.TrimSpace(r.URL.Query().Get("q"))
 		if q == "" {
@@ -59,7 +63,7 @@ func search(c *catalog.Cache, s SearchStore) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "search_failed", "Search is temporarily unavailable.")
 			return
 		}
-		snap, err := c.Get(r.Context())
+		snap, err := visibleCatalog(r.Context(), c, vis)
 		if err != nil {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
 			return

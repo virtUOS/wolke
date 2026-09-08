@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -25,6 +26,11 @@ type Service struct {
 	Categories  []string          `json:"categories"` // category slugs
 	DocOnly     bool              `json:"doc_only"`
 	Tag         string            `json:"tag,omitempty"` // "beta" | "wartung" | ""
+	// Visibility is the configured slug this service is restricted to, or ""
+	// for a public service (docs/specs/service-visibility.md). Only ever
+	// present on a service the reader holds — a View never carries a service
+	// whose slug the reader lacks.
+	Visibility string `json:"visibility,omitempty"`
 }
 
 // Category is the read model of a managed category.
@@ -34,16 +40,118 @@ type Category struct {
 	Sort  int               `json:"sort"`
 }
 
-// Snapshot is an immutable, fully-assembled view of the active catalog.
+// Snapshot is an immutable, fully-assembled view of the active catalog — the
+// RAW one, straight from the loader. It is deliberately unreadable: its service
+// and category accessors are unexported, and the only way to get at them is
+// VisibleTo, which narrows the catalog to what one reader may see. A handler
+// that forgets to narrow therefore fails to compile rather than leaking a
+// restricted service (docs/specs/service-visibility.md §3).
 type Snapshot struct {
-	Services   []Service           `json:"services"`
-	Categories []Category          `json:"categories"`
-	byID       map[string]*Service // lookup for defaults/search assembly
+	services   []Service
+	categories []Category
+	// public is the pre-narrowed view for a reader holding nothing. When no
+	// service is restricted it IS the whole catalog, and VisibleTo hands it
+	// out without copying — the unconfigured deployment pays nothing.
+	public     *View
+	restricted bool
 }
 
-// ServiceByID returns the service with the given id, if present.
-func (s *Snapshot) ServiceByID(id string) (Service, bool) {
-	if svc, ok := s.byID[id]; ok {
+// NewSnapshot assembles a snapshot from already-built services and categories.
+// Load uses it; tests use it to build fixtures without a database.
+func NewSnapshot(services []Service, categories []Category) *Snapshot {
+	if services == nil {
+		services = []Service{}
+	}
+	if categories == nil {
+		categories = []Category{}
+	}
+	s := &Snapshot{services: services, categories: categories}
+	for _, svc := range services {
+		if svc.Visibility != "" {
+			s.restricted = true
+			break
+		}
+	}
+	if s.restricted {
+		s.public = s.narrow(nil)
+	} else {
+		s.public = newView(services, categories)
+	}
+	return s
+}
+
+// VisibleTo returns the catalog as one reader sees it: public services plus
+// those whose visibility slug is in held, and only the categories that still
+// contain a service this reader can see. held may be nil (public only — what
+// the catalog MCP server passes, unconditionally).
+//
+// Category narrowing is what makes a restricted group's category vanish for
+// non-holders instead of rendering as an empty filter pill. A category that has
+// no services for anyone stays, exactly as today — narrowing only drops
+// categories that filtering emptied, so an unconfigured deployment's output is
+// byte-identical to the raw catalog.
+func (s *Snapshot) VisibleTo(held []string) *View {
+	if !s.restricted || len(held) == 0 {
+		if s.public == nil {
+			// The zero Snapshot (never assembled): empty, not nil.
+			return newView([]Service{}, []Category{})
+		}
+		return s.public
+	}
+	return s.narrow(held)
+}
+
+func (s *Snapshot) narrow(held []string) *View {
+	services := make([]Service, 0, len(s.services))
+	for _, svc := range s.services {
+		if svc.Visibility == "" || slices.Contains(held, svc.Visibility) {
+			services = append(services, svc)
+		}
+	}
+	// Categories populated by ANY service vs. by a VISIBLE one.
+	populated := map[string]bool{}
+	for _, svc := range s.services {
+		for _, c := range svc.Categories {
+			populated[c] = true
+		}
+	}
+	visible := map[string]bool{}
+	for _, svc := range services {
+		for _, c := range svc.Categories {
+			visible[c] = true
+		}
+	}
+	categories := make([]Category, 0, len(s.categories))
+	for _, c := range s.categories {
+		if !populated[c.Slug] || visible[c.Slug] {
+			categories = append(categories, c)
+		}
+	}
+	return newView(services, categories)
+}
+
+// View is a narrowed, readable catalog: exactly the services and categories
+// one reader may see. It is the only catalog type handlers consume, and it is
+// obtained solely through Snapshot.VisibleTo. Its JSON shape is /api/catalog.
+type View struct {
+	Services   []Service  `json:"services"`
+	Categories []Category `json:"categories"`
+	byID       map[string]*Service
+}
+
+func newView(services []Service, categories []Category) *View {
+	byID := make(map[string]*Service, len(services))
+	for i := range services {
+		byID[services[i].ID] = &services[i]
+	}
+	return &View{Services: services, Categories: categories, byID: byID}
+}
+
+// ServiceByID returns the service with the given id if this reader may see it.
+// A restricted service the reader does not hold is indistinguishable from an
+// unknown or soft-deleted one — there is no existence oracle.
+func (v *View) ServiceByID(id string) (Service, bool) {
+	if svc, ok := v.byID[id]; ok {
 		return *svc, true
 	}
 	return Service{}, false
@@ -88,7 +196,6 @@ func Load(ctx context.Context, db Store) (*Snapshot, error) {
 	}
 
 	services := make([]Service, 0, len(svcRows))
-	byID := make(map[string]*Service, len(svcRows))
 	for _, r := range svcRows {
 		desc, err := jsonMap(r.Description)
 		if err != nil {
@@ -105,17 +212,15 @@ func Load(ctx context.Context, db Store) (*Snapshot, error) {
 			Categories:  catsBySvc[id],
 			DocOnly:     !r.ServiceUrl.Valid || r.ServiceUrl.String == "",
 			Tag:         textStr(r.Tag),
+			Visibility:  textStr(r.Visibility),
 		}
 		if svc.Categories == nil {
 			svc.Categories = []string{}
 		}
 		services = append(services, svc)
 	}
-	for i := range services {
-		byID[services[i].ID] = &services[i]
-	}
 
-	return &Snapshot{Services: services, Categories: categories, byID: byID}, nil
+	return NewSnapshot(services, categories), nil
 }
 
 func jsonMap(b []byte) (map[string]string, error) {

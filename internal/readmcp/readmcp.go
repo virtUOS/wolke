@@ -7,7 +7,10 @@
 // By design this package holds NO write path: its Manager never imports the
 // admin use cases, so least privilege is enforced at compile time, not by
 // discipline. Soft-deleted (inactive) services are never returned, because the
-// catalog snapshot it reads from only ever contains active ones.
+// catalog snapshot it reads from only ever contains active ones. Restricted
+// services (docs/specs/service-visibility.md) are never returned either: this
+// server has no user identity, so it reads the catalog as a holder of nothing
+// — publicView passes an empty held set, unconditionally, forever.
 package readmcp
 
 import (
@@ -52,12 +55,23 @@ type Category struct {
 	Sort  int               `json:"sort"`
 }
 
-// ListServices returns active services, optionally narrowed by category slug and
-// by status tag ("beta" or "wartung"). Empty filters return the full catalog.
-func (m *Manager) ListServices(ctx context.Context, category, status string) ([]catalog.Service, error) {
+// publicView is the catalog as an anonymous reader sees it: public services
+// only. There is deliberately no way to pass a held set here.
+func (m *Manager) publicView(ctx context.Context) (*catalog.View, error) {
 	snap, err := m.cache.Get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load catalog: %w", err)
+	}
+	return snap.VisibleTo(nil), nil
+}
+
+// ListServices returns active public services, optionally narrowed by category
+// slug and by status tag ("beta" or "wartung"). Empty filters return the full
+// public catalog.
+func (m *Manager) ListServices(ctx context.Context, category, status string) ([]catalog.Service, error) {
+	snap, err := m.publicView(ctx)
+	if err != nil {
+		return nil, err
 	}
 	out := make([]catalog.Service, 0, len(snap.Services))
 	for _, s := range snap.Services {
@@ -76,9 +90,9 @@ func (m *Manager) ListServices(ctx context.Context, category, status string) ([]
 // unknown ids are indistinguishable here on purpose: the snapshot holds only
 // active services.
 func (m *Manager) GetService(ctx context.Context, id string) (catalog.Service, error) {
-	snap, err := m.cache.Get(ctx)
+	snap, err := m.publicView(ctx)
 	if err != nil {
-		return catalog.Service{}, fmt.Errorf("load catalog: %w", err)
+		return catalog.Service{}, err
 	}
 	svc, ok := snap.ServiceByID(strings.TrimSpace(id))
 	if !ok {
@@ -98,9 +112,9 @@ func (m *Manager) Search(ctx context.Context, query string) ([]catalog.Service, 
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}
-	snap, err := m.cache.Get(ctx)
+	snap, err := m.publicView(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("load catalog: %w", err)
+		return nil, err
 	}
 	out := make([]catalog.Service, 0, len(ids))
 	for _, id := range ids {
@@ -118,9 +132,9 @@ func (m *Manager) ListInMaintenance(ctx context.Context) ([]catalog.Service, err
 
 // ListCategories returns the managed categories.
 func (m *Manager) ListCategories(ctx context.Context) ([]Category, error) {
-	snap, err := m.cache.Get(ctx)
+	snap, err := m.publicView(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("load catalog: %w", err)
+		return nil, err
 	}
 	out := make([]Category, 0, len(snap.Categories))
 	for _, c := range snap.Categories {

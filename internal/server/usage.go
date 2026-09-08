@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/metrics"
 	"github.com/virtuos/wolke/internal/usage"
@@ -15,7 +16,10 @@ import (
 // and increments the per-service/role/target metric. target distinguishes a
 // service launch from a documentation-link click. Fire-and-forget from the SPA;
 // returns 204.
-func recordClick(db usage.Store, cache *catalog.Cache, m *metrics.Metrics) http.HandlerFunc {
+//
+// The metric label resolves through the user's narrowed view: a click on a
+// service the user cannot see mints no series (and reveals nothing).
+func recordClick(db usage.Store, cache *catalog.Cache, m *metrics.Metrics, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
 		var body struct {
@@ -47,7 +51,7 @@ func recordClick(db usage.Store, cache *catalog.Cache, m *metrics.Metrics) http.
 			return
 		}
 		if m != nil && cache != nil {
-			if snap, err := cache.Get(r.Context()); err == nil {
+			if snap, err := visibleCatalog(r.Context(), cache, vis); err == nil {
 				if svc, ok := snap.ServiceByID(body.ServiceID); ok {
 					m.IncClick(svc.Name, user.PrimaryRole, target)
 				}
@@ -59,7 +63,7 @@ func recordClick(db usage.Store, cache *catalog.Cache, m *metrics.Metrics) http.
 
 // frequent returns the user's most-used services, resolved via the catalog cache
 // so the shape matches /api/catalog (docs/01 §4.5, docs/02 §12).
-func frequent(c *catalog.Cache, db usage.Store) http.HandlerFunc {
+func frequent(c *catalog.Cache, db usage.Store, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
 		ids, err := usage.Frequent(r.Context(), db, user.ID, time.Now().Add(-usage.FrequentWindow), usage.FrequentLimit)
@@ -67,7 +71,7 @@ func frequent(c *catalog.Cache, db usage.Store) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "usage_unavailable", "Could not load frequently-used services.")
 			return
 		}
-		snap, err := c.Get(r.Context())
+		snap, err := visibleCatalog(r.Context(), c, vis)
 		if err != nil {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
 			return

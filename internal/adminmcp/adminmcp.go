@@ -16,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/service"
 	"github.com/virtuos/wolke/internal/store"
 )
@@ -42,16 +43,23 @@ type staged struct {
 type Manager struct {
 	db    *store.DB
 	actor service.Actor
+	vis   config.VisibilitySet
 
 	mu     sync.Mutex
 	staged map[string]staged
 	now    func() time.Time
 }
 
-// New builds a Manager that writes as the given admin actor (kind=mcp).
-func New(db *store.DB, actor service.Actor) *Manager {
-	return &Manager{db: db, actor: actor, staged: map[string]staged{}, now: time.Now}
+// New builds a Manager that writes as the given admin actor (kind=mcp). vis is
+// the deployment's configured visibility set, which the propose paths validate
+// a service's visibility against exactly as the form does.
+func New(db *store.DB, actor service.Actor, vis config.VisibilitySet) *Manager {
+	return &Manager{db: db, actor: actor, vis: vis, staged: map[string]staged{}, now: time.Now}
 }
+
+// VisibilityOptions lists the configured visibility slugs an admin may
+// restrict a service to (read-only helper for the tool description/UI).
+func (m *Manager) VisibilityOptions() []config.Visibility { return m.vis.List() }
 
 // --- reads ---
 
@@ -109,7 +117,7 @@ type Preview struct {
 
 // ProposeCreate validates a new service and stages it. No write.
 func (m *Manager) ProposeCreate(ctx context.Context, draft service.Draft) (Preview, error) {
-	if err := service.ValidateDraft(draft); err != nil {
+	if err := service.ValidateDraft(m.vis, draft); err != nil {
 		return Preview{}, err
 	}
 	if err := m.checkCategories(ctx, draft.Categories); err != nil {
@@ -129,7 +137,7 @@ func (m *Manager) ProposeUpdate(ctx context.Context, idStr string, draft service
 	if err != nil {
 		return Preview{}, err
 	}
-	if err := service.ValidateDraft(draft); err != nil {
+	if err := service.ValidateDraft(m.vis, draft); err != nil {
 		return Preview{}, err
 	}
 	if err := m.checkCategories(ctx, draft.Categories); err != nil {
@@ -172,13 +180,13 @@ func (m *Manager) Confirm(ctx context.Context, token string) (string, error) {
 
 	switch st.kind {
 	case kindCreate:
-		svc, err := service.CreateService(ctx, m.db, m.actor, st.draft)
+		svc, err := service.CreateService(ctx, m.db, m.actor, m.vis, st.draft)
 		if err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("Created service %q (%s).", svc.Name, svc.ID), nil
 	case kindUpdate:
-		svc, err := service.UpdateService(ctx, m.db, m.actor, st.id, st.draft)
+		svc, err := service.UpdateService(ctx, m.db, m.actor, m.vis, st.id, st.draft)
 		if err != nil {
 			return "", err
 		}
@@ -241,6 +249,7 @@ func draftPreview(d service.Draft, active bool) service.AdminService {
 		Categories:  cats,
 		Tag:         d.Tag,
 		Keywords:    kws,
+		Visibility:  d.Visibility,
 	}
 }
 

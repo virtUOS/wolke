@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -33,7 +34,7 @@ func TestUpdatePrefsPartialKeepsCurrent(t *testing.T) {
 	// Only theme is sent; view_mode and locale must keep their current values.
 	req := reqWithUser(http.MethodPatch, "/api/me/prefs", `{"theme":"dark"}`, current)
 	rec := httptest.NewRecorder()
-	updatePrefs(f)(rec, req)
+	updatePrefs(f, config.VisibilitySet{})(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -55,7 +56,7 @@ func TestUpdatePrefsSetsLocale(t *testing.T) {
 	current := store.User{ID: pgtype.UUID{Valid: true}, ViewMode: "auto", Theme: "system", Locale: "auto", FavoritesOrder: "usage"}
 	req := reqWithUser(http.MethodPatch, "/api/me/prefs", `{"locale":"en"}`, current)
 	rec := httptest.NewRecorder()
-	updatePrefs(f)(rec, req)
+	updatePrefs(f, config.VisibilitySet{})(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -70,7 +71,7 @@ func TestUpdatePrefsRejectsInvalidLocale(t *testing.T) {
 	current := store.User{ViewMode: "auto", Theme: "system", Locale: "auto", FavoritesOrder: "usage"}
 	req := reqWithUser(http.MethodPatch, "/api/me/prefs", `{"locale":"fr"}`, current)
 	rec := httptest.NewRecorder()
-	updatePrefs(f)(rec, req)
+	updatePrefs(f, config.VisibilitySet{})(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rec.Code)
 	}
@@ -80,7 +81,7 @@ func TestUpdatePrefsRejectsInvalidValue(t *testing.T) {
 	f := &fakePrefsStore{}
 	req := reqWithUser(http.MethodPatch, "/api/me/prefs", `{"view_mode":"grid"}`, store.User{ViewMode: "auto", Theme: "system"})
 	rec := httptest.NewRecorder()
-	updatePrefs(f)(rec, req)
+	updatePrefs(f, config.VisibilitySet{})(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rec.Code)
 	}
@@ -90,7 +91,7 @@ func TestUpdatePrefsRejectsBadJSON(t *testing.T) {
 	f := &fakePrefsStore{}
 	req := reqWithUser(http.MethodPatch, "/api/me/prefs", `not json`, store.User{ViewMode: "auto", Theme: "system"})
 	rec := httptest.NewRecorder()
-	updatePrefs(f)(rec, req)
+	updatePrefs(f, config.VisibilitySet{})(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", rec.Code)
 	}

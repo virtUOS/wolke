@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -29,7 +30,7 @@ func TestSearch(t *testing.T) {
 	cache := catalog.NewCache(time.Minute, func(ctx context.Context) (*catalog.Snapshot, error) {
 		return catalog.Load(ctx, db)
 	})
-	h := search(cache, db)
+	h := search(cache, db, config.VisibilitySet{})
 
 	names := func(q string) []string {
 		req := httptest.NewRequest(http.MethodGet, "/api/search?q="+url.QueryEscape(q), nil)

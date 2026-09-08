@@ -161,6 +161,10 @@ type Querier interface {
 	UpdateService(ctx context.Context, arg UpdateServiceParams) (Service, error)
 	// Display prefs persist server-side so they follow the user across devices.
 	UpdateUserPrefs(ctx context.Context, arg UpdateUserPrefsParams) (User, error)
+	// The user's own opt-in visibility slugs, written as a whole list
+	// (docs/specs/service-visibility.md §4). Claim-granted slugs live in
+	// visibility_claims and are never touched here.
+	UpdateUserVisibilityOptIn(ctx context.Context, arg UpdateUserVisibilityOptInParams) (User, error)
 	// Called on every login: insert the OIDC subject or refresh the mutable fields.
 	// primary_role and is_admin are re-derived from claims each login (docs/02 §6);
 	// user prefs (view_mode, theme) are intentionally not touched here.

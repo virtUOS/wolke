@@ -59,7 +59,7 @@ func run() error {
 		return fmt.Errorf("user %q is not an admin", adminSub)
 	}
 
-	mgr := adminmcp.New(db, service.Actor{ID: admin.ID, Kind: service.ActorMCP})
+	mgr := adminmcp.New(db, service.Actor{ID: admin.ID, Kind: service.ActorMCP}, cfg.Visibility())
 	srv := mcp.NewServer(&mcp.Implementation{Name: "wolke-admin", Version: "0.1.0"}, nil)
 	registerTools(srv, mgr)
 
@@ -79,7 +79,8 @@ type serviceFields struct {
 	DocURL        string   `json:"doc_url,omitempty"`
 	Icon          string   `json:"icon"` // kebab-case lucide icon name, e.g. "graduation-cap"
 	Categories    []string `json:"categories"`
-	Keywords      []string `json:"keywords,omitempty"` // optional search aliases (flat, DE+EN mixed)
+	Keywords      []string `json:"keywords,omitempty"`   // optional search aliases (flat, DE+EN mixed)
+	Visibility    string   `json:"visibility,omitempty"` // "" = public; else a configured visibility slug (see visibility.list)
 }
 
 func (f serviceFields) draft() service.Draft {
@@ -91,6 +92,7 @@ func (f serviceFields) draft() service.Draft {
 		Icon:        f.Icon,
 		Categories:  f.Categories,
 		Keywords:    f.Keywords,
+		Visibility:  f.Visibility,
 	}
 }
 
@@ -110,6 +112,9 @@ type servicesOut struct {
 }
 type categoriesOut struct {
 	Categories []adminmcp.Category `json:"categories"`
+}
+type visibilityOut struct {
+	Options []config.Visibility `json:"options"`
 }
 type insightsInput struct {
 	Days  int `json:"days,omitempty"`  // window in days (default 30)
@@ -141,13 +146,18 @@ func registerTools(s *mcp.Server, mgr *adminmcp.Manager) {
 			return nil, categoriesOut{Categories: cats}, err
 		})
 
+	mcp.AddTool(s, &mcp.Tool{Name: "visibility.list", Description: "List the configured service-visibility slugs a service may be restricted to (empty = every service is public). Pass one as `visibility` on propose_create/propose_update; omit it for a public service."},
+		func(_ context.Context, _ *mcp.CallToolRequest, _ empty) (*mcp.CallToolResult, visibilityOut, error) {
+			return nil, visibilityOut{Options: mgr.VisibilityOptions()}, nil
+		})
+
 	mcp.AddTool(s, &mcp.Tool{Name: "search.insights", Description: "List recent searches that returned no results — the worklist for adding service keywords. Read-only; aggregate-only (no user data). Optional days (default 30) and limit (default 50)."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in insightsInput) (*mcp.CallToolResult, insightsOut, error) {
 			list, err := mgr.SearchInsights(ctx, in.Days, in.Limit)
 			return nil, insightsOut{Insights: list}, err
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "service.propose_create", Description: "Validate a new service and return a preview + change_token. Does NOT write. Requires both description_de and description_en, a kebab-case lucide icon name, and at least one category."},
+	mcp.AddTool(s, &mcp.Tool{Name: "service.propose_create", Description: "Validate a new service and return a preview + change_token. Does NOT write. Requires both description_de and description_en, a kebab-case lucide icon name, and at least one category. Optional visibility restricts the service to holders of a configured slug (visibility.list)."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in serviceFields) (*mcp.CallToolResult, adminmcp.Preview, error) {
 			p, err := mgr.ProposeCreate(ctx, in.draft())
 			return nil, p, err

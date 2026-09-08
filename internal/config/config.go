@@ -40,6 +40,11 @@ type Config struct {
 
 	OIDC     OIDC     `yaml:"oidc"`
 	Branding Branding `yaml:"branding"`
+	// VisibilityEntries is the `visibility:` list: the deployment's non-public
+	// service groups (docs/specs/service-visibility.md). File-only, like the
+	// claim mapping; empty by default, which means every service is public.
+	// Read it through Config.Visibility().
+	VisibilityEntries []VisibilityEntry `yaml:"visibility"`
 }
 
 // OIDC holds the provider-agnostic client settings (scalars, env-overridable)
@@ -285,6 +290,9 @@ func (c *Config) validate() error {
 		return fmt.Errorf("config: log_level %q is not one of debug|info|warn|error", c.LogLevel)
 	}
 	if err := c.OIDC.Role.validateRoles(); err != nil {
+		return err
+	}
+	if err := validateVisibility(c.VisibilityEntries, c.Roles()); err != nil {
 		return err
 	}
 	if c.AnnouncementRetentionDays < 0 {

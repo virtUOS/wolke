@@ -22,10 +22,13 @@ func TestLoadSnapshotFromSeededDB(t *testing.T) {
 	}
 	defer db.Close()
 
-	snap, err := Load(ctx, db)
+	raw, err := Load(ctx, db)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
+	// The raw snapshot is unreadable by design; everything below reads the
+	// public view, which is the whole seeded catalog minus restricted entries.
+	snap := raw.VisibleTo(nil)
 	if len(snap.Services) == 0 {
 		t.Fatal("no services loaded (did you run `make seed`?)")
 	}

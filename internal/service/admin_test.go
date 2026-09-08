@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/virtuos/wolke/internal/config"
 )
 
 func validInput() Draft {
@@ -44,12 +46,20 @@ func TestValidateDraft(t *testing.T) {
 		{"keyword too long", func(in *Draft) { in.Keywords = []string{strings.Repeat("x", maxKeywordLength+1)} }, "keywords"},
 		// Duplicates/blank/whitespace collapse before the count check, so this is valid.
 		{"duplicate keywords collapse", func(in *Draft) { in.Keywords = []string{"bbb", "BBB", " bbb ", ""} }, ""},
+		// Visibility: "" is public; otherwise it must be a configured slug.
+		{"public visibility is valid", func(in *Draft) { in.Visibility = "" }, ""},
+		{"a configured visibility slug is valid", func(in *Draft) { in.Visibility = "experimental" }, ""},
+		{"an unconfigured visibility slug is rejected", func(in *Draft) { in.Visibility = "it-infra" }, "visibility"},
 	}
+	vis := (&config.Config{VisibilityEntries: []config.VisibilityEntry{{
+		Slug: "experimental", Grant: config.GrantOptIn,
+		Warning: map[string]string{"de": "Kann verschwinden."},
+	}}}).Visibility()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			in := validInput()
 			tt.mutate(&in)
-			err := validateServiceInput(in)
+			err := validateServiceInput(vis, in)
 			if tt.field == "" {
 				if err != nil {
 					t.Fatalf("want valid, got %v", err)
@@ -100,5 +110,17 @@ func TestValidHTTPURL(t *testing.T) {
 		if validHTTPURL(u) {
 			t.Errorf("validHTTPURL(%q) = true, want false", u)
 		}
+	}
+}
+
+// With no visibility configured at all, any non-empty slug is refused: the
+// admin form and the MCP propose path cannot restrict a service to a group
+// that does not exist.
+func TestVisibilityRejectedWhenNoneConfigured(t *testing.T) {
+	in := validInput()
+	in.Visibility = "experimental"
+	var ve *ValidationError
+	if err := validateServiceInput(config.VisibilitySet{}, in); !errors.As(err, &ve) || ve.Field != "visibility" {
+		t.Fatalf("err = %v, want a visibility ValidationError", err)
 	}
 }

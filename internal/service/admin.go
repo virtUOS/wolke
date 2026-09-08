@@ -46,6 +46,9 @@ type Draft struct {
 	Categories  []string // category slugs
 	Tag         string   // "" | "beta" | "wartung"
 	Keywords    []string // optional search aliases; flat, language-agnostic
+	// Visibility restricts the service to holders of a configured visibility
+	// slug; "" = public (docs/specs/service-visibility.md §4).
+	Visibility string
 }
 
 // Keyword limits keep the search aliases sane and the input bounded.
@@ -66,6 +69,7 @@ type AdminService struct {
 	Categories  []string          `json:"categories"`
 	Tag         string            `json:"tag,omitempty"`
 	Keywords    []string          `json:"keywords"`
+	Visibility  string            `json:"visibility,omitempty"`
 }
 
 // normalizeKeywords trims, drops blanks, and de-dupes case-insensitively while
@@ -90,8 +94,10 @@ func normalizeKeywords(in []string) []string {
 }
 
 // validateServiceInput enforces the catalog rules centrally so the form and the
-// MCP server behave identically (docs/02 §10).
-func validateServiceInput(in Draft) error {
+// MCP server behave identically (docs/02 §10). vis is the deployment's
+// configured visibility set: a service may only be restricted to a slug it
+// contains.
+func validateServiceInput(vis config.VisibilitySet, in Draft) error {
 	if strings.TrimSpace(in.Name) == "" {
 		return &ValidationError{Field: "name", Msg: "must not be empty"}
 	}
@@ -119,6 +125,9 @@ func validateServiceInput(in Draft) error {
 	if in.Tag != "" && in.Tag != "beta" && in.Tag != "wartung" {
 		return &ValidationError{Field: "tag", Msg: `must be "", "beta", or "wartung"`}
 	}
+	if in.Visibility != "" && !vis.Has(in.Visibility) {
+		return &ValidationError{Field: "visibility", Msg: "must be empty (public) or one of " + strings.Join(vis.Slugs(), ", ")}
+	}
 	kws := normalizeKeywords(in.Keywords)
 	if len(kws) > maxKeywords {
 		return &ValidationError{Field: "keywords", Msg: fmt.Sprintf("at most %d keywords are allowed", maxKeywords)}
@@ -138,7 +147,7 @@ func validHTTPURL(s string) bool {
 
 // ValidateDraft exposes service validation for the MCP propose step, which must
 // validate without writing (docs/02 §8).
-func ValidateDraft(in Draft) error { return validateServiceInput(in) }
+func ValidateDraft(vis config.VisibilitySet, in Draft) error { return validateServiceInput(vis, in) }
 
 // NormalizeKeywords exposes keyword normalization so the MCP propose preview
 // reflects exactly what a confirm would store (docs/02 §8).
@@ -163,8 +172,8 @@ func GetAdminService(ctx context.Context, db store.Querier, id pgtype.UUID) (Adm
 
 // CreateService validates, inserts the service + its categories, and audit-logs
 // the write — all in one transaction.
-func CreateService(ctx context.Context, db AdminDB, actor Actor, in Draft) (AdminService, error) {
-	if err := validateServiceInput(in); err != nil {
+func CreateService(ctx context.Context, db AdminDB, actor Actor, vis config.VisibilitySet, in Draft) (AdminService, error) {
+	if err := validateServiceInput(vis, in); err != nil {
 		return AdminService{}, err
 	}
 	var out AdminService
@@ -181,6 +190,7 @@ func CreateService(ctx context.Context, db AdminDB, actor Actor, in Draft) (Admi
 			Icon:        in.Icon,
 			Tag:         pgText(in.Tag),
 			Keywords:    normalizeKeywords(in.Keywords),
+			Visibility:  pgText(in.Visibility),
 		})
 		if err != nil {
 			return fmt.Errorf("create service: %w", err)
@@ -196,8 +206,8 @@ func CreateService(ctx context.Context, db AdminDB, actor Actor, in Draft) (Admi
 
 // UpdateService edits a service in place, replacing its category set, and audits
 // the before/after diff.
-func UpdateService(ctx context.Context, db AdminDB, actor Actor, id pgtype.UUID, in Draft) (AdminService, error) {
-	if err := validateServiceInput(in); err != nil {
+func UpdateService(ctx context.Context, db AdminDB, actor Actor, vis config.VisibilitySet, id pgtype.UUID, in Draft) (AdminService, error) {
+	if err := validateServiceInput(vis, in); err != nil {
 		return AdminService{}, err
 	}
 	var out AdminService
@@ -223,6 +233,7 @@ func UpdateService(ctx context.Context, db AdminDB, actor Actor, id pgtype.UUID,
 			Icon:        in.Icon,
 			Tag:         pgText(in.Tag),
 			Keywords:    normalizeKeywords(in.Keywords),
+			Visibility:  pgText(in.Visibility),
 		})
 		if err != nil {
 			return fmt.Errorf("update service: %w", err)
@@ -262,6 +273,10 @@ func SoftDeleteService(ctx context.Context, db AdminDB, actor Actor, id pgtype.U
 // must be one this deployment configures (roles.go); saving a list also purges
 // rows left behind by roles the claim mapping no longer defines, which is the
 // one moment we know it is safe to (spec §2.2).
+//
+// A restricted service may not be a role default (service-visibility spec
+// §7.1): default views stay public-only, so every user of a role sees the same
+// default view. Rejected with a field error naming the service.
 func SetRoleDefaults(ctx context.Context, db AdminDB, actor Actor, roles config.RoleSet, role string, serviceIDs []pgtype.UUID) error {
 	if err := ValidateRole(roles, role); err != nil {
 		return err
@@ -283,6 +298,16 @@ func SetRoleDefaults(ctx context.Context, db AdminDB, actor Actor, roles config.
 		}
 		ids := make([]string, 0, len(serviceIDs))
 		for i, sid := range serviceIDs {
+			svc, err := q.GetServiceByID(ctx, sid)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return &ValidationError{Field: "service_ids", Msg: "contains an unknown service"}
+			}
+			if err != nil {
+				return fmt.Errorf("look up service: %w", err)
+			}
+			if svc.Visibility.Valid && svc.Visibility.String != "" {
+				return &ValidationError{Field: "service_ids", Msg: fmt.Sprintf("%q is restricted (%s) and cannot be a role default", svc.Name, svc.Visibility.String)}
+			}
 			if err := q.AddRoleDefault(ctx, store.AddRoleDefaultParams{Role: role, ServiceID: sid, Sort: int32(i)}); err != nil {
 				return &ValidationError{Field: "service_ids", Msg: "contains an unknown service"}
 			}
@@ -465,6 +490,7 @@ func toAdminService(s store.Service, slugs []string) AdminService {
 		Categories:  slugs,
 		Tag:         textVal(s.Tag),
 		Keywords:    keywords,
+		Visibility:  textVal(s.Visibility),
 	}
 }
 

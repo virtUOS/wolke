@@ -28,3 +28,12 @@ set view_mode              = @view_mode,
     favorites_separate_tab = @favorites_separate_tab
 where id = @id
 returning *;
+
+-- name: UpdateUserVisibilityOptIn :one
+-- The user's own opt-in visibility slugs, written as a whole list
+-- (docs/specs/service-visibility.md §4). Claim-granted slugs live in
+-- visibility_claims and are never touched here.
+update users
+set visibility_optin = @optin
+where id = @id
+returning *;

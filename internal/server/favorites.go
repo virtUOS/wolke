@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/service"
 )
@@ -15,7 +16,9 @@ import (
 // listFavorites returns the user's favorited services, resolved via the catalog
 // cache so the shape matches /api/catalog (docs/02 §12). Favorites are a flat
 // set — no lists (docs/01 §4.4).
-func listFavorites(c *catalog.Cache, db service.FavoritesStore) http.HandlerFunc {
+// A favorite whose service became invisible to this user degrades like a
+// soft-deleted one: it stays stored, and simply does not resolve.
+func listFavorites(c *catalog.Cache, db service.FavoritesStore, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
 		ids, err := service.ListFavorites(r.Context(), db, user)
@@ -23,7 +26,7 @@ func listFavorites(c *catalog.Cache, db service.FavoritesStore) http.HandlerFunc
 			writeServiceError(w, err)
 			return
 		}
-		snap, err := c.Get(r.Context())
+		snap, err := visibleCatalog(r.Context(), c, vis)
 		if err != nil {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
 			return

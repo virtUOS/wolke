@@ -86,6 +86,7 @@ type Service struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	Tag         pgtype.Text        `json:"tag"`
 	Keywords    []string           `json:"keywords"`
+	Visibility  pgtype.Text        `json:"visibility"`
 }
 
 type ServiceCategory struct {
@@ -126,4 +127,6 @@ type User struct {
 	FavoritesSeeded       bool               `json:"favorites_seeded"`
 	Locale                string             `json:"locale"`
 	FavoritesManualSeeded bool               `json:"favorites_manual_seeded"`
+	VisibilityClaims      []string           `json:"visibility_claims"`
+	VisibilityOptin       []string           `json:"visibility_optin"`
 }
