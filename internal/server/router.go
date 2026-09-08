@@ -200,6 +200,11 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 				ar.Get("/role-defaults/{role}", adminGetRoleDefaults(ad))
 				ar.Put("/role-defaults/{role}", adminSetRoleDefaults(ad))
 				ar.Post("/categories", adminCreateCategory(ad))
+				// Static before the wildcard: chi resolves it that way anyway,
+				// and the reorder is a whole-list write, not a slug.
+				ar.Put("/categories/order", adminSetCategoryOrder(ad))
+				ar.Patch("/categories/{slug}", adminUpdateCategory(ad))
+				ar.Delete("/categories/{slug}", adminDeleteCategory(ad))
 				ar.Get("/announcements", adminListAnnouncements(ad))
 				ar.Post("/announcements", adminCreateAnnouncement(ad))
 				ar.Patch("/announcements/{id}", adminUpdateAnnouncement(ad))

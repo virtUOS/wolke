@@ -11,6 +11,7 @@ import (
 	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/service"
 	"github.com/virtuos/wolke/internal/store"
+	"github.com/virtuos/wolke/internal/store/storetest"
 )
 
 // Enforces the read-only catalog contract: the public MCP server serves only
@@ -44,6 +45,10 @@ func TestReadServerActiveOnly(t *testing.T) {
 		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub = 'readmcp-test'")
 		db.Close()
 	})
+	// This test adds and drops a category, which changes the set a concurrent
+	// whole-list reorder validates against (issue #130). Registered after the
+	// cleanup above so the lock is released before the pool closes.
+	storetest.LockCategorySet(ctx, t, db.Pool)
 
 	if _, err := service.CreateCategory(ctx, db, actor, "rm-test-cat", map[string]string{"de": "RM Test", "en": "RM Test"}, 9999); err != nil {
 		t.Fatalf("create category: %v", err)

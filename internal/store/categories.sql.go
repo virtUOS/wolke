@@ -7,6 +7,8 @@ package store
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countCategories = `-- name: CountCategories :one
@@ -20,4 +22,139 @@ func (q *Queries) CountCategories(ctx context.Context) (int64, error) {
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const countCategoryServices = `-- name: CountCategoryServices :one
+select count(*) from service_categories where category_id = $1
+`
+
+// How many services block a delete. Counts every attachment row, active or
+// soft-deleted: a soft-deleted service keeps its row and keeps blocking the FK,
+// so counting only active ones would promise a delete that then fails.
+func (q *Queries) CountCategoryServices(ctx context.Context, categoryID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countCategoryServices, categoryID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const deleteCategory = `-- name: DeleteCategory :execrows
+delete from categories where id = $1
+`
+
+// Unguarded on purpose: service_categories.category_id is `on delete restrict`,
+// so the database refuses a category services still use. The service layer
+// checks first and turns that into a readable refusal (issue #130 §2.3); this
+// statement is the second lock.
+func (q *Queries) DeleteCategory(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCategory, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const listCategoryServiceNames = `-- name: ListCategoryServiceNames :many
+select s.name
+from service_categories sc
+join services s on s.id = sc.service_id
+where sc.category_id = $1
+order by s.name
+limit $2
+`
+
+type ListCategoryServiceNamesParams struct {
+	CategoryID pgtype.UUID `json:"category_id"`
+	Lim        int32       `json:"lim"`
+}
+
+// The first few blocking service names, to name them in the refusal.
+func (q *Queries) ListCategoryServiceNames(ctx context.Context, arg ListCategoryServiceNamesParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listCategoryServiceNames, arg.CategoryID, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCategorySlugs = `-- name: ListCategorySlugs :many
+select slug from categories order by sort, slug
+`
+
+// The existing slug set, in current order — the reference a reorder write has to
+// be a permutation of (issue #130).
+func (q *Queries) ListCategorySlugs(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listCategorySlugs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, err
+		}
+		items = append(items, slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setCategoryOrder = `-- name: SetCategoryOrder :execrows
+update categories c
+set sort = ((o.ord - 1) * 10)::int
+from unnest($1::text[]) with ordinality as o (slug, ord)
+where c.slug = o.slug
+`
+
+// Whole-list order write: one statement, so the renumbering is atomic. `with
+// ordinality` numbers the incoming slugs; the gap-style step of 10 keeps
+// create's `max(sort)+10` appending after the last row. A slug that is not a
+// category updates nothing — the service layer has already rejected that case.
+func (q *Queries) SetCategoryOrder(ctx context.Context, slugs []string) (int64, error) {
+	result, err := q.db.Exec(ctx, setCategoryOrder, slugs)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateCategory = `-- name: UpdateCategory :one
+update categories set slug = $1, label = $2 where id = $3 returning id, slug, label, sort
+`
+
+type UpdateCategoryParams struct {
+	Slug  string      `json:"slug"`
+	Label []byte      `json:"label"`
+	ID    pgtype.UUID `json:"id"`
+}
+
+// Slug and both labels; renaming is safe because service_categories joins on the
+// category id (issue #130 §2.2). Uniqueness is checked in the service layer, so
+// a 23505 here means a concurrent insert took the slug first.
+func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error) {
+	row := q.db.QueryRow(ctx, updateCategory, arg.Slug, arg.Label, arg.ID)
+	var i Category
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Label,
+		&i.Sort,
+	)
+	return i, err
 }

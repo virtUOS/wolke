@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -341,20 +342,80 @@ func SetRoleDefaults(ctx context.Context, db AdminDB, actor Actor, roles config.
 	})
 }
 
-// CreateCategory adds a managed category.
-func CreateCategory(ctx context.Context, db AdminDB, actor Actor, slug string, label map[string]string, sort int) (store.Category, error) {
+// ConflictError is a well-formed write the current state refuses — other data
+// still depends on what it would change. The HTTP layer maps it to a 409.
+type ConflictError struct{ Msg string }
+
+func (e *ConflictError) Error() string { return e.Msg }
+
+// Category slugs are kebab-case: lowercase alphanumerics, hyphen-separated.
+// They appear in the /?cat=<slug> URL filter, so the format is a real rule and
+// not cosmetic. This regex used to live only in CategoriesAdmin.tsx, which left
+// the API accepting "Foo Bar!!" — it belongs here, with the frontend's copy
+// kept purely as fast feedback (CLAUDE.md rule 3, issue #130).
+var categorySlugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+
+// How many blocking service names a delete refusal names before it counts the
+// rest. Enough to act on, short enough to read in one line.
+const categoryInUseSample = 4
+
+// AdminCategory is the API/audit shape of a category (label as a map, not the
+// raw JSONB bytes store.Category carries).
+type AdminCategory struct {
+	Slug  string            `json:"slug"`
+	Label map[string]string `json:"label"`
+	Sort  int32             `json:"sort"`
+}
+
+func toAdminCategory(c store.Category) AdminCategory {
+	return AdminCategory{Slug: c.Slug, Label: jsonToMap(c.Label), Sort: c.Sort}
+}
+
+// validateCategoryInput enforces the slug format and the both-languages label
+// rule for every category write path, and returns the trimmed slug.
+func validateCategoryInput(slug string, label map[string]string) (string, error) {
 	slug = strings.TrimSpace(slug)
 	if slug == "" {
-		return store.Category{}, &ValidationError{Field: "slug", Msg: "must not be empty"}
+		return "", &ValidationError{Field: "slug", Msg: "must not be empty"}
+	}
+	if !categorySlugPattern.MatchString(slug) {
+		return "", &ValidationError{Field: "slug", Msg: "must be lowercase letters, digits and single hyphens (e.g. \"forschung\")"}
 	}
 	if strings.TrimSpace(label["de"]) == "" {
-		return store.Category{}, &ValidationError{Field: "label", Msg: "German label (de) is required"}
+		return "", &ValidationError{Field: "label", Msg: "German label (de) is required"}
 	}
 	if strings.TrimSpace(label["en"]) == "" {
-		return store.Category{}, &ValidationError{Field: "label", Msg: "English label (en) is required"}
+		return "", &ValidationError{Field: "label", Msg: "English label (en) is required"}
+	}
+	return slug, nil
+}
+
+// requireFreeSlug rejects a slug another category already holds. categories.slug
+// is unique not null, so without this check the raw 23505 would surface as a 500
+// on both create and rename (issue #130 §2.2).
+func requireFreeSlug(ctx context.Context, q *store.Queries, slug string) error {
+	_, err := q.GetCategoryBySlug(ctx, slug)
+	switch {
+	case err == nil:
+		return &ValidationError{Field: "slug", Msg: fmt.Sprintf("already exists (%q)", slug)}
+	case errors.Is(err, pgx.ErrNoRows):
+		return nil
+	default:
+		return fmt.Errorf("check category slug: %w", err)
+	}
+}
+
+// CreateCategory adds a managed category.
+func CreateCategory(ctx context.Context, db AdminDB, actor Actor, slug string, label map[string]string, sort int) (store.Category, error) {
+	slug, err := validateCategoryInput(slug, label)
+	if err != nil {
+		return store.Category{}, err
 	}
 	var out store.Category
-	err := inTx(ctx, db, func(q *store.Queries) error {
+	err = inTx(ctx, db, func(q *store.Queries) error {
+		if err := requireFreeSlug(ctx, q, slug); err != nil {
+			return err
+		}
 		c, err := q.CreateCategory(ctx, store.CreateCategoryParams{Slug: slug, Label: mustJSON(label), Sort: int32(sort)})
 		if err != nil {
 			return fmt.Errorf("create category: %w", err)
@@ -363,6 +424,150 @@ func CreateCategory(ctx context.Context, db AdminDB, actor Actor, slug string, l
 		return audit(ctx, q, actor, "category.create", c.ID, map[string]any{"after": map[string]any{"slug": slug, "label": label}})
 	})
 	return out, err
+}
+
+// UpdateCategory edits a category's slug and both labels, addressed by its
+// current slug, and audits the before/after diff.
+//
+// Renaming is allowed: service_categories joins on the category id, so
+// attachments survive untouched, and the only slug consumer is the /?cat=<slug>
+// URL filter, which Dashboard.tsx already drops when the catalog no longer knows
+// it (issue #130 §2.2).
+func UpdateCategory(ctx context.Context, db AdminDB, actor Actor, slug, newSlug string, label map[string]string) (store.Category, error) {
+	newSlug, err := validateCategoryInput(newSlug, label)
+	if err != nil {
+		return store.Category{}, err
+	}
+	var out store.Category
+	err = inTx(ctx, db, func(q *store.Queries) error {
+		before, err := q.GetCategoryBySlug(ctx, slug)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &NotFoundError{What: "category"}
+		}
+		if err != nil {
+			return fmt.Errorf("get category: %w", err)
+		}
+		if newSlug != before.Slug {
+			if err := requireFreeSlug(ctx, q, newSlug); err != nil {
+				return err
+			}
+		}
+		c, err := q.UpdateCategory(ctx, store.UpdateCategoryParams{
+			ID: before.ID, Slug: newSlug, Label: mustJSON(label),
+		})
+		if err != nil {
+			return fmt.Errorf("update category: %w", err)
+		}
+		out = c
+		return audit(ctx, q, actor, "category.update", c.ID, map[string]any{
+			"before": toAdminCategory(before),
+			"after":  toAdminCategory(c),
+		})
+	})
+	return out, err
+}
+
+// categoryInUseMessage is the refusal a guarded delete returns: how many
+// services block it and, so the admin knows what to reassign, the first few by
+// name (issue #130 §2.3).
+func categoryInUseMessage(n int64, names []string) string {
+	verb := "services still use"
+	object := "them"
+	if n == 1 {
+		verb = "service still uses"
+		object = "it"
+	}
+	listed := strings.Join(names, ", ")
+	if rest := n - int64(len(names)); rest > 0 {
+		listed = fmt.Sprintf("%s and %d more", listed, rest)
+	}
+	return fmt.Sprintf("%d %s this category: %s. Reassign %s first.", n, verb, listed, object)
+}
+
+// DeleteCategory removes a category that nothing uses, and audits it.
+//
+// The delete is guarded, not cascading: service_categories.category_id is
+// `on delete restrict`, and that is the right guard — every service must carry
+// at least one category, so cascading could mint invalid services. A category
+// services still hold is refused with a ConflictError naming the count, rather
+// than letting the constraint violation surface as a 500.
+func DeleteCategory(ctx context.Context, db AdminDB, actor Actor, slug string) error {
+	return inTx(ctx, db, func(q *store.Queries) error {
+		before, err := q.GetCategoryBySlug(ctx, slug)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &NotFoundError{What: "category"}
+		}
+		if err != nil {
+			return fmt.Errorf("get category: %w", err)
+		}
+		n, err := q.CountCategoryServices(ctx, before.ID)
+		if err != nil {
+			return fmt.Errorf("count category services: %w", err)
+		}
+		if n > 0 {
+			names, err := q.ListCategoryServiceNames(ctx, store.ListCategoryServiceNamesParams{
+				CategoryID: before.ID, Lim: categoryInUseSample,
+			})
+			if err != nil {
+				return fmt.Errorf("list category services: %w", err)
+			}
+			return &ConflictError{Msg: categoryInUseMessage(n, names)}
+		}
+		if _, err := q.DeleteCategory(ctx, before.ID); err != nil {
+			return fmt.Errorf("delete category: %w", err)
+		}
+		return audit(ctx, q, actor, "category.delete", before.ID, map[string]any{
+			"before": toAdminCategory(before),
+		})
+	})
+}
+
+// checkCategoryPermutation is the reorder contract: the incoming list must be a
+// permutation of exactly the existing slugs. Anything else is a client that is
+// out of sync, and renumbering a partial list would silently collapse the order
+// it didn't send — the same rule, for the same reason, as SetFavoritesOrder.
+func checkCategoryPermutation(current, want []string) error {
+	seen := make(map[string]bool, len(want))
+	for _, slug := range want {
+		if seen[slug] {
+			return &ValidationError{Field: "slugs", Msg: "must not list a category twice"}
+		}
+		seen[slug] = true
+	}
+	if len(current) != len(seen) {
+		return &ValidationError{Field: "slugs", Msg: "must list exactly the existing categories"}
+	}
+	for _, slug := range current {
+		if !seen[slug] {
+			return &ValidationError{Field: "slugs", Msg: "must list exactly the existing categories"}
+		}
+	}
+	return nil
+}
+
+// SetCategoryOrder replaces the order categories appear in for every user with
+// the given whole list, and audits the before/after order. Idempotent: writing
+// the same list twice is a no-op.
+func SetCategoryOrder(ctx context.Context, db AdminDB, actor Actor, slugs []string) error {
+	return inTx(ctx, db, func(q *store.Queries) error {
+		current, err := q.ListCategorySlugs(ctx)
+		if err != nil {
+			return fmt.Errorf("list category slugs: %w", err)
+		}
+		if err := checkCategoryPermutation(current, slugs); err != nil {
+			return err
+		}
+		if len(slugs) == 0 {
+			return nil
+		}
+		if _, err := q.SetCategoryOrder(ctx, slugs); err != nil {
+			return fmt.Errorf("set category order: %w", err)
+		}
+		return audit(ctx, q, actor, "category.reorder", pgtype.UUID{}, map[string]any{
+			"before": current,
+			"after":  slugs,
+		})
+	})
 }
 
 // SearchInsight is one zero-result query with how often and when it was last
