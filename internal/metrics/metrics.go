@@ -26,6 +26,7 @@ type Metrics struct {
 	activeSessions      prometheus.Gauge
 	catalogServices     *prometheus.GaugeVec // state=active|inactive
 	announcementsActive *prometheus.GaugeVec // severity
+	serviceFavorites    *prometheus.GaugeVec // service (name, as on ClicksTotal)
 }
 
 // New builds and registers the collectors on a private registry.
@@ -53,8 +54,12 @@ func New() *Metrics {
 			Name: "wolke_announcements_active",
 			Help: "Active announcements by severity.",
 		}, []string{"severity"}),
+		serviceFavorites: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "wolke_service_favorites",
+			Help: "Users currently having a service favorited, per active service.",
+		}, []string{"service"}),
 	}
-	m.reg.MustRegister(m.ClicksTotal, m.RequestDuration, m.activeSessions, m.catalogServices, m.announcementsActive)
+	m.reg.MustRegister(m.ClicksTotal, m.RequestDuration, m.activeSessions, m.catalogServices, m.announcementsActive, m.serviceFavorites)
 	return m
 }
 
@@ -75,6 +80,7 @@ type GaugeSource interface {
 	CountActiveSessions(ctx context.Context) (int64, error)
 	CountServicesByState(ctx context.Context) ([]store.CountServicesByStateRow, error)
 	CountActiveAnnouncementsBySeverity(ctx context.Context) ([]store.CountActiveAnnouncementsBySeverityRow, error)
+	CountFavoritesByService(ctx context.Context) ([]store.CountFavoritesByServiceRow, error)
 }
 
 // RefreshGauges updates the gauges from the database.
@@ -107,6 +113,18 @@ func (m *Metrics) RefreshGauges(ctx context.Context, src GaugeSource) error {
 	m.announcementsActive.Reset()
 	for _, a := range anns {
 		m.announcementsActive.WithLabelValues(a.Severity).Set(float64(a.N))
+	}
+
+	favs, err := src.CountFavoritesByService(ctx)
+	if err != nil {
+		return err
+	}
+	// Reset first: a service that was soft-deleted or renamed has left the
+	// query, and its series must go with it instead of freezing at its last
+	// value.
+	m.serviceFavorites.Reset()
+	for _, f := range favs {
+		m.serviceFavorites.WithLabelValues(f.Name).Set(float64(f.N))
 	}
 	return nil
 }

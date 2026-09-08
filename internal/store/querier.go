@@ -26,6 +26,10 @@ type Querier interface {
 	// A trivial query used in Phase 0 to prove the sqlc -> pgx pipeline end-to-end.
 	// Real catalog queries arrive in Phase 1.
 	CountCategories(ctx context.Context) (int64, error)
+	// Favorites per active service. The left join keeps a service nobody has
+	// pinned in the result with n = 0, so its gauge series exists rather than
+	// silently dropping out of the dashboard.
+	CountFavoritesByService(ctx context.Context) ([]CountFavoritesByServiceRow, error)
 	CountServicesByState(ctx context.Context) ([]CountServicesByStateRow, error)
 	CreateAnnouncement(ctx context.Context, arg CreateAnnouncementParams) (Announcement, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
