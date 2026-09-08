@@ -19,7 +19,9 @@ import (
 // cache (invalidated after writes), and an audit reader.
 type AdminDeps struct {
 	// Roles is the configured role set; the router fills it from Deps.Roles.
-	Roles      config.RoleSet
+	Roles config.RoleSet
+	// Visibility is the configured visibility set; the router fills it too.
+	Visibility config.VisibilitySet
 	Store      service.AdminDB
 	Invalidate func() // catalog cache invalidation; nil = no-op
 	Audit      AuditStore
@@ -61,6 +63,7 @@ type serviceBody struct {
 	Categories  []string          `json:"categories"`
 	Tag         string            `json:"tag"`
 	Keywords    []string          `json:"keywords"`
+	Visibility  string            `json:"visibility"` // "" = public
 }
 
 func (b serviceBody) draft() service.Draft {
@@ -73,6 +76,7 @@ func (b serviceBody) draft() service.Draft {
 		Categories:  b.Categories,
 		Tag:         b.Tag,
 		Keywords:    b.Keywords,
+		Visibility:  b.Visibility,
 	}
 }
 
@@ -94,7 +98,7 @@ func adminCreateService(d AdminDeps) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
-		svc, err := service.CreateService(r.Context(), d.Store, actorFromContext(r.Context()), b.draft())
+		svc, err := service.CreateService(r.Context(), d.Store, actorFromContext(r.Context()), d.Visibility, b.draft())
 		if err != nil {
 			writeServiceError(w, err)
 			return
@@ -116,7 +120,7 @@ func adminUpdateService(d AdminDeps) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
-		svc, err := service.UpdateService(r.Context(), d.Store, actorFromContext(r.Context()), id, b.draft())
+		svc, err := service.UpdateService(r.Context(), d.Store, actorFromContext(r.Context()), d.Visibility, id, b.draft())
 		if err != nil {
 			writeServiceError(w, err)
 			return

@@ -47,6 +47,31 @@ oidc:
     claim: groups
     match: dashboard-admins
 
+# Service visibility (docs/specs/service-visibility.md; issues #34, #121). A
+# service is public unless an admin restricts it to one of the slugs below; a
+# user sees the public services plus those of every slug they hold. Validated
+# at startup like oidc.role: slug [a-z0-9-]{1,32}, unique, not `all`, not a role
+# slug. Two ways to hold a slug, and that is the only difference between them:
+#   grant: opt-in  — the user enables it in the account menu, after confirming
+#                    `warning` (required: "may vanish, data is not migrated").
+#   grant: claim   — the IdP grants it through a (possibly nested) claim, like
+#                    oidc.admin; requires `claim` + `match`. Login-side
+#                    derivation ships in the spec's Stage 2; configurable now.
+# `label` is the badge on the tile (optional; defaults to the capitalized slug).
+# Leave the list out (the default) and every service is public — no UI changes.
+visibility: []
+#  - slug: experimental
+#    label:   { de: "Experimentell", en: "Experimental" }
+#    grant:   opt-in
+#    warning:
+#      de: "Experimentelle Dienste können jederzeit ohne Vorankündigung verschwinden; Daten gehen dabei möglicherweise verloren und werden nicht migriert."
+#      en: "Experimental services can disappear at any time without notice; data may be lost and will not be migrated."
+#  - slug: it-infra
+#    label:   { de: "IT-Infrastruktur", en: "IT infrastructure" }
+#    grant:   claim
+#    claim:   groups
+#    match:   it-service-admins
+
 # Branding / theme — applied by the SPA as CSS variables at runtime. Keep the
 # token NAMES stable (docs/03 §2); only values change. The brand hex values are
 # read from the mockups and are still TBD against the UOS Corporate Design

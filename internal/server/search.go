@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/store"
 )
@@ -41,7 +42,10 @@ func normalizeSearchQuery(q string) string {
 // search serves GET /api/search?q= — fuzzy/substring matches over name,
 // description, and category labels, resolved to full services via the cache
 // (docs/01 §4.6, docs/02 §12). The SPA groups results by category.
-func search(c *catalog.Cache, s SearchStore) http.HandlerFunc {
+//
+// Visibility needs no SQL change: a restricted id the user does not hold simply
+// fails to resolve through the narrowed view, and the result count follows.
+func search(c *catalog.Cache, s SearchStore, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := strings.TrimSpace(r.URL.Query().Get("q"))
 		if q == "" {
@@ -59,7 +63,7 @@ func search(c *catalog.Cache, s SearchStore) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "search_failed", "Search is temporarily unavailable.")
 			return
 		}
-		snap, err := c.Get(r.Context())
+		snap, err := visibleCatalog(r.Context(), c, vis)
 		if err != nil {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
 			return
@@ -73,10 +77,18 @@ func search(c *catalog.Cache, s SearchStore) http.HandlerFunc {
 		// Best-effort log for the zero-result insights (docs/01 §4.6): a failure
 		// here must never break or slow the actual search response. Skip very short
 		// queries to keep mid-typing fragments out of the insights worklist.
+		//
+		// The logged count is the PRE-narrowing one (len(ids), what the catalog
+		// matched), not what this viewer was shown. The event measures the
+		// catalog's keyword coverage for the admin worklist; a non-holder
+		// searching a restricted service's name is not a gap in coverage, and
+		// logging it as zero results would fill the worklist with false gaps that
+		// are already covered. The count is an aggregate, never tied to a user,
+		// so it reveals nothing to the viewer either.
 		if norm := normalizeSearchQuery(q); len([]rune(norm)) >= minLoggedQueryLen {
 			if err := s.InsertSearchEvent(r.Context(), store.InsertSearchEventParams{
 				QueryNorm:   norm,
-				ResultCount: int32(len(services)),
+				ResultCount: int32(len(ids)),
 			}); err != nil {
 				slog.WarnContext(r.Context(), "search event log failed", "error", err)
 			}

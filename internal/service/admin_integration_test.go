@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -68,7 +69,7 @@ func TestAdminServiceLifecycleAudited(t *testing.T) {
 	}
 
 	// Create → audited, present in admin list.
-	svc, err := CreateService(ctx, db, actor, in)
+	svc, err := CreateService(ctx, db, actor, config.VisibilitySet{}, in)
 	if err != nil {
 		t.Fatalf("CreateService: %v", err)
 	}
@@ -84,7 +85,7 @@ func TestAdminServiceLifecycleAudited(t *testing.T) {
 	// Update → audited; rejects an unknown category.
 	in.Name = "Admin Test Service v2"
 	in.Categories = []string{"data", "communication"}
-	if _, err := UpdateService(ctx, db, actor, id, in); err != nil {
+	if _, err := UpdateService(ctx, db, actor, config.VisibilitySet{}, id, in); err != nil {
 		t.Fatalf("UpdateService: %v", err)
 	}
 	if auditCount("service.update") != 1 {
@@ -92,7 +93,7 @@ func TestAdminServiceLifecycleAudited(t *testing.T) {
 	}
 	bad := in
 	bad.Categories = []string{"no-such-category"}
-	if _, err := UpdateService(ctx, db, actor, id, bad); err == nil {
+	if _, err := UpdateService(ctx, db, actor, config.VisibilitySet{}, id, bad); err == nil {
 		t.Error("UpdateService with unknown category should fail validation")
 	}
 

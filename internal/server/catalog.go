@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/httpx"
 )
 
@@ -17,10 +18,11 @@ type RoleDefaultsStore interface {
 }
 
 // catalogList serves the active catalog (services + categories) from the cache,
-// so the bulk of read traffic never touches the DB (docs/02 §9, §12).
-func catalogList(c *catalog.Cache) http.HandlerFunc {
+// so the bulk of read traffic never touches the DB (docs/02 §9, §12) — narrowed
+// to what this user may see (docs/specs/service-visibility.md §3).
+func catalogList(c *catalog.Cache, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		snap, err := c.Get(r.Context())
+		snap, err := visibleCatalog(r.Context(), c, vis)
 		if err != nil {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
 			return
@@ -31,14 +33,14 @@ func catalogList(c *catalog.Cache) http.HandlerFunc {
 
 // catalogDefaults serves the role-ordered default view for the current user
 // (docs/01 §3, docs/02 §12): the admin-curated order, resolved to live services.
-func catalogDefaults(c *catalog.Cache, defaults RoleDefaultsStore) http.HandlerFunc {
+func catalogDefaults(c *catalog.Cache, defaults RoleDefaultsStore, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := userFromContext(r.Context())
 		if !ok {
 			httpx.WriteProblem(w, http.StatusUnauthorized, "unauthenticated", "Login required.")
 			return
 		}
-		snap, err := c.Get(r.Context())
+		snap, err := visibleCatalog(r.Context(), c, vis)
 		if err != nil {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
 			return

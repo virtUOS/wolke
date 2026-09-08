@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import { localized, type AdminService, type Category, type Service, type ServiceDraft, type ServiceTag } from '@/lib/api'
+import { localized, type AdminService, type Category, type Service, type ServiceDraft, type ServiceTag, type VisibilityEntry } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { curatedIconNames } from '@/lib/icons'
 import { cn } from '@/lib/utils'
@@ -16,6 +16,9 @@ import { Tile } from '../Tile'
 interface ServiceFormProps {
   categories: Category[]
   locale: string
+  /** The deployment's configured visibility groups; the selector renders only
+   *  when there are any (docs/specs/service-visibility.md §5). */
+  visibilityOptions?: VisibilityEntry[]
   initial?: AdminService
   onSubmit: (draft: ServiceDraft) => void
   onCancel: () => void
@@ -46,7 +49,7 @@ function mergeKeywords(existing: string[], raw: string): string[] {
 // Admin create/edit form for a catalog service, with a live tile preview, an
 // icon picker, multi-category selection, and URL validation (docs/03 §6). The
 // server re-validates authoritatively; this gives immediate feedback.
-export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, submitting, error }: ServiceFormProps) {
+export function ServiceForm({ categories, locale, visibilityOptions = [], initial, onSubmit, onCancel, submitting, error }: ServiceFormProps) {
   const s = t(locale)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const errId = useId()
@@ -64,6 +67,16 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
   const [iconQuery, setIconQuery] = useState('')
   const [cats, setCats] = useState<Set<string>>(new Set(initial?.categories ?? []))
   const [tag, setTag] = useState<ServiceTag | ''>(initial?.tag ?? '')
+  // '' = public. A stored slug the deployment no longer configures still shows
+  // as selected (as its slug), so an admin sees — and can clear — it.
+  const [visibility, setVisibility] = useState(initial?.visibility ?? '')
+  const visibilityLabels = useMemo(() => {
+    const out: Record<string, string> = {}
+    for (const v of visibilityOptions) out[v.slug] = localized(v.label, locale)
+    return out
+  }, [visibilityOptions, locale])
+  const visibilityChoices = ['', ...visibilityOptions.map((v) => v.slug)]
+  if (visibility && !(visibility in visibilityLabels)) visibilityChoices.push(visibility)
   const [keywords, setKeywords] = useState<string[]>(initial?.keywords ?? [])
   const [kwInput, setKwInput] = useState('')
 
@@ -100,8 +113,9 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
       categories: [...cats],
       doc_only: serviceUrl.trim() === '',
       tag: tag || undefined,
+      visibility: visibility || undefined,
     }),
-    [name, descDe, descEn, serviceUrl, docUrl, icon, cats, tag, s],
+    [name, descDe, descEn, serviceUrl, docUrl, icon, cats, tag, visibility, s],
   )
 
   const errors: string[] = []
@@ -161,6 +175,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
       tag,
       // effectiveKeywords flushes any term left in the input, comma-split like the chips.
       keywords: effectiveKeywords,
+      visibility,
     })
   }
 
@@ -261,6 +276,27 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
           </div>
         </fieldset>
 
+        {visibilityChoices.length > 1 && (
+          <fieldset>
+            <legend className="mb-1 text-sm font-medium">{s.admin.fVisibility}</legend>
+            <p className="mb-1 text-xs text-text-muted">{s.admin.visibilityHint}</p>
+            <div className="flex flex-wrap gap-2">
+              {visibilityChoices.map((value) => (
+                <ChoiceChip
+                  key={value}
+                  type="radio"
+                  name="visibility"
+                  value={value}
+                  active={visibility === value}
+                  checked={visibility === value}
+                  onChange={() => setVisibility(value)}
+                  label={value === '' ? s.admin.visibilityPublic : visibilityLabels[value] ?? value}
+                />
+              ))}
+            </div>
+          </fieldset>
+        )}
+
         <fieldset>
           <legend className="mb-1 text-sm font-medium">{s.admin.fIcon}</legend>
           <Input
@@ -316,7 +352,7 @@ export function ServiceForm({ categories, locale, initial, onSubmit, onCancel, s
         <div>
           <p className="mb-2 text-sm font-medium text-text-muted">{s.admin.preview}</p>
           <div className="max-w-sm">
-            <Tile service={preview} categories={categories} locale={locale} />
+            <Tile service={preview} categories={categories} locale={locale} visibilityLabels={visibilityLabels} />
           </div>
         </div>
 

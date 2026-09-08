@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -50,7 +51,7 @@ func TestClickThenFrequent(t *testing.T) {
 		r := httptest.NewRequest(http.MethodPost, target, strings.NewReader(body))
 		r = r.WithContext(context.WithValue(r.Context(), userCtxKey{}, user))
 		rec := httptest.NewRecorder()
-		recordClick(db, cache, nil)(rec, r)
+		recordClick(db, cache, nil, config.VisibilitySet{})(rec, r)
 		return rec
 	}
 
@@ -80,7 +81,7 @@ func TestClickThenFrequent(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/api/usage/frequent", nil)
 	r = r.WithContext(context.WithValue(r.Context(), userCtxKey{}, user))
 	rec := httptest.NewRecorder()
-	frequent(cache, db)(rec, r)
+	frequent(cache, db, config.VisibilitySet{})(rec, r)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("frequent = %d, want 200", rec.Code)
 	}

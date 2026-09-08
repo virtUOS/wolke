@@ -12,7 +12,7 @@ import (
 )
 
 const getUserByID = `-- name: GetUserByID :one
-select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded from users where id = $1
+select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded, visibility_claims, visibility_optin from users where id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -34,12 +34,14 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 		&i.FavoritesSeeded,
 		&i.Locale,
 		&i.FavoritesManualSeeded,
+		&i.VisibilityClaims,
+		&i.VisibilityOptin,
 	)
 	return i, err
 }
 
 const getUserBySub = `-- name: GetUserBySub :one
-select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded from users where oidc_sub = $1
+select id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded, visibility_claims, visibility_optin from users where oidc_sub = $1
 `
 
 func (q *Queries) GetUserBySub(ctx context.Context, oidcSub string) (User, error) {
@@ -61,6 +63,8 @@ func (q *Queries) GetUserBySub(ctx context.Context, oidcSub string) (User, error
 		&i.FavoritesSeeded,
 		&i.Locale,
 		&i.FavoritesManualSeeded,
+		&i.VisibilityClaims,
+		&i.VisibilityOptin,
 	)
 	return i, err
 }
@@ -73,7 +77,7 @@ set view_mode              = $1,
     favorites_order        = $4,
     favorites_separate_tab = $5
 where id = $6
-returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded
+returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded, visibility_claims, visibility_optin
 `
 
 type UpdateUserPrefsParams struct {
@@ -112,6 +116,48 @@ func (q *Queries) UpdateUserPrefs(ctx context.Context, arg UpdateUserPrefsParams
 		&i.FavoritesSeeded,
 		&i.Locale,
 		&i.FavoritesManualSeeded,
+		&i.VisibilityClaims,
+		&i.VisibilityOptin,
+	)
+	return i, err
+}
+
+const updateUserVisibilityOptIn = `-- name: UpdateUserVisibilityOptIn :one
+update users
+set visibility_optin = $1
+where id = $2
+returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded, visibility_claims, visibility_optin
+`
+
+type UpdateUserVisibilityOptInParams struct {
+	Optin []string    `json:"optin"`
+	ID    pgtype.UUID `json:"id"`
+}
+
+// The user's own opt-in visibility slugs, written as a whole list
+// (docs/specs/service-visibility.md §4). Claim-granted slugs live in
+// visibility_claims and are never touched here.
+func (q *Queries) UpdateUserVisibilityOptIn(ctx context.Context, arg UpdateUserVisibilityOptInParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserVisibilityOptIn, arg.Optin, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.OidcSub,
+		&i.DisplayName,
+		&i.Email,
+		&i.PrimaryRole,
+		&i.IsAdmin,
+		&i.ViewMode,
+		&i.Theme,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+		&i.FavoritesOrder,
+		&i.FavoritesSeparateTab,
+		&i.FavoritesSeeded,
+		&i.Locale,
+		&i.FavoritesManualSeeded,
+		&i.VisibilityClaims,
+		&i.VisibilityOptin,
 	)
 	return i, err
 }
@@ -125,7 +171,7 @@ set display_name = excluded.display_name,
     primary_role = excluded.primary_role,
     is_admin     = excluded.is_admin,
     last_seen_at = now()
-returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded
+returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded, visibility_claims, visibility_optin
 `
 
 type UpsertUserParams struct {
@@ -164,6 +210,8 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		&i.FavoritesSeeded,
 		&i.Locale,
 		&i.FavoritesManualSeeded,
+		&i.VisibilityClaims,
+		&i.VisibilityOptin,
 	)
 	return i, err
 }

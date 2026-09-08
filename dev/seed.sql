@@ -20,15 +20,20 @@ on conflict (slug) do update set label = excluded.label, sort = excluded.sort;
 -- Services. service_url NULL => documentation-only entry (tile launches docs).
 -- keywords: admin-configured search aliases (a flat, language-agnostic list) that
 -- surface a service for terms not in its name or description (docs/01 §4.6).
-insert into services (name, description, service_url, doc_url, icon, keywords) values
-  ('Stud.IP',  '{"de":"Lernplattform für Kurse und Materialien.","en":"Course and learning-material platform."}', 'https://studip.example.edu',  'https://docs.example.edu/studip',  'graduation-cap', '{}'),
-  ('MyShare',  '{"de":"Persönlicher Netzspeicher der Universität.","en":"Your university network storage."}',     'https://myshare.example.edu', 'https://docs.example.edu/myshare', 'hard-drive', '{}'),
-  ('VPN',      '{"de":"Sicherer Zugriff auf das Uni-Netz von außerhalb.","en":"Secure off-campus network access."}', 'https://vpn.example.edu',   'https://docs.example.edu/vpn',     'shield', '{"remote access","fernzugriff"}'),
-  ('Webmail',  '{"de":"Universitäts-E-Mail im Browser.","en":"University email in your browser."}',               'https://webmail.example.edu', 'https://docs.example.edu/mail',    'mail', '{}'),
-  ('BigBlueButton', '{"de":"Web-Konferenzen und Vorlesungsaufzeichnung.","en":"Web conferencing and lecture recording."}', 'https://bbb.example.edu', 'https://docs.example.edu/bbb', 'video', '{"video conference","videokonferenz","online meeting","webinar","bbb"}'),
-  ('Identitätsmanagement', '{"de":"Passwort ändern und Konto verwalten.","en":"Change your password and manage your account."}', 'https://idm.example.edu', 'https://docs.example.edu/account', 'key-round', '{}'),
-  ('WLAN an der UOS', '{"de":"So verbindest du dich mit eduroam.","en":"How to connect to eduroam."}', NULL, 'https://docs.example.edu/wifi', 'wifi', '{wifi,internet}')
-on conflict (name) do update set keywords = excluded.keywords;
+-- visibility: NULL = public; a slug restricts the service to users holding it
+-- (docs/specs/service-visibility.md). 'Zettelkasten Labor' is the experimental
+-- fixture the opt-in e2e flow toggles — it needs the matching `visibility:`
+-- entry in the config (dev/config.e2e.yaml) to be visible to anyone at all.
+insert into services (name, description, service_url, doc_url, icon, keywords, visibility) values
+  ('Stud.IP',  '{"de":"Lernplattform für Kurse und Materialien.","en":"Course and learning-material platform."}', 'https://studip.example.edu',  'https://docs.example.edu/studip',  'graduation-cap', '{}', NULL),
+  ('MyShare',  '{"de":"Persönlicher Netzspeicher der Universität.","en":"Your university network storage."}',     'https://myshare.example.edu', 'https://docs.example.edu/myshare', 'hard-drive', '{}', NULL),
+  ('VPN',      '{"de":"Sicherer Zugriff auf das Uni-Netz von außerhalb.","en":"Secure off-campus network access."}', 'https://vpn.example.edu',   'https://docs.example.edu/vpn',     'shield', '{"remote access","fernzugriff"}', NULL),
+  ('Webmail',  '{"de":"Universitäts-E-Mail im Browser.","en":"University email in your browser."}',               'https://webmail.example.edu', 'https://docs.example.edu/mail',    'mail', '{}', NULL),
+  ('BigBlueButton', '{"de":"Web-Konferenzen und Vorlesungsaufzeichnung.","en":"Web conferencing and lecture recording."}', 'https://bbb.example.edu', 'https://docs.example.edu/bbb', 'video', '{"video conference","videokonferenz","online meeting","webinar","bbb"}', NULL),
+  ('Identitätsmanagement', '{"de":"Passwort ändern und Konto verwalten.","en":"Change your password and manage your account."}', 'https://idm.example.edu', 'https://docs.example.edu/account', 'key-round', '{}', NULL),
+  ('WLAN an der UOS', '{"de":"So verbindest du dich mit eduroam.","en":"How to connect to eduroam."}', NULL, 'https://docs.example.edu/wifi', 'wifi', '{wifi,internet}', NULL),
+  ('Zettelkasten Labor', '{"de":"Experimentelles KI-Notizbuch für Forschungsnotizen.","en":"Experimental AI notebook for research notes."}', 'https://zettelkasten-lab.example.edu', 'https://docs.example.edu/zettelkasten', 'flask-conical', '{"notizen","notebook","ki"}', 'experimental')
+on conflict (name) do update set keywords = excluded.keywords, visibility = excluded.visibility;
 
 -- Category attachments (by name/slug, so this stays readable).
 insert into service_categories (service_id, category_id)
@@ -39,7 +44,8 @@ select s.id, c.id from services s, categories c where (s.name, c.slug) in (
   ('Webmail', 'communication'),
   ('BigBlueButton', 'teaching'), ('BigBlueButton', 'communication'),
   ('Identitätsmanagement', 'identity'),
-  ('WLAN an der UOS', 'data')
+  ('WLAN an der UOS', 'data'),
+  ('Zettelkasten Labor', 'ai-tools')
 )
 on conflict do nothing;
 

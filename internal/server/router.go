@@ -50,6 +50,12 @@ type Deps struct {
 	// config — callers never set it — so every handler that validates, serves or
 	// degrades a role reads the same set (docs/specs/configurable-roles.md).
 	Roles config.RoleSet
+	// Visibility is the deployment's configured service-visibility set. New()
+	// fills it from the config like Roles, so every read surface narrows the
+	// catalog through the same set (docs/specs/service-visibility.md §3).
+	Visibility config.VisibilitySet
+	// VisibilityOptIn backs PUT /api/me/visibility (the user's own opt-in list).
+	VisibilityOptIn service.VisibilityStore
 	// SPA overrides the embedded SPA filesystem; nil uses the real embedded
 	// build (web.FS()). Tests inject a fake filesystem here so they never
 	// depend on whether `make web-build && make embed` has actually run in
@@ -103,6 +109,7 @@ func New(cfg *config.Config, deps Deps) (http.Handler, error) {
 	r.Get("/workbox-{file}", spaHandler.ServeHTTP)
 
 	deps.Roles = cfg.Roles()
+	deps.Visibility = cfg.Visibility()
 
 	if deps.Auth != nil {
 		mountAuthenticated(r, deps, spaHandler)
@@ -129,6 +136,7 @@ func buildSPA(override fs.FS) (http.Handler, error) {
 // API returns 401 without a session; the SPA redirects to login (docs/01 §6).
 func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 	roles := deps.Roles
+	vis := deps.Visibility
 	// GET /api/roles answers the same bytes for every request, so render them
 	// once here rather than per request.
 	rolesJSON := mustRolesJSON(roles)
@@ -147,24 +155,25 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 	searchLimiter := newKeyedLimiter(searchRatePerMinute)
 	r.Group(func(pr chi.Router) {
 		pr.Use(loadSession(deps.Auth, deps.Users, roles))
-		pr.With(requireUserJSON).Get("/api/me", me)
+		pr.With(requireUserJSON).Get("/api/me", me(vis))
 		pr.With(requireUserJSON).Get("/api/roles", roleList(rolesJSON))
 		if deps.Prefs != nil {
-			pr.With(requireUserJSON).Patch("/api/me/prefs", updatePrefs(deps.Prefs))
+			pr.With(requireUserJSON).Patch("/api/me/prefs", updatePrefs(deps.Prefs, vis))
+		}
+		if deps.VisibilityOptIn != nil {
+			pr.With(requireUserJSON).Put("/api/me/visibility", setVisibilityOptIn(deps.VisibilityOptIn, vis))
 		}
 		if deps.Favorites != nil {
 			if deps.Catalog != nil {
-				pr.With(requireUserJSON).Get("/api/favorites", listFavorites(deps.Catalog, deps.Favorites))
+				pr.With(requireUserJSON).Get("/api/favorites", listFavorites(deps.Catalog, deps.Favorites, vis))
+				pr.With(requireUserJSON).Post("/api/favorites/items", addFavorite(deps.Favorites, deps.Catalog, vis))
 			}
-			pr.With(requireUserJSON).Post("/api/favorites/items", addFavorite(deps.Favorites))
 			pr.With(requireUserJSON).Delete("/api/favorites/items", removeFavorite(deps.Favorites))
 			pr.With(requireUserJSON).Put("/api/favorites/order", setFavoritesOrder(deps.Favorites))
 		}
-		if deps.Usage != nil {
-			pr.With(requireUserJSON).Post("/api/events/click", recordClick(deps.Usage, deps.Catalog, deps.Metrics))
-			if deps.Catalog != nil {
-				pr.With(requireUserJSON).Get("/api/usage/frequent", frequent(deps.Catalog, deps.Usage))
-			}
+		if deps.Usage != nil && deps.Catalog != nil {
+			pr.With(requireUserJSON).Post("/api/events/click", recordClick(deps.Usage, deps.Catalog, deps.Metrics, vis))
+			pr.With(requireUserJSON).Get("/api/usage/frequent", frequent(deps.Catalog, deps.Usage, vis))
 		}
 		if deps.Announce != nil {
 			pr.With(requireUserJSON).Get("/api/announcements", userAnnouncements(deps.Announce, roles))
@@ -174,13 +183,14 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 			pr.With(requireUserJSON).Post("/api/announcements/{id}/dismiss", dismissAnnouncement(deps.AnnounceDismiss))
 		}
 		if deps.Catalog != nil {
-			pr.With(requireUserJSON).Get("/api/catalog", catalogList(deps.Catalog))
-			pr.With(requireUserJSON).Get("/api/catalog/defaults", catalogDefaults(deps.Catalog, deps.Defaults))
-			pr.With(requireUserJSON, searchLimiter.middleware).Get("/api/search", search(deps.Catalog, deps.Search))
+			pr.With(requireUserJSON).Get("/api/catalog", catalogList(deps.Catalog, vis))
+			pr.With(requireUserJSON).Get("/api/catalog/defaults", catalogDefaults(deps.Catalog, deps.Defaults, vis))
+			pr.With(requireUserJSON, searchLimiter.middleware).Get("/api/search", search(deps.Catalog, deps.Search, vis))
 		}
 		if deps.Admin != nil {
 			ad := *deps.Admin
 			ad.Roles = roles
+			ad.Visibility = vis
 			pr.Route("/api/admin", func(ar chi.Router) {
 				ar.Use(requireAdmin)
 				ar.Get("/services", adminListServices(ad))

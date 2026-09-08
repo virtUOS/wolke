@@ -31,7 +31,10 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
 
   const services = catalog.data?.services ?? []
   const byID = new Map(services.map((s) => [s.id, s]))
-  const name = (id: string) => byID.get(id)?.name ?? id
+  // An id the catalog cannot resolve — a service that left the catalog, or a
+  // restricted default this admin does not hold (/api/catalog is narrowed for
+  // admins too) — renders as an unavailable placeholder, not as a bare id.
+  const name = (id: string) => byID.get(id)?.name ?? s.admin.unavailableService
 
   // True once the admin has touched the list since the current fetch started.
   // The fetch is not instant, and the picker is usable while it is in flight, so
@@ -61,11 +64,13 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
     }
   }, [role])
 
-  // A service that has since left the catalog would render as a bare id, so it
-  // is filtered out of the view — and of what Save writes — rather than out of
-  // state. Derived, not stored: no effect to race with a local edit, and no
-  // dependency on the catalog arriving before the defaults do.
-  const visible = catalog.data ? ordered.filter((id) => byID.has(id)) : ordered
+  // Every saved id stays in the list, resolvable or not. An id the narrowed
+  // catalog cannot name is still a real row on the server: dropping it from the
+  // view — and so from what Save writes — would delete a default nothing on
+  // screen ever mentioned (review of #131). It is shown as a placeholder the
+  // admin can remove deliberately, mirroring how a soft-deleted favorite
+  // degrades rather than vanishes.
+  const visible = ordered
 
   // The row indices the buttons pass in are indices into `visible`, so a swap
   // is translated back onto the stored list.
@@ -88,7 +93,10 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
     setOrdered((o) => (o.includes(id) ? o : [...o, id]))
   }
 
-  const available = services.filter((s: Service) => !visible.includes(s.id))
+  // Public services only (docs/specs/service-visibility.md §7.1): a default
+  // view is the same for every user of a role, so a restricted service can
+  // neither be offered here nor — the server enforces it — saved.
+  const available = services.filter((s: Service) => !s.visibility && !visible.includes(s.id))
 
   return (
     <div className="space-y-4">
@@ -112,7 +120,9 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
           // buttons, so they inherit the shared 44px phone touch floor (issue
           // #101) instead of the 24px boxes they used to be.
           <li key={id} className="flex flex-wrap items-center gap-2 rounded-md border border-surface px-2 py-1 text-sm">
-            <span className="min-w-0 flex-1 hyphenate-compound">{i + 1}. {name(id)}</span>
+            <span className={`min-w-0 flex-1 hyphenate-compound${byID.has(id) ? '' : ' italic text-text-muted'}`}>
+              {i + 1}. {name(id)}
+            </span>
             <IconButton size="sm" aria-label={`${s.admin.moveUp} – ${name(id)}`} disabled={i === 0} onClick={() => move(i, -1)} className="disabled:opacity-30">
               <ChevronUp className="h-4 w-4" aria-hidden="true" />
             </IconButton>
@@ -145,8 +155,8 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
           onClick={() => {
             setError(undefined)
             actions.setRoleDefaults.mutate(
-              // `visible`, not `ordered`: an id the catalog no longer knows is
-              // not shown, so it must not be silently re-saved either.
+              // The whole list, placeholders included: only an explicit
+              // "Entfernen" drops a default.
               { role, serviceIDs: visible },
               {
                 onSuccess: () => setSaved(true),

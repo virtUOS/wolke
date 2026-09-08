@@ -102,6 +102,9 @@ export default defineConfig({
       SESSION_SECRET: 'e2e-not-secret',
       LOG_LEVEL: 'warn',
       BRANDING_DIR: 'branding',
+      // The structured config the suite needs beyond the defaults: one opt-in
+      // visibility group, for the experimental-mode flow (issue #34).
+      CONFIG_FILE: 'dev/config.e2e.yaml',
       DATABASE_URL: process.env.DATABASE_URL ?? 'postgres://wolke:devpass@localhost:5432/wolke?sslmode=disable',
       // 127.0.0.1, not localhost: mock-oauth2-server crashes on IPv6 peers.
       OIDC_ISSUER_URL: process.env.OIDC_TEST_ISSUER ?? 'http://127.0.0.1:8455/default',

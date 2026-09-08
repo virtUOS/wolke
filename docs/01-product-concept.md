@@ -52,6 +52,11 @@ Roles are re-resolved from the claims at every login, so a user whose stored rol
 the configured set simply reads as the configured default until their next login heals the row
 (doc 02 §4).
 
+**Visibility groups are orthogonal to roles.** A role decides a user's *default view*; a
+visibility group decides which *non-public* services a user may see at all (§5.7). A deployment
+configures zero or more groups; with none configured, every service is public and nothing about
+the product changes.
+
 ## 4. The core UX
 
 The Figma/PDF concept is sound; this formalizes it.
@@ -192,6 +197,31 @@ Prometheus metrics (doc 02 §7). No third-party analytics; data stays in Postgre
 ### 5.6 Theming
 Light and dark mode, system-preference by default, user toggle persists. Palette derived from
 the UOS corporate design (doc 03).
+
+### 5.7 Service visibility (experimental mode and claim-gated groups)
+A service is **public** (the default) or restricted to one **visibility group**, a slug the
+deployment configures (`visibility:` in config.yaml, doc 02 §11). A user sees the public services
+plus those of every group they **hold**. A group is held in one of two ways — that is the only
+difference between the two use cases (spec: `docs/specs/service-visibility.md`):
+
+- **Opt-in** (`grant: opt-in`, issue #34 — "experimental mode"): the user enables the group
+  themselves in the account menu. Enabling asks for confirmation with the configured **warning**
+  ("experimental services may vanish without notice; data is not migrated"); disabling is
+  immediate and loses nothing.
+- **Claim** (`grant: claim`, issue #121 — e.g. IT infrastructure): the IdP grants it via a group
+  claim, re-derived at every login like `is_admin`. Configurable today; the login-side derivation
+  ships in the spec's Stage 2.
+
+Non-holders never see a restricted service — not in the catalog, the default view, search,
+favorites, "frequently used", nor through the public catalog MCP server (which holds nothing,
+always). A category that only contains restricted services disappears with them, so there is no
+empty pill leaking the group's name. Holders see the services **inline** in the normal views,
+badged with the group's label in the tile's status slot; there are no separate tabs. Role default
+views stay public-only: a restricted service cannot be a role default, and restricting a service
+that already is one removes it from every role's defaults in the same write (audited). Admins pick
+a service's visibility on the form and via the MCP propose path; admin views always show
+everything. Writes are narrowed too: a click or a favourite on a service the user cannot see is
+a no-op / not found, indistinguishable from an unknown id.
 
 ## 6. Explicit non-goals
 - No service status/health monitoring or up/down badges.

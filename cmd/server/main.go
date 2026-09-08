@@ -208,6 +208,7 @@ func run() error {
 		deps.Auth = auth.NewService(authn, sessions, db, cfg, logger)
 		deps.Users = db
 		deps.Prefs = db
+		deps.VisibilityOptIn = db
 		// Spell out the effective claim mapping so a deployment can verify at a
 		// glance that its mounted config was actually loaded (a missing mount
 		// silently falls back to the built-in defaults and demotes everyone).

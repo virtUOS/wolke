@@ -44,6 +44,9 @@ interface DashboardShellProps {
   onSetLocale: (locale: Me['locale']) => void
   onAdmin: () => void
   isMobile: boolean
+  /** Persists the user's opt-in visibility slugs (issue #34); the entries and
+   *  current state come from `me.visibility`. */
+  onSetVisibilityOptIn: (optin: string[]) => void
   /** Identifies the current view; when it changes, focus moves to <main> so a
    *  view switch (e.g. opening/closing Admin) isn't lost to <body>. */
   focusKey: string
@@ -65,6 +68,7 @@ export function DashboardShell({
   onSetLocale,
   onAdmin,
   isMobile,
+  onSetVisibilityOptIn,
   focusKey,
   children,
 }: DashboardShellProps) {
@@ -123,6 +127,9 @@ export function DashboardShell({
         onAdmin={onAdmin}
         onLogout={logout}
         isMobile={isMobile}
+        visibilityEntries={me.visibility.entries}
+        visibilityOptIn={me.visibility.optin}
+        onSetVisibilityOptIn={onSetVisibilityOptIn}
       />
       <main
         id="main"

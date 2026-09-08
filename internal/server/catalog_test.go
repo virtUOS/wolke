@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -20,17 +21,17 @@ func withUser(req *http.Request, role string) *http.Request {
 }
 
 func TestCatalogListServesSnapshot(t *testing.T) {
-	snap := &catalog.Snapshot{
-		Services: []catalog.Service{
+	snap := catalog.NewSnapshot(
+		[]catalog.Service{
 			{ID: "a", Name: "Alpha", Categories: []string{"learning"}},
 			{ID: "b", Name: "Beta", Categories: []string{"data"}, DocOnly: true},
 		},
-		Categories: []catalog.Category{{Slug: "learning", Sort: 10}, {Slug: "data", Sort: 20}},
-	}
+		[]catalog.Category{{Slug: "learning", Sort: 10}, {Slug: "data", Sort: 20}},
+	)
 	cache := catalog.NewCache(time.Minute, func(context.Context) (*catalog.Snapshot, error) { return snap, nil })
 
 	rec := httptest.NewRecorder()
-	catalogList(cache)(rec, httptest.NewRequest(http.MethodGet, "/api/catalog", nil))
+	catalogList(cache, config.VisibilitySet{})(rec, httptest.NewRequest(http.MethodGet, "/api/catalog", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
@@ -66,7 +67,7 @@ func TestCatalogDefaultsForStudent(t *testing.T) {
 
 	req := withUser(httptest.NewRequest(http.MethodGet, "/api/catalog/defaults", nil), "student")
 	rec := httptest.NewRecorder()
-	catalogDefaults(cache, db)(rec, req)
+	catalogDefaults(cache, db, config.VisibilitySet{})(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}

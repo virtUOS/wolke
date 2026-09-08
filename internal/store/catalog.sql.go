@@ -76,7 +76,7 @@ func (q *Queries) ListActiveServiceCategories(ctx context.Context) ([]ListActive
 }
 
 const listActiveServices = `-- name: ListActiveServices :many
-select id, name, description, service_url, doc_url, icon, tag
+select id, name, description, service_url, doc_url, icon, tag, visibility
 from services
 where is_active = true
 order by name
@@ -90,6 +90,7 @@ type ListActiveServicesRow struct {
 	DocUrl      pgtype.Text `json:"doc_url"`
 	Icon        string      `json:"icon"`
 	Tag         pgtype.Text `json:"tag"`
+	Visibility  pgtype.Text `json:"visibility"`
 }
 
 // Note: keywords are intentionally NOT selected — they are a search-only aid
@@ -111,6 +112,7 @@ func (q *Queries) ListActiveServices(ctx context.Context) ([]ListActiveServicesR
 			&i.DocUrl,
 			&i.Icon,
 			&i.Tag,
+			&i.Visibility,
 		); err != nil {
 			return nil, err
 		}

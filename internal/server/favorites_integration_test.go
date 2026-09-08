@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -59,7 +60,7 @@ func TestFavoritesFlow(t *testing.T) {
 		return rec
 	}
 	listIDs := func() []string {
-		rec := call(listFavorites(cache, db), http.MethodGet, "")
+		rec := call(listFavorites(cache, db, config.VisibilitySet{}), http.MethodGet, "")
 		if rec.Code != http.StatusOK {
 			t.Fatalf("list favorites = %d, want 200", rec.Code)
 		}
@@ -103,7 +104,7 @@ func TestFavoritesFlow(t *testing.T) {
 	}
 
 	// Re-add it.
-	if rec := call(addFavorite(db), http.MethodPost, `{"service_id":"`+removed+`"}`); rec.Code != http.StatusNoContent {
+	if rec := call(addFavorite(db, cache, config.VisibilitySet{}), http.MethodPost, `{"service_id":"`+removed+`"}`); rec.Code != http.StatusNoContent {
 		t.Fatalf("add = %d, want 204", rec.Code)
 	}
 	if len(listIDs()) != len(seeded) {
@@ -164,7 +165,7 @@ func TestFavoritesManualOrderFlow(t *testing.T) {
 		return rec
 	}
 	listIDs := func() []string {
-		rec := call(listFavorites(cache, db), http.MethodGet, "/api/favorites", "")
+		rec := call(listFavorites(cache, db, config.VisibilitySet{}), http.MethodGet, "/api/favorites", "")
 		if rec.Code != http.StatusOK {
 			t.Fatalf("list favorites = %d, want 200: %s", rec.Code, rec.Body)
 		}
@@ -255,7 +256,7 @@ func TestFavoritesManualOrderFlow(t *testing.T) {
 	if extra == "" {
 		t.Skip("every active service is already a favorite; nothing left to append")
 	}
-	if rec := call(addFavorite(db), http.MethodPost, "/api/favorites/items", `{"service_id":"`+extra+`"}`); rec.Code != http.StatusNoContent {
+	if rec := call(addFavorite(db, cache, config.VisibilitySet{}), http.MethodPost, "/api/favorites/items", `{"service_id":"`+extra+`"}`); rec.Code != http.StatusNoContent {
 		t.Fatalf("add = %d, want 204", rec.Code)
 	}
 	if got := listIDs(); !slices.Equal(got, append(append([]string{}, moved...), extra)) {

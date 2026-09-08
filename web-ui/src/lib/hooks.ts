@@ -146,6 +146,25 @@ export function usePrefsMutation() {
   })
 }
 
+/**
+ * useVisibilityOptInMutation persists the user's opt-in visibility slugs
+ * (issue #34). The server answers with the refreshed Me, which replaces the
+ * cache; every catalog-derived query is then refetched, because what the user
+ * may see just changed — the whole point of the toggle.
+ */
+export function useVisibilityOptInMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (optin: string[]) => api.setVisibilityOptIn(optin),
+    onSuccess: (me) => {
+      qc.setQueryData(['me'], me)
+      for (const key of ['catalog', 'defaults', 'favorites', 'search', 'frequent']) {
+        qc.invalidateQueries({ queryKey: [key] })
+      }
+    },
+  })
+}
+
 export function useFavorites() {
   return useQuery({ queryKey: ['favorites'], queryFn: ({ signal }) => api.favorites(signal) })
 }

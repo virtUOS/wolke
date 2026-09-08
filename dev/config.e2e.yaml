@@ -1,0 +1,15 @@
+# Structured config for the local dev loop and the Playwright e2e suite
+# (playwright.config.ts sets CONFIG_FILE to this file). It layers over the
+# built-in defaults exactly like a deployment's config.yaml would, and only
+# adds what the suite needs beyond them: one opt-in visibility group, so the
+# experimental-mode flow (issue #34) can be exercised end to end against the
+# seeded "Zettelkasten Labor" service (dev/seed.sql).
+#
+# To run the same locally:  CONFIG_FILE=dev/config.e2e.yaml make run
+visibility:
+  - slug: experimental
+    label: { de: "Experimentell", en: "Experimental" }
+    grant: opt-in
+    warning:
+      de: "Experimentelle Dienste können jederzeit ohne Vorankündigung verschwinden; Daten gehen dabei möglicherweise verloren und werden nicht migriert."
+      en: "Experimental services can disappear at any time without notice; data may be lost and will not be migrated."

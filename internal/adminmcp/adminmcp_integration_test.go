@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/service"
 	"github.com/virtuos/wolke/internal/store"
 )
@@ -34,7 +35,7 @@ func TestProposeNeverWritesConfirmDoes(t *testing.T) {
 		db.Close()
 	})
 
-	mgr := New(db, service.Actor{ID: admin.ID, Kind: service.ActorMCP})
+	mgr := New(db, service.Actor{ID: admin.ID, Kind: service.ActorMCP}, config.VisibilitySet{})
 
 	countServices := func() int {
 		var n int

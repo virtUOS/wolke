@@ -115,6 +115,11 @@ type Querier interface {
 	// be null for notices shown immediately, so fall back to created_at.
 	PurgeAnnouncementsBefore(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
 	PurgeOldClicks(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
+	// Deletes every role's default-view row for one service and reports which
+	// roles lost one (for the audit diff). Used when a service becomes restricted:
+	// default views stay public-only (docs/specs/service-visibility.md §7.1), so
+	// the write that restricts a service is the write that removes it as a default.
+	PurgeRoleDefaultsForService(ctx context.Context, serviceID pgtype.UUID) ([]string, error)
 	// Deletes the default-view rows of every role outside the configured set and
 	// reports which roles those were (for the audit diff). One statement, so the
 	// read and the delete cannot disagree. The role set is config, not schema —
@@ -161,6 +166,10 @@ type Querier interface {
 	UpdateService(ctx context.Context, arg UpdateServiceParams) (Service, error)
 	// Display prefs persist server-side so they follow the user across devices.
 	UpdateUserPrefs(ctx context.Context, arg UpdateUserPrefsParams) (User, error)
+	// The user's own opt-in visibility slugs, written as a whole list
+	// (docs/specs/service-visibility.md §4). Claim-granted slugs live in
+	// visibility_claims and are never touched here.
+	UpdateUserVisibilityOptIn(ctx context.Context, arg UpdateUserVisibilityOptInParams) (User, error)
 	// Called on every login: insert the OIDC subject or refresh the mutable fields.
 	// primary_role and is_admin are re-derived from claims each login (docs/02 §6);
 	// user prefs (view_mode, theme) are intentionally not touched here.

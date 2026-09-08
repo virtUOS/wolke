@@ -5,13 +5,14 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/service"
 )
 
 // updatePrefs handles PATCH /api/me/prefs (docs/02 §12). Unspecified fields keep
 // the user's current value; validation and the write live in internal/service.
-func updatePrefs(db service.PrefsStore) http.HandlerFunc {
+func updatePrefs(db service.PrefsStore, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := userFromContext(r.Context())
 		if !ok {
@@ -63,6 +64,6 @@ func updatePrefs(db service.PrefsStore) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "prefs_update_failed", "Could not save your preferences.")
 			return
 		}
-		writeJSON(w, http.StatusOK, toMeResponse(updated))
+		writeJSON(w, http.StatusOK, toMeResponse(updated, vis))
 	}
 }

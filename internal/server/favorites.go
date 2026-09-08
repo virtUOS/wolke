@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/catalog"
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/service"
 )
@@ -15,7 +16,9 @@ import (
 // listFavorites returns the user's favorited services, resolved via the catalog
 // cache so the shape matches /api/catalog (docs/02 §12). Favorites are a flat
 // set — no lists (docs/01 §4.4).
-func listFavorites(c *catalog.Cache, db service.FavoritesStore) http.HandlerFunc {
+// A favorite whose service became invisible to this user degrades like a
+// soft-deleted one: it stays stored, and simply does not resolve.
+func listFavorites(c *catalog.Cache, db service.FavoritesStore, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
 		ids, err := service.ListFavorites(r.Context(), db, user)
@@ -23,7 +26,7 @@ func listFavorites(c *catalog.Cache, db service.FavoritesStore) http.HandlerFunc
 			writeServiceError(w, err)
 			return
 		}
-		snap, err := c.Get(r.Context())
+		snap, err := visibleCatalog(r.Context(), c, vis)
 		if err != nil {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
 			return
@@ -38,11 +41,24 @@ func listFavorites(c *catalog.Cache, db service.FavoritesStore) http.HandlerFunc
 	}
 }
 
-func addFavorite(db service.FavoritesStore) http.HandlerFunc {
+// addFavorite stars a service the user can see. The id is resolved through the
+// narrowed view first: a restricted service the user does not hold — like a
+// soft-deleted or unknown one — is a 404, not a stored favorite the user could
+// never resolve (and not a 500 that would tell it apart from "unknown").
+func addFavorite(db service.FavoritesStore, c *catalog.Cache, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
 		serviceID, ok := decodeServiceID(w, r)
 		if !ok {
+			return
+		}
+		snap, err := visibleCatalog(r.Context(), c, vis)
+		if err != nil {
+			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			return
+		}
+		if _, ok := snap.ServiceByID(uuidString(serviceID)); !ok {
+			httpx.WriteProblem(w, http.StatusNotFound, "not_found", "service not found")
 			return
 		}
 		if err := service.AddFavorite(r.Context(), db, user.ID, serviceID); err != nil {

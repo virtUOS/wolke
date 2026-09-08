@@ -10,11 +10,13 @@ interface CatalogViewProps {
   actions?: TileActions
   /** Shown when there are no services (e.g. the favorites tab's own copy). */
   emptyMessage?: string
+  /** Localized visibility labels by slug, for the tile badge (see Tile). */
+  visibilityLabels?: Record<string, string>
 }
 
 // Flat service grid (Editorial direction). Category grouping was removed —
 // filtering is done upstream via the category chips in Dashboard.
-export function CatalogView({ services, categories, locale, layout, actions, emptyMessage }: CatalogViewProps) {
+export function CatalogView({ services, categories, locale, layout, actions, emptyMessage, visibilityLabels }: CatalogViewProps) {
   if (services.length === 0) {
     return (
       <div
@@ -45,6 +47,7 @@ export function CatalogView({ services, categories, locale, layout, actions, emp
             favorited={actions?.favoritedIDs.has(s.id)}
             onToggleFavorite={actions?.onToggleFavorite}
             onLaunch={actions?.onLaunch}
+            visibilityLabels={visibilityLabels}
           />
         ))}
       </div>
@@ -70,6 +73,7 @@ export function CatalogView({ services, categories, locale, layout, actions, emp
           favorited={actions?.favoritedIDs.has(s.id)}
           onToggleFavorite={actions?.onToggleFavorite}
           onLaunch={actions?.onLaunch}
+          visibilityLabels={visibilityLabels}
         />
       ))}
     </div>
