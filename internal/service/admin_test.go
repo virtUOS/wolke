@@ -124,3 +124,118 @@ func TestVisibilityRejectedWhenNoneConfigured(t *testing.T) {
 		t.Fatalf("err = %v, want a visibility ValidationError", err)
 	}
 }
+
+// --- categories (issue #130) ---
+
+func TestValidateCategoryInput(t *testing.T) {
+	validLabel := map[string]string{"de": "Forschung", "en": "Research"}
+	tests := []struct {
+		name  string
+		slug  string
+		label map[string]string
+		field string // "" => expect valid
+	}{
+		{"valid", "forschung", validLabel, ""},
+		{"valid with digits and hyphens", "ai-tools-2", validLabel, ""},
+		{"surrounding whitespace is trimmed, not rejected", "  forschung  ", validLabel, ""},
+		{"empty", "   ", validLabel, "slug"},
+		{"spaces and punctuation", "Foo Bar!!", validLabel, "slug"},
+		{"uppercase", "Forschung", validLabel, "slug"},
+		{"underscore", "ai_tools", validLabel, "slug"},
+		{"leading hyphen", "-tools", validLabel, "slug"},
+		{"trailing hyphen", "tools-", validLabel, "slug"},
+		{"double hyphen", "ai--tools", validLabel, "slug"},
+		{"missing de label", "forschung", map[string]string{"en": "Research"}, "label"},
+		{"blank de label", "forschung", map[string]string{"de": "  ", "en": "Research"}, "label"},
+		{"missing en label", "forschung", map[string]string{"de": "Forschung"}, "label"},
+		{"blank en label", "forschung", map[string]string{"de": "Forschung", "en": " "}, "label"},
+		{"nil label", "forschung", nil, "label"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			slug, err := validateCategoryInput(tt.slug, tt.label)
+			if tt.field == "" {
+				if err != nil {
+					t.Fatalf("want valid, got %v", err)
+				}
+				if slug != strings.TrimSpace(tt.slug) {
+					t.Errorf("slug = %q, want the trimmed input %q", slug, strings.TrimSpace(tt.slug))
+				}
+				return
+			}
+			var ve *ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("err = %v, want ValidationError", err)
+			}
+			if ve.Field != tt.field {
+				t.Errorf("field = %q, want %q", ve.Field, tt.field)
+			}
+		})
+	}
+}
+
+// The reorder write is a permutation of exactly the existing slugs — the same
+// contract as PUT /api/favorites/order, so a client that is out of sync is
+// rejected rather than having its partial list silently renumber the rest.
+func TestCheckCategoryPermutation(t *testing.T) {
+	current := []string{"learning", "teaching", "data"}
+	tests := []struct {
+		name string
+		want []string
+		ok   bool
+	}{
+		{"same order is valid (idempotent)", []string{"learning", "teaching", "data"}, true},
+		{"a real permutation", []string{"data", "learning", "teaching"}, true},
+		{"a duplicate", []string{"data", "data", "learning"}, false},
+		{"one missing", []string{"data", "learning"}, false},
+		{"one extra", []string{"data", "learning", "teaching", "support"}, false},
+		{"an unknown slug swapped in", []string{"data", "learning", "support"}, false},
+		{"empty while categories exist", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkCategoryPermutation(current, tt.want)
+			if tt.ok {
+				if err != nil {
+					t.Fatalf("want valid, got %v", err)
+				}
+				return
+			}
+			var ve *ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("err = %v, want ValidationError", err)
+			}
+			if ve.Field != "slugs" {
+				t.Errorf("field = %q, want %q", ve.Field, "slugs")
+			}
+		})
+	}
+}
+
+// The refusal has to tell the admin what to reassign, not just that something
+// blocks (issue #130 §2.3).
+func TestCategoryInUseMessage(t *testing.T) {
+	tests := []struct {
+		name  string
+		n     int64
+		names []string
+		want  string
+	}{
+		{"one", 1, []string{"MyShare"}, "1 service still uses this category: MyShare. Reassign it first."},
+		{
+			"a few, all named", 3, []string{"BigBlueButton", "Stud.IP", "Webmail"},
+			"3 services still use this category: BigBlueButton, Stud.IP, Webmail. Reassign them first.",
+		},
+		{
+			"more than the sample", 6, []string{"BigBlueButton", "Stud.IP", "VPN", "Webmail"},
+			"6 services still use this category: BigBlueButton, Stud.IP, VPN, Webmail and 2 more. Reassign them first.",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := categoryInUseMessage(tt.n, tt.names); got != tt.want {
+				t.Errorf("categoryInUseMessage(%d, %q) =\n  %q\nwant\n  %q", tt.n, tt.names, got, tt.want)
+			}
+		})
+	}
+}

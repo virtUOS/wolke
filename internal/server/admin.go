@@ -196,11 +196,7 @@ func adminSetRoleDefaults(d AdminDeps) http.HandlerFunc {
 
 func adminCreateCategory(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var b struct {
-			Slug  string            `json:"slug"`
-			Label map[string]string `json:"label"`
-			Sort  int               `json:"sort"`
-		}
+		var b categoryBody
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
@@ -211,8 +207,84 @@ func adminCreateCategory(d AdminDeps) http.HandlerFunc {
 			return
 		}
 		d.invalidate()
-		writeJSON(w, http.StatusCreated, map[string]any{"slug": cat.Slug})
+		writeJSON(w, http.StatusCreated, categoryJSON(cat))
 	}
+}
+
+// categoryBody is the create/update request shape. `sort` is only meaningful on
+// create (the frontend appends past max(sort)); the order is otherwise owned by
+// the reorder endpoint.
+type categoryBody struct {
+	Slug  string            `json:"slug"`
+	Label map[string]string `json:"label"`
+	Sort  int               `json:"sort"`
+}
+
+// adminUpdateCategory handles PATCH /api/admin/categories/{slug}: both labels
+// and, deliberately, the slug itself — attachments join on the category id, so a
+// rename is safe (issue #130 §2.2).
+func adminUpdateCategory(d AdminDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var b categoryBody
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
+			return
+		}
+		cat, err := service.UpdateCategory(r.Context(), d.Store, actorFromContext(r.Context()),
+			chi.URLParam(r, "slug"), b.Slug, b.Label)
+		if err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		d.invalidate()
+		writeJSON(w, http.StatusOK, categoryJSON(cat))
+	}
+}
+
+// adminDeleteCategory handles DELETE /api/admin/categories/{slug}. A category
+// services still use comes back as a 409 naming the count, not as the FK's
+// constraint violation (issue #130 §2.3).
+func adminDeleteCategory(d AdminDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := service.DeleteCategory(r.Context(), d.Store, actorFromContext(r.Context()), chi.URLParam(r, "slug")); err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		d.invalidate()
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// adminSetCategoryOrder handles PUT /api/admin/categories/order: the whole
+// ordered slug list, written to categories.sort. A whole-list write rather than
+// per-row sort arithmetic, so a client and the server can never end up with two
+// notions of the order; sending the same list twice is a no-op. Validation
+// (permutation, no duplicates) lives in internal/service.
+func adminSetCategoryOrder(d AdminDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var b struct {
+			Slugs []string `json:"slugs"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
+			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
+			return
+		}
+		if err := service.SetCategoryOrder(r.Context(), d.Store, actorFromContext(r.Context()), b.Slugs); err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		d.invalidate()
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// categoryJSON is the response shape for a single category write. The label
+// comes back as a map, so the admin UI can render what it just saved without
+// re-fetching the catalog.
+func categoryJSON(c store.Category) map[string]any {
+	var label map[string]string
+	_ = json.Unmarshal(c.Label, &label)
+	return map[string]any{"slug": c.Slug, "label": label, "sort": c.Sort}
 }
 
 // auditEntry is the API shape of an audit row (diff embedded as raw JSON).

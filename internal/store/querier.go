@@ -26,6 +26,10 @@ type Querier interface {
 	// A trivial query used in Phase 0 to prove the sqlc -> pgx pipeline end-to-end.
 	// Real catalog queries arrive in Phase 1.
 	CountCategories(ctx context.Context) (int64, error)
+	// How many services block a delete. Counts every attachment row, active or
+	// soft-deleted: a soft-deleted service keeps its row and keeps blocking the FK,
+	// so counting only active ones would promise a delete that then fails.
+	CountCategoryServices(ctx context.Context, categoryID pgtype.UUID) (int64, error)
 	// Favorites per active service. The left join keeps a service nobody has
 	// pinned in the result with n = 0, so its gauge series exists rather than
 	// silently dropping out of the dashboard.
@@ -39,6 +43,11 @@ type Querier interface {
 	// (NULL when the IdP sends no sid claim) — back-channel logout revokes by it.
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
 	DeleteAnnouncement(ctx context.Context, id pgtype.UUID) (int64, error)
+	// Unguarded on purpose: service_categories.category_id is `on delete restrict`,
+	// so the database refuses a category services still use. The service layer
+	// checks first and turns that into a readable refusal (issue #130 §2.3); this
+	// statement is the second lock.
+	DeleteCategory(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteRoleDefaults(ctx context.Context, role string) error
 	// Retention pruning: drop events older than a cutoff (run from ops/a scheduled job).
@@ -93,6 +102,11 @@ type Querier interface {
 	// actor_name resolves the acting user for the admin audit view.
 	ListAudit(ctx context.Context, lim int32) ([]ListAuditRow, error)
 	ListCategories(ctx context.Context) ([]Category, error)
+	// The first few blocking service names, to name them in the refusal.
+	ListCategoryServiceNames(ctx context.Context, arg ListCategoryServiceNamesParams) ([]string, error)
+	// The existing slug set, in current order — the reference a reorder write has to
+	// be a permutation of (issue #130).
+	ListCategorySlugs(ctx context.Context) ([]string, error)
 	// Favorites ordered alphabetically by service name.
 	ListFavoritesAlpha(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
 	// Favorites ordered by the user's click count (most-used first), then by the
@@ -156,6 +170,11 @@ type Querier interface {
 	// what they effectively have (issue #125). The ranking deliberately mirrors
 	// ListFavoritesByUsage above — the two must not drift.
 	SeedManualFavoritesOrder(ctx context.Context, userID pgtype.UUID) error
+	// Whole-list order write: one statement, so the renumbering is atomic. `with
+	// ordinality` numbers the incoming slugs; the gap-style step of 10 keeps
+	// create's `max(sort)+10` appending after the last row. A slug that is not a
+	// category updates nothing — the service layer has already rejected that case.
+	SetCategoryOrder(ctx context.Context, slugs []string) (int64, error)
 	// Whole-list manual order write: one statement, so the renumbering is atomic
 	// without a transaction. `with ordinality` numbers the incoming array, and the
 	// join means an id that is not the caller's favorite updates nothing — the
@@ -163,6 +182,10 @@ type Querier interface {
 	SetFavoritesOrder(ctx context.Context, arg SetFavoritesOrderParams) (int64, error)
 	SoftDeleteService(ctx context.Context, id pgtype.UUID) (int64, error)
 	UpdateAnnouncement(ctx context.Context, arg UpdateAnnouncementParams) (Announcement, error)
+	// Slug and both labels; renaming is safe because service_categories joins on the
+	// category id (issue #130 §2.2). Uniqueness is checked in the service layer, so
+	// a 23505 here means a concurrent insert took the slug first.
+	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
 	UpdateService(ctx context.Context, arg UpdateServiceParams) (Service, error)
 	// Display prefs persist server-side so they follow the user across devices.
 	UpdateUserPrefs(ctx context.Context, arg UpdateUserPrefsParams) (User, error)

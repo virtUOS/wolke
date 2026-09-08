@@ -12,6 +12,7 @@
 // only goes green once the shared primitives meet the floor.
 
 import type { Page } from '@playwright/test'
+import { MIN_TOUCH_TARGET } from './helpers/rules'
 import { expectViewportHealthy } from './helpers/viewport'
 import { expect, test } from './fixtures'
 
@@ -153,6 +154,44 @@ test.describe('the admin surface at every viewport', () => {
     expect(pinned.position).toBe('sticky')
     expect(pinned.top, 'the bar sits at the top of the viewport, not mid-page').toBe(0)
     expect(pinned.hitAtTop, 'the bar is what the top of the viewport hits').toBe(true)
+  })
+
+  // The categories section gained four row actions, an edit form and a confirm
+  // dialog (issue #130). The section's resting state is covered by the loop
+  // above; these are the states only reachable by interacting with it.
+  test('the category row actions, edit form and delete dialog are viewport-healthy', async ({ page }, testInfo) => {
+    const isMobile = testInfo.project.use.isMobile === true
+    await gotoAdmin(page)
+    await openSection(page, 'Kategorien')
+
+    const rows = page.getByRole('listitem')
+    await expect(rows.first()).toBeVisible()
+
+    // Four controls plus a real German category label on one row: the cluster
+    // that has to wrap rather than overflow at 324px.
+    await expectViewportHealthy(page, { isMobile, label: 'admin – category rows' })
+    if (isMobile) {
+      for (const name of [/Nach oben/, /Nach unten/, /^Bearbeiten$/, /^Löschen$/]) {
+        const box = await rows.first().getByRole('button', { name }).boundingBox()
+        expect(box, `${name} on the first category row`).not.toBeNull()
+        expect(box!.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET)
+      }
+    }
+
+    // The edit form replaces the create form in place, prefilled.
+    await rows.first().getByRole('button', { name: 'Bearbeiten' }).click()
+    await expect(page.getByRole('button', { name: 'Kategorie speichern' })).toBeVisible()
+    await expectViewportHealthy(page, { isMobile, label: 'admin – category edit form' })
+    await page.getByRole('button', { name: 'Abbrechen' }).click()
+    await expect(page.getByRole('button', { name: 'Kategorie anlegen' })).toBeVisible()
+
+    // The confirm dialog over the list. Dismissed with Escape — nothing is
+    // written, so this spec leaves the seeded catalog exactly as it found it.
+    await rows.first().getByRole('button', { name: 'Löschen' }).click()
+    await expect(page.getByRole('dialog', { name: 'Kategorie entfernen?' })).toBeVisible()
+    await expectViewportHealthy(page, { isMobile, label: 'admin – category delete dialog' })
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toBeHidden()
   })
 
   test('the announcement form is viewport-healthy', async ({ page }) => {

@@ -27,14 +27,30 @@ func TestRollupAndPurge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	svcs, err := db.ListActiveServices(ctx)
-	if err != nil || len(svcs) == 0 {
-		t.Fatalf("need services: %v", err)
+	// The test owns its service rather than borrowing the catalog's first one.
+	// ListActiveServices orders by name, so `svcs[0]` was whichever service
+	// happened to sort first *at that moment* — and several integration tests in
+	// other packages create a transient service that sorts before the seeded
+	// ones ("Admin Test Service", "API Test Service"). `go test ./...` runs those
+	// packages in parallel against this same database, so the borrowed id could
+	// be hard-deleted by its owner's cleanup between the read above and the
+	// insert below, failing this test on click_events' foreign key. Inserted
+	// directly: a click rollup needs a service row, not a valid catalog entry
+	// (the >= 1 category rule is a service-layer one), and nothing else reads it.
+	var sid pgtype.UUID
+	// is_active = false so the fixture is invisible to every catalog read while
+	// it exists — the rollup aggregates raw click_events and does not filter on
+	// it, so this costs the test nothing and keeps the isolation total.
+	if err := db.Pool.QueryRow(ctx,
+		`insert into services (name, description, service_url, icon, is_active)
+		 values ('Rollup Test Service', '{"de":"Rollup.","en":"Rollup."}', 'https://rollup.example.edu', 'server', false)
+		 returning id`).Scan(&sid); err != nil {
+		t.Fatalf("insert service: %v", err)
 	}
-	sid := svcs[0].ID
 	t.Cleanup(func() {
 		_, _ = db.Pool.Exec(ctx, "delete from click_events where user_id=$1", u.ID)
-		_, _ = db.Pool.Exec(ctx, "delete from usage_daily where service_id=$1 and user_role='rollup-role'", sid)
+		_, _ = db.Pool.Exec(ctx, "delete from usage_daily where service_id=$1", sid)
+		_, _ = db.Pool.Exec(ctx, "delete from services where id=$1", sid)
 		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub='rollup-test'")
 		db.Close()
 	})

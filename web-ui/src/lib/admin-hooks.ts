@@ -64,6 +64,16 @@ export function useAdminActions() {
         api.createCategory(v.slug, v.label, v.sort),
       onSuccess: afterCatalogWrite,
     }),
+    updateCategory: useMutation({
+      mutationFn: (v: { slug: string; next: { slug: string; label: Localized } }) =>
+        api.updateCategory(v.slug, v.next),
+      onSuccess: afterCatalogWrite,
+    }),
+    deleteCategory: useMutation({ mutationFn: (slug: string) => api.deleteCategory(slug), onSuccess: afterCatalogWrite }),
+    setCategoryOrder: useMutation({
+      mutationFn: (slugs: string[]) => api.setCategoryOrder(slugs),
+      onSuccess: afterCatalogWrite,
+    }),
     createAnnouncement: useMutation({
       mutationFn: (a: AnnouncementInput) => api.createAnnouncement(a),
       onSuccess: afterAnnouncementWrite,

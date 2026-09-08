@@ -138,11 +138,17 @@ func decodeServiceID(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool)
 func writeServiceError(w http.ResponseWriter, err error) {
 	var ve *service.ValidationError
 	var nf *service.NotFoundError
+	var ce *service.ConflictError
 	switch {
 	case errors.As(err, &ve):
 		httpx.WriteProblem(w, http.StatusBadRequest, "invalid", ve.Error())
 	case errors.As(err, &nf):
 		httpx.WriteProblem(w, http.StatusNotFound, "not_found", nf.Error())
+	// A well-formed write the current state refuses (e.g. deleting a category
+	// services still use). The detail says what blocks it, so it is written to
+	// be shown to the admin verbatim.
+	case errors.As(err, &ce):
+		httpx.WriteProblem(w, http.StatusConflict, "conflict", ce.Error())
 	default:
 		httpx.WriteProblem(w, http.StatusInternalServerError, "internal", "Unexpected error.")
 	}
