@@ -185,7 +185,15 @@ export const api = {
   setRoleDefaults: (role: string, serviceIDs: string[]) =>
     send<void>('PUT', `/api/admin/role-defaults/${role}`, { service_ids: serviceIDs }),
   createCategory: (slug: string, label: Localized, sort: number) =>
-    send<{ slug: string }>('POST', '/api/admin/categories', { slug, label, sort }),
+    send<Category>('POST', '/api/admin/categories', { slug, label, sort }),
+  // The slug in the path addresses the category; the one in the body is the new
+  // value — renaming is allowed (issue #130), attachments join on the id.
+  updateCategory: (slug: string, next: { slug: string; label: Localized }) =>
+    send<Category>('PATCH', `/api/admin/categories/${encodeURIComponent(slug)}`, next),
+  deleteCategory: (slug: string) => send<void>('DELETE', `/api/admin/categories/${encodeURIComponent(slug)}`),
+  // Whole ordered list, like setFavoritesOrder: the server validates it as a
+  // permutation of the existing slugs, so partial writes can't renumber silently.
+  setCategoryOrder: (slugs: string[]) => send<void>('PUT', '/api/admin/categories/order', { slugs }),
   adminAnnouncements: (signal?: AbortSignal) =>
     getJSON<{ announcements: Announcement[] }>('/api/admin/announcements', signal),
   createAnnouncement: (a: AnnouncementInput) => send<Announcement>('POST', '/api/admin/announcements', a),
