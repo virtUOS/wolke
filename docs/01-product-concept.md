@@ -217,8 +217,11 @@ favorites, "frequently used", nor through the public catalog MCP server (which h
 always). A category that only contains restricted services disappears with them, so there is no
 empty pill leaking the group's name. Holders see the services **inline** in the normal views,
 badged with the group's label in the tile's status slot; there are no separate tabs. Role default
-views stay public-only: a restricted service cannot be a role default. Admins pick a service's
-visibility on the form and via the MCP propose path; admin views always show everything.
+views stay public-only: a restricted service cannot be a role default, and restricting a service
+that already is one removes it from every role's defaults in the same write (audited). Admins pick
+a service's visibility on the form and via the MCP propose path; admin views always show
+everything. Writes are narrowed too: a click or a favourite on a service the user cannot see is
+a no-op / not found, indistinguishable from an unknown id.
 
 ## 6. Explicit non-goals
 - No service status/health monitoring or up/down badges.
