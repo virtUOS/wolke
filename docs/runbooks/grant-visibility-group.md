@@ -49,6 +49,16 @@ nothing in this runbook applies to them.
    stays the default; one slug per service. The write is audited like any other
    catalog change (**Administration → Audit**).
 
+   **A visibility slug is not a category.** Marking a service changes only who
+   may see it — it stays in whatever categories it already belongs to, and no
+   "IT-Infrastruktur" category appears anywhere. If you want the restricted
+   services grouped under their own heading, create that category yourself
+   (**Administration → Kategorien → Kategorie anlegen**) and assign the
+   services to it. A category disappears for a user when *every* service in it
+   is invisible to them, so a category holding only restricted services is
+   exactly what produces the "invisible section" effect — but it is your
+   editorial choice, not something the slug does.
+
 ## Part 1 — grant access to a user
 
 1. At the IdP, add the user to the group named in `match`.
