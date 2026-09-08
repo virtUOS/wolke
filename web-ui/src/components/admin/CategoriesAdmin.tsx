@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import { localized, type Category, type Localized } from '@/lib/api'
+import { localized, type Category, type Localized, type VisibilityEntry } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { useAdminActions } from '@/lib/admin-hooks'
-import { useTransientAnnouncement } from '@/lib/hooks'
+import { useMe, useTransientAnnouncement } from '@/lib/hooks'
+import { ChoiceChip } from '@/components/ui/choice-chip'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { IconButton } from '@/components/ui/icon-button'
@@ -32,14 +33,22 @@ interface Draft {
   slug: string
   de: string
   en: string
+  /** The visibility group restricting the category; '' = public
+   *  (docs/specs/service-visibility.md §2.2). */
+  visibility: string
 }
 
-const emptyDraft: Draft = { editing: '', slug: '', de: '', en: '' }
+const emptyDraft: Draft = { editing: '', slug: '', de: '', en: '', visibility: '' }
 
 export function CategoriesAdmin({ categories, locale }: { categories: Category[]; locale: string }) {
   const s = t(locale)
   const actions = useAdminActions()
   const { announcement, announce } = useTransientAnnouncement()
+  // The configured groups ride on /api/me; an admin gets every one of them.
+  const me = useMe()
+  const groups: VisibilityEntry[] = me.data?.visibility.entries ?? []
+  const groupLabel = (slug: string) =>
+    localized(groups.find((g) => g.slug === slug)?.label, locale) || slug
   const [draft, setDraft] = useState<Draft>(emptyDraft)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [error, setError] = useState<string | undefined>()
@@ -104,7 +113,11 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     setError(undefined)
-    const next = { slug: draft.slug.trim(), label: { de: draft.de.trim(), en: draft.en.trim() } as Localized }
+    const next = {
+      slug: draft.slug.trim(),
+      label: { de: draft.de.trim(), en: draft.en.trim() } as Localized,
+      visibility: draft.visibility,
+    }
     const onError = (err: unknown) => failed(err, s.admin.failed)
     if (isEditing) {
       actions.updateCategory.mutate(
@@ -156,6 +169,14 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
                   <span className="mr-1.5 text-text-muted">{i + 1}.</span>
                   <span className="font-medium">{label(c)}</span>{' '}
                   <span className="text-text-muted">({c.slug})</span>
+                  {c.visibility && (
+                    <>
+                      {' '}
+                      <span className="rounded-sm bg-surface px-1.5 py-0.5 text-xs text-text-muted">
+                        {groupLabel(c.visibility)}
+                      </span>
+                    </>
+                  )}
                 </span>
                 <span className="flex shrink-0 items-center gap-1">
                   <IconButton
@@ -186,7 +207,11 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
                     className="border-border"
                     onClick={() => {
                       setError(undefined)
-                      setDraft({ editing: c.slug, slug: c.slug, de: c.label.de ?? '', en: c.label.en ?? '' })
+                      setDraft({
+                        editing: c.slug, slug: c.slug,
+                        de: c.label.de ?? '', en: c.label.en ?? '',
+                        visibility: c.visibility ?? '',
+                      })
                     }}
                   >
                     {s.common.edit}
@@ -254,6 +279,25 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
             aria-required
           />
         </label>
+        {groups.length > 0 && (
+          <fieldset className="min-w-48 flex-1 text-sm">
+            <legend className="mb-1 block font-medium">{s.admin.catVisibility}</legend>
+            <div className="flex flex-wrap gap-2">
+              {['', ...groups.map((g) => g.slug)].map((value) => (
+                <ChoiceChip
+                  key={value}
+                  type="radio"
+                  name="cat-visibility"
+                  value={value}
+                  active={draft.visibility === value}
+                  checked={draft.visibility === value}
+                  onChange={() => setDraft((d) => ({ ...d, visibility: value }))}
+                  label={value === '' ? s.admin.visibilityPublic : groupLabel(value)}
+                />
+              ))}
+            </div>
+          </fieldset>
+        )}
         <Button type="submit" size="sm" disabled={!complete}>
           {isEditing ? s.admin.saveCategory : s.admin.createCategory}
         </Button>
@@ -272,6 +316,7 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
           </Button>
         )}
       </form>
+      {groups.length > 0 && <p className="text-xs text-text-muted">{s.admin.catVisibilityHint}</p>}
       {draft.slug.trim() !== '' && !slugValid && <p className="text-sm text-danger">{s.admin.slugError}</p>}
       {error && (
         <p role="alert" className="text-sm text-danger">

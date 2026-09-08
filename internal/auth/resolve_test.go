@@ -127,15 +127,7 @@ func visibilitySet(entries ...config.VisibilityEntry) config.VisibilitySet {
 }
 
 func claimEntry(slug, claim, match string) config.VisibilityEntry {
-	return config.VisibilityEntry{Slug: slug, Grant: config.GrantClaim, Claim: claim, Match: match}
-}
-
-func optInEntry(slug string) config.VisibilityEntry {
-	return config.VisibilityEntry{
-		Slug:    slug,
-		Grant:   config.GrantOptIn,
-		Warning: map[string]string{"de": "kann verschwinden", "en": "may vanish"},
-	}
+	return config.VisibilityEntry{Slug: slug, Claim: claim, Match: match}
 }
 
 func TestResolveVisibilityClaims(t *testing.T) {
@@ -164,10 +156,9 @@ func TestResolveVisibilityClaims(t *testing.T) {
 			want:   []string{"it-infra"},
 		},
 		{
-			name: "several claim entries at once, in config order",
+			name: "several entries at once, in config order",
 			set: visibilitySet(
 				claimEntry("it-infra", "groups", "it-service-admins"),
-				optInEntry("experimental"),
 				claimEntry("net-ops", "realm_access.roles", "network"),
 			),
 			claims: map[string]any{
@@ -189,15 +180,11 @@ func TestResolveVisibilityClaims(t *testing.T) {
 			want:   []string{},
 		},
 		{
-			// An opt-in slug is the user's to hold, never the IdP's: even a
-			// claim/match that lines up must not grant it.
-			name: "a claim value matching an opt-in entry grants nothing",
-			set: visibilitySet(config.VisibilityEntry{
-				Slug: "experimental", Grant: config.GrantOptIn,
-				Claim: "groups", Match: "experimental-users",
-				Warning: map[string]string{"de": "kann verschwinden", "en": "may vanish"},
-			}),
-			claims: map[string]any{"groups": []any{"experimental-users"}},
+			// An entry the config loader dropped (no claim/match) grants
+			// nothing, whatever the token says.
+			name:   "an entry without a claim mapping grants nothing",
+			set:    visibilitySet(config.VisibilityEntry{Slug: "half-configured", Match: "some-group"}),
+			claims: map[string]any{"groups": []any{"some-group"}},
 			want:   []string{},
 		},
 	}

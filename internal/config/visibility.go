@@ -1,14 +1,15 @@
 package config
 
-// Service visibility slugs are deployment data, not code
-// (docs/specs/service-visibility.md §2). A slug marks a service as non-public;
-// a user's visible set is {public} ∪ {slugs the user holds}. A slug is held
-// either because an IdP claim granted it (grant: claim) or because the user
-// opted in (grant: opt-in) — that is the only difference between the two
-// flavours, and the reason there is one mechanism rather than two.
+// Visibility slugs are deployment data, not code
+// (docs/specs/service-visibility.md §2.2). A slug restricts a *category* — and
+// every service in it — to the users who hold that slug, and a slug is held
+// exactly one way: an IdP claim granted it at login. There is no self-service
+// flavour here; "show me the experimental stuff" is the beta tag plus a user
+// pref, which needs no configuration at all (§2.1).
 //
-// No configured entries means no behaviour change at all: every service is
-// public and no visibility UI renders anywhere.
+// Config carries only the claim mapping, because there is no way to guess which
+// IdP group grants membership. No configured entries means no behaviour change:
+// every category is public, and a category cannot be restricted at all.
 
 import (
 	"fmt"
@@ -17,38 +18,26 @@ import (
 	"strings"
 )
 
-// Grant types: who decides that a user holds a slug.
-const (
-	GrantClaim = "claim"  // membership comes from the IdP (Stage 2 of the spec)
-	GrantOptIn = "opt-in" // the user enables it in the account menu (Stage 1)
-)
-
 // VisibilityEntry is one configured visibility slug, as it appears in the
 // `visibility:` list of the config file.
 type VisibilityEntry struct {
 	Slug  string            `yaml:"slug"`
 	Label map[string]string `yaml:"label"`
-	Grant string            `yaml:"grant"`
-	// Claim/Match apply to grant: claim — a (possibly nested) claim path and the
-	// value that grants the slug, like oidc.admin.
+	// Claim is a (possibly nested) claim path and Match the value in it that
+	// grants the slug — exactly the shape of oidc.admin.
 	Claim string `yaml:"claim"`
 	Match string `yaml:"match"`
-	// Warning applies to grant: opt-in — the text shown in the confirm dialog
-	// before the user enables it ("data may vanish, no migration").
-	Warning map[string]string `yaml:"warning"`
 }
 
 // Visibility is one configured slug as the read paths and the API see it: the
-// slug, its display labels, its grant type, and — for opt-in slugs — the
-// warning. Labels and warning are complete (both languages filled) even when
-// the file supplied only one. The json tags are the /api/me shape.
+// slug and its display labels. Labels are complete (both languages filled) even
+// when the file supplied only one. Claim and Match are login-side detail and
+// never leave the server. The json tags are the /api/me shape.
 type Visibility struct {
-	Slug    string            `json:"slug"`
-	Label   map[string]string `json:"label"`
-	Grant   string            `json:"grant"`
-	Claim   string            `json:"-"`
-	Match   string            `json:"-"`
-	Warning map[string]string `json:"warning,omitempty"`
+	Slug  string            `json:"slug"`
+	Label map[string]string `json:"label"`
+	Claim string            `json:"-"`
+	Match string            `json:"-"`
 }
 
 // VisibilitySet is the configured visibility slugs in config order. The zero
@@ -74,18 +63,14 @@ func newVisibilitySet(entries []VisibilityEntry) VisibilitySet {
 		if _, dup := set.index[e.Slug]; dup {
 			continue
 		}
-		if e.Grant != GrantClaim && e.Grant != GrantOptIn {
+		if strings.TrimSpace(e.Claim) == "" || strings.TrimSpace(e.Match) == "" {
 			continue
 		}
 		v := Visibility{
 			Slug:  e.Slug,
 			Label: fillLanguages(e.Label, capitalize(e.Slug)),
-			Grant: e.Grant,
 			Claim: e.Claim,
 			Match: e.Match,
-		}
-		if e.Grant == GrantOptIn {
-			v.Warning = fillLanguages(e.Warning, "")
 		}
 		set.index[e.Slug] = len(set.entries)
 		set.entries = append(set.entries, v)
@@ -120,10 +105,9 @@ func fillLanguages(in map[string]string, fallback string) map[string]string {
 // validateVisibility refuses a visibility list that could not work: a malformed
 // or reserved slug, a slug that collides with a role (the two live in different
 // columns today, but a shared namespace keeps future audience/visibility
-// features unambiguous), a duplicate, an unknown grant type, an opt-in entry
-// without the warning the stakeholder requirement demands, or a claim entry
-// without the claim path and value that would grant it. Called from
-// Config.validate, so a violation is a startup failure.
+// features unambiguous), a duplicate, or an entry without the claim path and
+// value that would grant it. Called from Config.validate, so a violation is a
+// startup failure.
 func validateVisibility(entries []VisibilityEntry, roles RoleSet) error {
 	seen := map[string]bool{}
 	for _, e := range entries {
@@ -140,29 +124,11 @@ func validateVisibility(entries []VisibilityEntry, roles RoleSet) error {
 			return fmt.Errorf("config: visibility slug %q is listed twice", e.Slug)
 		}
 		seen[e.Slug] = true
-		switch e.Grant {
-		case GrantOptIn:
-			if !hasText(e.Warning) {
-				return fmt.Errorf("config: visibility %q: grant opt-in requires a warning {de,en}", e.Slug)
-			}
-		case GrantClaim:
-			if strings.TrimSpace(e.Claim) == "" || strings.TrimSpace(e.Match) == "" {
-				return fmt.Errorf("config: visibility %q: grant claim requires claim and match", e.Slug)
-			}
-		default:
-			return fmt.Errorf("config: visibility %q: grant must be %q or %q", e.Slug, GrantClaim, GrantOptIn)
+		if strings.TrimSpace(e.Claim) == "" || strings.TrimSpace(e.Match) == "" {
+			return fmt.Errorf("config: visibility %q requires claim and match (the IdP claim granting it)", e.Slug)
 		}
 	}
 	return nil
-}
-
-func hasText(m map[string]string) bool {
-	for _, v := range m {
-		if strings.TrimSpace(v) != "" {
-			return true
-		}
-	}
-	return false
 }
 
 // List returns the configured slugs in config order. A deep copy: it is handed
@@ -171,8 +137,7 @@ func (s VisibilitySet) List() []Visibility {
 	out := make([]Visibility, 0, len(s.entries))
 	for _, v := range s.entries {
 		out = append(out, Visibility{
-			Slug: v.Slug, Label: maps.Clone(v.Label), Grant: v.Grant,
-			Claim: v.Claim, Match: v.Match, Warning: maps.Clone(v.Warning),
+			Slug: v.Slug, Label: maps.Clone(v.Label), Claim: v.Claim, Match: v.Match,
 		})
 	}
 	return out
@@ -193,48 +158,18 @@ func (s VisibilitySet) Has(slug string) bool {
 	return ok
 }
 
-// Grant returns the grant type of a configured slug, or "" if unknown.
-func (s VisibilitySet) Grant(slug string) string {
-	i, ok := s.index[slug]
-	if !ok {
-		return ""
-	}
-	return s.entries[i].Grant
-}
-
 // Len is the number of configured slugs.
 func (s VisibilitySet) Len() int { return len(s.entries) }
 
-// Held computes a user's effective held set from the two stored sources
-// (spec §4): visibility_claims ∪ visibility_optin, each filtered to slugs that
-// still exist in config AND whose grant type matches the source. So a slug
-// flipped from opt-in to claim in config cannot leave self-granted access
-// behind, and a slug removed from config grants nothing to anyone. The result
+// Held filters a user's stored visibility_claims to the slugs config still
+// defines, so a slug removed from config grants nothing to anyone. The result
 // is in config order, deduplicated, never nil.
-func (s VisibilitySet) Held(claims, optin []string) []string {
+func (s VisibilitySet) Held(claims []string) []string {
 	held := make([]string, 0, len(s.entries))
 	for _, v := range s.entries {
-		switch v.Grant {
-		case GrantClaim:
-			if slices.Contains(claims, v.Slug) {
-				held = append(held, v.Slug)
-			}
-		case GrantOptIn:
-			if slices.Contains(optin, v.Slug) {
-				held = append(held, v.Slug)
-			}
+		if slices.Contains(claims, v.Slug) {
+			held = append(held, v.Slug)
 		}
 	}
 	return held
-}
-
-// OptInSlugs returns the slugs a user may enable themselves (grant: opt-in).
-func (s VisibilitySet) OptInSlugs() []string {
-	out := make([]string, 0, len(s.entries))
-	for _, v := range s.entries {
-		if v.Grant == GrantOptIn {
-			out = append(out, v.Slug)
-		}
-	}
-	return out
 }

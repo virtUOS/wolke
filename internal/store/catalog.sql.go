@@ -76,7 +76,7 @@ func (q *Queries) ListActiveServiceCategories(ctx context.Context) ([]ListActive
 }
 
 const listActiveServices = `-- name: ListActiveServices :many
-select id, name, description, service_url, doc_url, icon, tag, visibility
+select id, name, description, service_url, doc_url, icon, tag
 from services
 where is_active = true
 order by name
@@ -90,7 +90,6 @@ type ListActiveServicesRow struct {
 	DocUrl      pgtype.Text `json:"doc_url"`
 	Icon        string      `json:"icon"`
 	Tag         pgtype.Text `json:"tag"`
-	Visibility  pgtype.Text `json:"visibility"`
 }
 
 // Note: keywords are intentionally NOT selected — they are a search-only aid
@@ -112,7 +111,6 @@ func (q *Queries) ListActiveServices(ctx context.Context) ([]ListActiveServicesR
 			&i.DocUrl,
 			&i.Icon,
 			&i.Tag,
-			&i.Visibility,
 		); err != nil {
 			return nil, err
 		}
@@ -125,9 +123,11 @@ func (q *Queries) ListActiveServices(ctx context.Context) ([]ListActiveServicesR
 }
 
 const listCategories = `-- name: ListCategories :many
-select id, slug, label, sort from categories order by sort, slug
+select id, slug, label, sort, visibility from categories order by sort, slug
 `
 
+// visibility comes along: it is the primary read filter, so the snapshot
+// carries it (docs/specs/service-visibility.md §2.2).
 func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 	rows, err := q.db.Query(ctx, listCategories)
 	if err != nil {
@@ -142,6 +142,7 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 			&i.Slug,
 			&i.Label,
 			&i.Sort,
+			&i.Visibility,
 		); err != nil {
 			return nil, err
 		}

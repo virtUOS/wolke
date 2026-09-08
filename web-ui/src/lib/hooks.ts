@@ -142,24 +142,13 @@ export function usePrefsMutation() {
       // and switching *to* manual is also what seeds the arrangement
       // server-side, so the refetch is what surfaces the seeded order.
       if (patch.favorites_order !== undefined) qc.invalidateQueries({ queryKey: ['favorites'] })
-    },
-  })
-}
-
-/**
- * useVisibilityOptInMutation persists the user's opt-in visibility slugs
- * (issue #34). The server answers with the refreshed Me, which replaces the
- * cache; every catalog-derived query is then refetched, because what the user
- * may see just changed — the whole point of the toggle.
- */
-export function useVisibilityOptInMutation() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (optin: string[]) => api.setVisibilityOptIn(optin),
-    onSuccess: (me) => {
-      qc.setQueryData(['me'], me)
-      for (const key of ['catalog', 'defaults', 'favorites', 'search', 'frequent']) {
-        qc.invalidateQueries({ queryKey: [key] })
+      // show_beta changes what the user may see, so every catalog-derived
+      // query is stale — the whole point of the toggle
+      // (docs/specs/service-visibility.md §2.1).
+      if (patch.show_beta !== undefined) {
+        for (const key of ['catalog', 'defaults', 'favorites', 'search', 'frequent']) {
+          qc.invalidateQueries({ queryKey: [key] })
+        }
       }
     },
   })

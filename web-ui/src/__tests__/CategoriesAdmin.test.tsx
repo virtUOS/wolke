@@ -59,7 +59,13 @@ describe('CategoriesAdmin — edit, delete and reorder (issue #130)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Kategorie speichern' }))
 
     await waitFor(() =>
-      expect(update).toHaveBeenCalledWith('learning', { slug: 'lernen', label: { de: 'Lernen', en: 'Learning' } }),
+      expect(update).toHaveBeenCalledWith('learning', {
+        slug: 'lernen',
+        label: { de: 'Lernen', en: 'Learning' },
+        // Public, and stays public: the selector is only rendered when the
+        // deployment configures groups (docs/specs/service-visibility.md §2.2).
+        visibility: '',
+      }),
     )
     // Back to the list once it saved.
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Kategorie speichern' })).not.toBeInTheDocument())
@@ -187,7 +193,7 @@ describe('CategoriesAdmin — edit, delete and reorder (issue #130)', () => {
 
     // sort is max(sort)+10, past the current last row.
     await waitFor(() =>
-      expect(create).toHaveBeenCalledWith('forschung', { de: 'Forschung', en: 'Research' }, 40),
+      expect(create).toHaveBeenCalledWith('forschung', { de: 'Forschung', en: 'Research' }, 40, ''),
     )
   })
 

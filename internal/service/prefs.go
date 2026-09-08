@@ -32,6 +32,11 @@ type Prefs struct {
 	Locale               string
 	FavoritesOrder       string
 	FavoritesSeparateTab bool
+	// ShowBeta reveals the services tagged beta, which are hidden by default
+	// (docs/specs/service-visibility.md §2.1). The confirm dialog that warns
+	// about them lives in the UI; there is nothing to validate here — a boolean
+	// has no invalid value.
+	ShowBeta bool
 }
 
 var (
@@ -67,5 +72,6 @@ func UpdatePrefs(ctx context.Context, db PrefsStore, userID pgtype.UUID, p Prefs
 		Locale:               p.Locale,
 		FavoritesOrder:       p.FavoritesOrder,
 		FavoritesSeparateTab: p.FavoritesSeparateTab,
+		ShowBeta:             p.ShowBeta,
 	})
 }

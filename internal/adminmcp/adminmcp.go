@@ -51,14 +51,15 @@ type Manager struct {
 }
 
 // New builds a Manager that writes as the given admin actor (kind=mcp). vis is
-// the deployment's configured visibility set, which the propose paths validate
-// a service's visibility against exactly as the form does.
+// the deployment's configured visibility set — what restricts a *category*
+// (docs/specs/service-visibility.md §2.2); a service is restricted by the
+// categories it sits in, never by a field of its own.
 func New(db *store.DB, actor service.Actor, vis config.VisibilitySet) *Manager {
 	return &Manager{db: db, actor: actor, vis: vis, staged: map[string]staged{}, now: time.Now}
 }
 
 // VisibilityOptions lists the configured visibility slugs an admin may
-// restrict a service to (read-only helper for the tool description/UI).
+// restrict a category to (read-only helper for the tool description/UI).
 func (m *Manager) VisibilityOptions() []config.Visibility { return m.vis.List() }
 
 // --- reads ---
@@ -81,6 +82,17 @@ func (m *Manager) GetService(ctx context.Context, idStr string) (service.AdminSe
 type Category struct {
 	Slug  string            `json:"slug"`
 	Label map[string]string `json:"label"`
+	// Visibility is the slug restricting this category and everything in it, or
+	// "" for a public category (docs/specs/service-visibility.md §2.2).
+	Visibility string `json:"visibility,omitempty"`
+}
+
+// textVal unwraps a nullable text column.
+func textVal(t pgtype.Text) string {
+	if !t.Valid {
+		return ""
+	}
+	return t.String
 }
 
 // SearchInsights lists recent zero-result searches — the worklist for adding
@@ -98,7 +110,9 @@ func (m *Manager) ListCategories(ctx context.Context) ([]Category, error) {
 	}
 	out := make([]Category, 0, len(rows))
 	for _, c := range rows {
-		out = append(out, Category{Slug: c.Slug, Label: jsonMap(c.Label)})
+		out = append(out, Category{
+			Slug: c.Slug, Label: jsonMap(c.Label), Visibility: textVal(c.Visibility),
+		})
 	}
 	return out, nil
 }
@@ -117,7 +131,7 @@ type Preview struct {
 
 // ProposeCreate validates a new service and stages it. No write.
 func (m *Manager) ProposeCreate(ctx context.Context, draft service.Draft) (Preview, error) {
-	if err := service.ValidateDraft(m.vis, draft); err != nil {
+	if err := service.ValidateDraft(draft); err != nil {
 		return Preview{}, err
 	}
 	if err := m.checkCategories(ctx, draft.Categories); err != nil {
@@ -137,7 +151,7 @@ func (m *Manager) ProposeUpdate(ctx context.Context, idStr string, draft service
 	if err != nil {
 		return Preview{}, err
 	}
-	if err := service.ValidateDraft(m.vis, draft); err != nil {
+	if err := service.ValidateDraft(draft); err != nil {
 		return Preview{}, err
 	}
 	if err := m.checkCategories(ctx, draft.Categories); err != nil {
@@ -180,13 +194,13 @@ func (m *Manager) Confirm(ctx context.Context, token string) (string, error) {
 
 	switch st.kind {
 	case kindCreate:
-		svc, err := service.CreateService(ctx, m.db, m.actor, m.vis, st.draft)
+		svc, err := service.CreateService(ctx, m.db, m.actor, st.draft)
 		if err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("Created service %q (%s).", svc.Name, svc.ID), nil
 	case kindUpdate:
-		svc, err := service.UpdateService(ctx, m.db, m.actor, m.vis, st.id, st.draft)
+		svc, err := service.UpdateService(ctx, m.db, m.actor, st.id, st.draft)
 		if err != nil {
 			return "", err
 		}
@@ -249,7 +263,6 @@ func draftPreview(d service.Draft, active bool) service.AdminService {
 		Categories:  cats,
 		Tag:         d.Tag,
 		Keywords:    kws,
-		Visibility:  d.Visibility,
 	}
 }
 

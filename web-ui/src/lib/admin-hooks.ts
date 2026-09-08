@@ -5,6 +5,14 @@ export function useAdminServices() {
   return useQuery({ queryKey: ['admin', 'services'], queryFn: ({ signal }) => api.adminServices(signal) })
 }
 
+// useAdminCategories is the UNNARROWED category list: every category with its
+// visibility group. The admin screens must not read the narrowed /api/catalog,
+// or an admin who holds no group could not manage its category or the services
+// in it (docs/specs/service-visibility.md §5).
+export function useAdminCategories() {
+  return useQuery({ queryKey: ['admin', 'categories'], queryFn: ({ signal }) => api.adminCategories(signal) })
+}
+
 export function useAudit() {
   return useQuery({ queryKey: ['admin', 'audit'], queryFn: ({ signal }) => api.audit(signal) })
 }
@@ -38,6 +46,7 @@ export function useAdminActions() {
   const qc = useQueryClient()
   const afterCatalogWrite = () => {
     qc.invalidateQueries({ queryKey: ['admin', 'services'] })
+    qc.invalidateQueries({ queryKey: ['admin', 'categories'] })
     qc.invalidateQueries({ queryKey: ['admin', 'audit'] })
     qc.invalidateQueries({ queryKey: ['catalog'] })
     qc.invalidateQueries({ queryKey: ['defaults'] })
@@ -60,12 +69,12 @@ export function useAdminActions() {
       onSuccess: afterCatalogWrite,
     }),
     createCategory: useMutation({
-      mutationFn: (v: { slug: string; label: Localized; sort: number }) =>
-        api.createCategory(v.slug, v.label, v.sort),
+      mutationFn: (v: { slug: string; label: Localized; sort: number; visibility?: string }) =>
+        api.createCategory(v.slug, v.label, v.sort, v.visibility ?? ''),
       onSuccess: afterCatalogWrite,
     }),
     updateCategory: useMutation({
-      mutationFn: (v: { slug: string; next: { slug: string; label: Localized } }) =>
+      mutationFn: (v: { slug: string; next: { slug: string; label: Localized; visibility: string } }) =>
         api.updateCategory(v.slug, v.next),
       onSuccess: afterCatalogWrite,
     }),

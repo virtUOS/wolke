@@ -16,8 +16,10 @@ import { Tile } from '../Tile'
 interface ServiceFormProps {
   categories: Category[]
   locale: string
-  /** The deployment's configured visibility groups; the selector renders only
-   *  when there are any (docs/specs/service-visibility.md §5). */
+  /** The deployment's configured visibility groups, used only to name the
+   *  group in the hint below the category picker. A service carries no
+   *  visibility of its own: it is restricted by the categories it sits in, and
+   *  that is set in the category editor (docs/specs/service-visibility.md §2.2). */
   visibilityOptions?: VisibilityEntry[]
   initial?: AdminService
   onSubmit: (draft: ServiceDraft) => void
@@ -69,14 +71,24 @@ export function ServiceForm({ categories, locale, visibilityOptions = [], initia
   const [tag, setTag] = useState<ServiceTag | ''>(initial?.tag ?? '')
   // '' = public. A stored slug the deployment no longer configures still shows
   // as selected (as its slug), so an admin sees — and can clear — it.
-  const [visibility, setVisibility] = useState(initial?.visibility ?? '')
   const visibilityLabels = useMemo(() => {
     const out: Record<string, string> = {}
     for (const v of visibilityOptions) out[v.slug] = localized(v.label, locale)
     return out
   }, [visibilityOptions, locale])
-  const visibilityChoices = ['', ...visibilityOptions.map((v) => v.slug)]
-  if (visibility && !(visibility in visibilityLabels)) visibilityChoices.push(visibility)
+  // The hint, derived from the chosen categories — never a control. Names
+  // every restricted category the service would land in, because holding one
+  // of them is not enough: the reader must hold them all.
+  const restrictingGroups = useMemo(() => {
+    const out: string[] = []
+    for (const slug of cats) {
+      const cat = categories.find((c) => c.slug === slug)
+      if (!cat?.visibility) continue
+      const label = visibilityLabels[cat.visibility] ?? cat.visibility
+      if (!out.includes(label)) out.push(label)
+    }
+    return out
+  }, [cats, categories, visibilityLabels])
   const [keywords, setKeywords] = useState<string[]>(initial?.keywords ?? [])
   const [kwInput, setKwInput] = useState('')
 
@@ -113,9 +125,8 @@ export function ServiceForm({ categories, locale, visibilityOptions = [], initia
       categories: [...cats],
       doc_only: serviceUrl.trim() === '',
       tag: tag || undefined,
-      visibility: visibility || undefined,
     }),
-    [name, descDe, descEn, serviceUrl, docUrl, icon, cats, tag, visibility, s],
+    [name, descDe, descEn, serviceUrl, docUrl, icon, cats, tag, s],
   )
 
   const errors: string[] = []
@@ -175,7 +186,6 @@ export function ServiceForm({ categories, locale, visibilityOptions = [], initia
       tag,
       // effectiveKeywords flushes any term left in the input, comma-split like the chips.
       keywords: effectiveKeywords,
-      visibility,
     })
   }
 
@@ -219,6 +229,11 @@ export function ServiceForm({ categories, locale, visibilityOptions = [], initia
               />
             ))}
           </div>
+          {/* Derived, never a control: restriction lives on the category
+              (docs/specs/service-visibility.md §2.2). */}
+          {restrictingGroups.length > 0 && (
+            <p className="mt-1 text-xs text-text-muted">{s.admin.visibilityHint(restrictingGroups)}</p>
+          )}
         </fieldset>
 
         <fieldset>
@@ -276,27 +291,6 @@ export function ServiceForm({ categories, locale, visibilityOptions = [], initia
           </div>
         </fieldset>
 
-        {visibilityChoices.length > 1 && (
-          <fieldset>
-            <legend className="mb-1 text-sm font-medium">{s.admin.fVisibility}</legend>
-            <p className="mb-1 text-xs text-text-muted">{s.admin.visibilityHint}</p>
-            <div className="flex flex-wrap gap-2">
-              {visibilityChoices.map((value) => (
-                <ChoiceChip
-                  key={value}
-                  type="radio"
-                  name="visibility"
-                  value={value}
-                  active={visibility === value}
-                  checked={visibility === value}
-                  onChange={() => setVisibility(value)}
-                  label={value === '' ? s.admin.visibilityPublic : visibilityLabels[value] ?? value}
-                />
-              ))}
-            </div>
-          </fieldset>
-        )}
-
         <fieldset>
           <legend className="mb-1 text-sm font-medium">{s.admin.fIcon}</legend>
           <Input
@@ -352,7 +346,7 @@ export function ServiceForm({ categories, locale, visibilityOptions = [], initia
         <div>
           <p className="mb-2 text-sm font-medium text-text-muted">{s.admin.preview}</p>
           <div className="max-w-sm">
-            <Tile service={preview} categories={categories} locale={locale} visibilityLabels={visibilityLabels} />
+            <Tile service={preview} categories={categories} locale={locale} />
           </div>
         </div>
 

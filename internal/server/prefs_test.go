@@ -20,7 +20,7 @@ type fakePrefsStore struct {
 
 func (f *fakePrefsStore) UpdateUserPrefs(_ context.Context, arg store.UpdateUserPrefsParams) (store.User, error) {
 	f.got = arg
-	return store.User{ViewMode: arg.ViewMode, Theme: arg.Theme}, nil
+	return store.User{ViewMode: arg.ViewMode, Theme: arg.Theme, ShowBeta: arg.ShowBeta}, nil
 }
 
 func reqWithUser(method, target, body string, user store.User) *http.Request {

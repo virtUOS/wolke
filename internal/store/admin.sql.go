@@ -42,8 +42,40 @@ func (q *Queries) AddServiceCategory(ctx context.Context, arg AddServiceCategory
 	return err
 }
 
+const adminListCategories = `-- name: AdminListCategories :many
+select id, slug, label, sort, visibility from categories order by sort, slug
+`
+
+// Every category with its visibility, unnarrowed — the admin screens manage
+// categories they do not themselves hold (docs/specs/service-visibility.md §5).
+func (q *Queries) AdminListCategories(ctx context.Context) ([]Category, error) {
+	rows, err := q.db.Query(ctx, adminListCategories)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Category{}
+	for rows.Next() {
+		var i Category
+		if err := rows.Scan(
+			&i.ID,
+			&i.Slug,
+			&i.Label,
+			&i.Sort,
+			&i.Visibility,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const adminListServices = `-- name: AdminListServices :many
-select id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords, visibility from services order by name
+select id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords from services order by name
 `
 
 // Full catalog including soft-deleted (inactive) services.
@@ -68,7 +100,6 @@ func (q *Queries) AdminListServices(ctx context.Context) ([]Service, error) {
 			&i.UpdatedAt,
 			&i.Tag,
 			&i.Keywords,
-			&i.Visibility,
 		); err != nil {
 			return nil, err
 		}
@@ -81,31 +112,39 @@ func (q *Queries) AdminListServices(ctx context.Context) ([]Service, error) {
 }
 
 const createCategory = `-- name: CreateCategory :one
-insert into categories (slug, label, sort) values ($1, $2, $3) returning id, slug, label, sort
+insert into categories (slug, label, sort, visibility)
+values ($1, $2, $3, $4) returning id, slug, label, sort, visibility
 `
 
 type CreateCategoryParams struct {
-	Slug  string `json:"slug"`
-	Label []byte `json:"label"`
-	Sort  int32  `json:"sort"`
+	Slug       string      `json:"slug"`
+	Label      []byte      `json:"label"`
+	Sort       int32       `json:"sort"`
+	Visibility pgtype.Text `json:"visibility"`
 }
 
 func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error) {
-	row := q.db.QueryRow(ctx, createCategory, arg.Slug, arg.Label, arg.Sort)
+	row := q.db.QueryRow(ctx, createCategory,
+		arg.Slug,
+		arg.Label,
+		arg.Sort,
+		arg.Visibility,
+	)
 	var i Category
 	err := row.Scan(
 		&i.ID,
 		&i.Slug,
 		&i.Label,
 		&i.Sort,
+		&i.Visibility,
 	)
 	return i, err
 }
 
 const createService = `-- name: CreateService :one
-insert into services (name, description, service_url, doc_url, icon, tag, keywords, visibility)
-values ($1, $2, $3, $4, $5, $6, $7, $8)
-returning id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords, visibility
+insert into services (name, description, service_url, doc_url, icon, tag, keywords)
+values ($1, $2, $3, $4, $5, $6, $7)
+returning id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords
 `
 
 type CreateServiceParams struct {
@@ -116,7 +155,6 @@ type CreateServiceParams struct {
 	Icon        string      `json:"icon"`
 	Tag         pgtype.Text `json:"tag"`
 	Keywords    []string    `json:"keywords"`
-	Visibility  pgtype.Text `json:"visibility"`
 }
 
 func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (Service, error) {
@@ -128,7 +166,6 @@ func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (S
 		arg.Icon,
 		arg.Tag,
 		arg.Keywords,
-		arg.Visibility,
 	)
 	var i Service
 	err := row.Scan(
@@ -143,7 +180,6 @@ func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) (S
 		&i.UpdatedAt,
 		&i.Tag,
 		&i.Keywords,
-		&i.Visibility,
 	)
 	return i, err
 }
@@ -167,7 +203,7 @@ func (q *Queries) DeleteServiceCategories(ctx context.Context, serviceID pgtype.
 }
 
 const getCategoryBySlug = `-- name: GetCategoryBySlug :one
-select id, slug, label, sort from categories where slug = $1
+select id, slug, label, sort, visibility from categories where slug = $1
 `
 
 func (q *Queries) GetCategoryBySlug(ctx context.Context, slug string) (Category, error) {
@@ -178,12 +214,13 @@ func (q *Queries) GetCategoryBySlug(ctx context.Context, slug string) (Category,
 		&i.Slug,
 		&i.Label,
 		&i.Sort,
+		&i.Visibility,
 	)
 	return i, err
 }
 
 const getServiceByID = `-- name: GetServiceByID :one
-select id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords, visibility from services where id = $1
+select id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords from services where id = $1
 `
 
 func (q *Queries) GetServiceByID(ctx context.Context, id pgtype.UUID) (Service, error) {
@@ -201,7 +238,6 @@ func (q *Queries) GetServiceByID(ctx context.Context, id pgtype.UUID) (Service, 
 		&i.UpdatedAt,
 		&i.Tag,
 		&i.Keywords,
-		&i.Visibility,
 	)
 	return i, err
 }
@@ -307,6 +343,72 @@ func (q *Queries) ListServiceCategorySlugs(ctx context.Context, serviceID pgtype
 	return items, nil
 }
 
+const listServiceRestrictedCategories = `-- name: ListServiceRestrictedCategories :many
+select distinct c.visibility
+from service_categories sc
+join categories c on c.id = sc.category_id
+where sc.service_id = $1 and c.visibility is not null
+`
+
+// The visibility slugs of the restricted categories a service belongs to
+// (empty = the service is public). One row per distinct slug; the read model's
+// predicate needs every one of them held (docs/specs/service-visibility.md
+// §2.2, restricted wins).
+func (q *Queries) ListServiceRestrictedCategories(ctx context.Context, serviceID pgtype.UUID) ([]pgtype.Text, error) {
+	rows, err := q.db.Query(ctx, listServiceRestrictedCategories, serviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.Text{}
+	for rows.Next() {
+		var visibility pgtype.Text
+		if err := rows.Scan(&visibility); err != nil {
+			return nil, err
+		}
+		items = append(items, visibility)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const purgeRoleDefaultsForCategory = `-- name: PurgeRoleDefaultsForCategory :many
+with purged as (
+    delete from role_defaults rd
+    using service_categories sc
+    where sc.service_id = rd.service_id and sc.category_id = $1
+    returning rd.role
+)
+select distinct role from purged
+`
+
+// Deletes every role's default-view row for every service in one category and
+// reports the affected roles. Runs when a category becomes restricted: default
+// views stay public-only (docs/specs/service-visibility.md §2.2), and leaving
+// the rows behind would wedge those roles' editors, whose every save would then
+// be rejected.
+func (q *Queries) PurgeRoleDefaultsForCategory(ctx context.Context, categoryID pgtype.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, purgeRoleDefaultsForCategory, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var role string
+		if err := rows.Scan(&role); err != nil {
+			return nil, err
+		}
+		items = append(items, role)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const purgeRoleDefaultsForService = `-- name: PurgeRoleDefaultsForService :many
 with purged as (
     delete from role_defaults where service_id = $1 returning role
@@ -390,10 +492,9 @@ set name        = $1,
     icon        = $5,
     tag         = $6,
     keywords    = $7,
-    visibility  = $8,
     updated_at  = now()
-where id = $9
-returning id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords, visibility
+where id = $8
+returning id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords
 `
 
 type UpdateServiceParams struct {
@@ -404,7 +505,6 @@ type UpdateServiceParams struct {
 	Icon        string      `json:"icon"`
 	Tag         pgtype.Text `json:"tag"`
 	Keywords    []string    `json:"keywords"`
-	Visibility  pgtype.Text `json:"visibility"`
 	ID          pgtype.UUID `json:"id"`
 }
 
@@ -417,7 +517,6 @@ func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) (S
 		arg.Icon,
 		arg.Tag,
 		arg.Keywords,
-		arg.Visibility,
 		arg.ID,
 	)
 	var i Service
@@ -433,7 +532,6 @@ func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) (S
 		&i.UpdatedAt,
 		&i.Tag,
 		&i.Keywords,
-		&i.Visibility,
 	)
 	return i, err
 }

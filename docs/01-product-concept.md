@@ -53,9 +53,9 @@ the configured set simply reads as the configured default until their next login
 (doc 02 §4).
 
 **Visibility groups are orthogonal to roles.** A role decides a user's *default view*; a
-visibility group decides which *non-public* services a user may see at all (§5.7). A deployment
-configures zero or more groups; with none configured, every service is public and nothing about
-the product changes.
+visibility group decides which *restricted categories* — and so which services — a user may see
+at all (§5.7). A deployment configures zero or more groups; with none configured, every category
+is public and nothing about the product changes.
 
 ## 4. The core UX
 
@@ -198,30 +198,40 @@ Prometheus metrics (doc 02 §7). No third-party analytics; data stays in Postgre
 Light and dark mode, system-preference by default, user toggle persists. Palette derived from
 the UOS corporate design (doc 03).
 
-### 5.7 Service visibility (experimental mode and claim-gated groups)
-A service is **public** (the default) or restricted to one **visibility group**, a slug the
-deployment configures (`visibility:` in config.yaml, doc 02 §11). A user sees the public services
-plus those of every group they **hold**. A group is held in one of two ways — that is the only
-difference between the two use cases (spec: `docs/specs/service-visibility.md`):
+### 5.7 Service visibility: beta services and restricted categories
+Two distinct needs, each expressed with the smallest thing that already exists
+(spec: `docs/specs/service-visibility.md`).
 
-- **Opt-in** (`grant: opt-in`, issue #34 — "experimental mode"): the user enables the group
-  themselves in the account menu. Enabling asks for confirmation with the configured **warning**
-  ("experimental services may vanish without notice; data is not migrated"); disabling is
-  immediate and loses nothing.
-- **Claim** (`grant: claim`, issue #121 — e.g. IT infrastructure): the IdP grants it via a group
-  claim, re-derived at every login like `is_admin`. Configurable today; the login-side derivation
-  ships in the spec's Stage 2.
+**Beta services are the `beta` tag, and nothing else.** A service tagged `beta` already renders
+the Beta badge; it is now also **hidden until the user asks for it**. One built-in switch in the
+account menu — "Beta-Dienste anzeigen" — reveals them, behind a confirm dialog carrying the
+warning that they may vanish without notice and that their data is not migrated. Revealed
+services appear inline **in their own categories**, badged exactly as before, and a **Beta**
+filter joins the maintenance one for as long as the switch is on. Nothing to configure: the
+admin sets one field, the tag. `wartung` keeps its present meaning — a cosmetic label plus its
+filter; only `beta` hides.
+
+**Restricted services are a restricted category.** Visibility lives on the **category**, not the
+service: assigning a service to "IT-Infrastruktur" *is* restricting it. A category carries at
+most one visibility group (a configured slug, `visibility:` in config.yaml, doc 02 §11), set in
+the category editor; the service form shows only a hint saying which group the chosen categories
+imply. A user holds a group when the IdP's claims grant it, re-derived at every login like
+`is_admin`, so losing the group at the IdP loses the access at the next login. There is no
+self-service flavour and no configuration beyond the claim mapping — there is no way to guess
+which IdP group grants membership. A service in several categories is visible only to a user who
+holds **every** restricted category it belongs to, so a second category cannot be used to bypass
+the restriction.
 
 Non-holders never see a restricted service — not in the catalog, the default view, search,
-favorites, "frequently used", nor through the public catalog MCP server (which holds nothing,
-always). A category that only contains restricted services disappears with them, so there is no
-empty pill leaking the group's name. Holders see the services **inline** in the normal views,
-badged with the group's label in the tile's status slot; there are no separate tabs. Role default
-views stay public-only: a restricted service cannot be a role default, and restricting a service
-that already is one removes it from every role's defaults in the same write (audited). Admins pick
-a service's visibility on the form and via the MCP propose path; admin views always show
-everything. Writes are narrowed too: a click or a favourite on a service the user cannot see is
-a no-op / not found, indistinguishable from an unknown id.
+favorites, "frequently used", nor through the public catalog MCP server (which holds nothing and
+cannot ask for beta, always). The restricted category disappears with its services, so there is
+no empty pill leaking the group's name. There are no separate tabs for either flavour. Role
+default views stay public-only: a service in a restricted category cannot be a role default, and
+restricting one that already is — by moving the service, or by restricting its category — removes
+it from every role's defaults in the same write (audited). Admin views always show everything:
+they read unnarrowed endpoints, so an admin who holds no group still manages every category and
+service. Writes are narrowed too: a click or a favourite on a service the user cannot see is a
+no-op / not found, indistinguishable from an unknown id.
 
 ## 6. Explicit non-goals
 - No service status/health monitoring or up/down badges.

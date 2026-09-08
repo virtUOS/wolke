@@ -173,14 +173,18 @@ claims by dot-path, so use Keycloak's built-in `realm_access.roles`:
 The admin check can use realm roles the same way (`admin.claim: realm_access.roles`,
 `match: wolke-admin`), or stay on groups — they're independent.
 
-### 3c. Optional: a group that unlocks restricted services
+### 3c. Optional: a group that unlocks a restricted category
 
-Services can be marked non-public with a **visibility slug**
-(`docs/specs/service-visibility.md`). A slug with `grant: claim` is held by
-whoever the IdP says holds it — resolved from a claim exactly like `is_admin`,
-and re-derived on every login, so removing the group revokes access at the next
-login. Users who don't hold it never see those services anywhere: not in the
-catalog, not in search, and the category they sit in disappears for them.
+A **category** can be restricted to a **visibility group**
+(`docs/specs/service-visibility.md`), which restricts every service in it. A
+group is held by whoever the IdP says holds it — resolved from a claim exactly
+like `is_admin`, and re-derived on every login, so removing the group revokes
+access at the next login. Users who don't hold it never see the category or its
+services anywhere: not in the catalog, not in search, and the category pill
+never renders for them.
+
+(There is nothing to configure for "experimental" services: that is the `beta`
+tag plus a per-user switch in the account menu.)
 
 1. **Realm → Groups** → create the group, e.g. `it-service-admins`, and assign
    the IT staff who should see the infrastructure services.
@@ -197,24 +201,24 @@ catalog, not in search, and the category they sit in disappears for them.
    visibility:
      - slug: it-infra                       # [a-z0-9-]{1,32}, unique, not a role slug, not `all`
        label: { de: "IT-Infrastruktur", en: "IT infrastructure" }
-       grant: claim
        claim: groups                        # nested dot-paths work, e.g. realm_access.roles
        match: it-service-admins             # membership in this group ⇒ the slug
    ```
 
-   Only `slug`, `grant`, `claim` and `match` are needed — the mapping is
-   `claim` + `match`, and the slug is just the internal name. `label` is
-   optional and plays no part in the mapping, but it *is* what holders read on
-   the tile badge and what admins pick in the service form's **Sichtbarkeit**
-   selector; without it both fall back to the capitalized slug ("It-infra"),
-   which reads poorly for a hyphenated slug.
+   Only `slug`, `claim` and `match` are needed — the mapping is `claim` +
+   `match`, and the slug is just the internal name. `label` is optional and
+   plays no part in the mapping, but it *is* what admins pick in the category
+   editor's **Sichtbarkeit** selector; without it, it falls back to the
+   capitalized slug ("It-infra"), which reads poorly for a hyphenated slug.
 
    Realm roles work the same way — `claim: realm_access.roles` with the role
    name as `match`, once that mapper has **Add to ID token: On** (step 3b's
    alternative).
-4. Restart wolke, then mark a service: **Administration → Dienste →** (the
-   service) **→ Sichtbarkeit → IT-Infrastruktur**. Members see it inline in the
-   normal views, badged with the label; nobody else can obtain it.
+4. Restart wolke, then restrict a category: **Administration → Kategorien →**
+   (the category) **→ Bearbeiten → Sichtbarkeit → IT-Infrastruktur**. Every
+   service in that category is now visible to members only; nobody else can
+   obtain the category or its services. A service in several categories needs
+   the member to hold *all* of the restricted ones.
 
 Granting and revoking day to day is
 `docs/runbooks/grant-visibility-group.md`.
@@ -249,6 +253,7 @@ Granting and revoking day to day is
 | Everyone is `student`, nobody is admin | The role/group claim isn't in the **ID token**. Enable **Add to ID token** on the Group Membership / realm-roles mapper (step 3a). Verify by decoding the ID token at jwt.io — the claim must be present. |
 | Admin never granted | `groups` carries full paths (`/dashboard-admins`). Set **Full group path: Off**, or set `admin.match: /dashboard-admins`. |
 | A visibility group grants nothing | Same two causes as admin: the `groups` mapper lacks **Add to ID token**, or the claim carries full paths (`/it-service-admins`) while `match` doesn't. The login log line names what was granted: `{"msg":"login", …, "visibility":["it-infra"]}` — an empty list means the claim didn't match. |
+| A member still sees nothing | The group is held but no category carries it. Restriction lives on the category, not the service: check **Administration → Kategorien**. |
 | `invalid_redirect_uri` at Keycloak | The client's Valid redirect URIs must contain `PUBLIC_URL` + `/auth/callback`, exactly. |
 | Login loops / "id_token nonce mismatch" or issuer errors | `OIDC_ISSUER_URL` must equal the `iss` in the token byte-for-byte (mind the `/realms/<realm>` path and `http` vs `https`). Check the discovery URL (step 2). |
 | Session cookie not set / immediately logged out | `PUBLIC_URL` must match the browser origin and be `https://…` in production (the `Secure` cookie flag is derived from its scheme). Make sure Caddy/your proxy forwards `X-Forwarded-Proto`. |

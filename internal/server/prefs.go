@@ -25,6 +25,7 @@ func updatePrefs(db service.PrefsStore, vis config.VisibilitySet) http.HandlerFu
 			Locale               *string `json:"locale"`
 			FavoritesOrder       *string `json:"favorites_order"`
 			FavoritesSeparateTab *bool   `json:"favorites_separate_tab"`
+			ShowBeta             *bool   `json:"show_beta"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
@@ -37,6 +38,7 @@ func updatePrefs(db service.PrefsStore, vis config.VisibilitySet) http.HandlerFu
 			Locale:               user.Locale,
 			FavoritesOrder:       user.FavoritesOrder,
 			FavoritesSeparateTab: user.FavoritesSeparateTab,
+			ShowBeta:             user.ShowBeta,
 		}
 		if body.Theme != nil {
 			p.Theme = *body.Theme
@@ -52,6 +54,9 @@ func updatePrefs(db service.PrefsStore, vis config.VisibilitySet) http.HandlerFu
 		}
 		if body.FavoritesSeparateTab != nil {
 			p.FavoritesSeparateTab = *body.FavoritesSeparateTab
+		}
+		if body.ShowBeta != nil {
+			p.ShowBeta = *body.ShowBeta
 		}
 
 		updated, err := service.UpdatePrefs(r.Context(), db, user.ID, p)

@@ -28,7 +28,7 @@ func TestLoadSnapshotFromSeededDB(t *testing.T) {
 	}
 	// The raw snapshot is unreadable by design; everything below reads the
 	// public view, which is the whole seeded catalog minus restricted entries.
-	snap := raw.VisibleTo(nil)
+	snap := raw.VisibleTo(nil, false)
 	if len(snap.Services) == 0 {
 		t.Fatal("no services loaded (did you run `make seed`?)")
 	}

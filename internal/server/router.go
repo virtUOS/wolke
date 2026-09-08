@@ -54,8 +54,6 @@ type Deps struct {
 	// fills it from the config like Roles, so every read surface narrows the
 	// catalog through the same set (docs/specs/service-visibility.md §3).
 	Visibility config.VisibilitySet
-	// VisibilityOptIn backs PUT /api/me/visibility (the user's own opt-in list).
-	VisibilityOptIn service.VisibilityStore
 	// SPA overrides the embedded SPA filesystem; nil uses the real embedded
 	// build (web.FS()). Tests inject a fake filesystem here so they never
 	// depend on whether `make web-build && make embed` has actually run in
@@ -160,9 +158,6 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 		if deps.Prefs != nil {
 			pr.With(requireUserJSON).Patch("/api/me/prefs", updatePrefs(deps.Prefs, vis))
 		}
-		if deps.VisibilityOptIn != nil {
-			pr.With(requireUserJSON).Put("/api/me/visibility", setVisibilityOptIn(deps.VisibilityOptIn, vis))
-		}
 		if deps.Favorites != nil {
 			if deps.Catalog != nil {
 				pr.With(requireUserJSON).Get("/api/favorites", listFavorites(deps.Catalog, deps.Favorites, vis))
@@ -199,6 +194,7 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 				ar.Delete("/services/{id}", adminDeleteService(ad))
 				ar.Get("/role-defaults/{role}", adminGetRoleDefaults(ad))
 				ar.Put("/role-defaults/{role}", adminSetRoleDefaults(ad))
+				ar.Get("/categories", adminListCategories(ad))
 				ar.Post("/categories", adminCreateCategory(ad))
 				// Static before the wildcard: chi resolves it that way anyway,
 				// and the reorder is a whole-list write, not a slug.

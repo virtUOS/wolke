@@ -9,10 +9,12 @@ select count(*) from categories;
 select slug from categories order by sort, slug;
 
 -- name: UpdateCategory :one
--- Slug and both labels; renaming is safe because service_categories joins on the
--- category id (issue #130 §2.2). Uniqueness is checked in the service layer, so
--- a 23505 here means a concurrent insert took the slug first.
-update categories set slug = @slug, label = @label where id = @id returning *;
+-- Slug, both labels and the visibility slug; renaming is safe because
+-- service_categories joins on the category id (issue #130 §2.2). Uniqueness is
+-- checked in the service layer, so a 23505 here means a concurrent insert took
+-- the slug first.
+update categories set slug = @slug, label = @label, visibility = @visibility
+where id = @id returning *;
 
 -- name: DeleteCategory :execrows
 -- Unguarded on purpose: service_categories.category_id is `on delete restrict`,

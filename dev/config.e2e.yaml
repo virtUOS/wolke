@@ -1,15 +1,22 @@
 # Structured config for the local dev loop and the Playwright e2e suite
 # (playwright.config.ts sets CONFIG_FILE to this file). It layers over the
 # built-in defaults exactly like a deployment's config.yaml would, and only
-# adds what the suite needs beyond them: one opt-in visibility group, so the
-# experimental-mode flow (issue #34) can be exercised end to end against the
-# seeded "Zettelkasten Labor" service (dev/seed.sql).
+# adds what the suite needs beyond them: one visibility group, so the
+# restricted-category flow (issue #121) can be exercised end to end against the
+# seeded "IT-Infrastruktur" category (dev/seed.sql).
+#
+# The group deliberately matches a claim value the mock IdP does NOT emit (it
+# sends groups: ["dashboard-admins"]), so the e2e user holds nothing: the
+# non-holder half of the contract — the category and its services are absent
+# from every read surface — is what the suite asserts. The holder half is
+# covered by the Go tests, which can mint any claim set.
+#
+# Beta services need no configuration at all: the tag is schema, the reveal is
+# a user pref (docs/specs/service-visibility.md §2.1).
 #
 # To run the same locally:  CONFIG_FILE=dev/config.e2e.yaml make run
 visibility:
-  - slug: experimental
-    label: { de: "Experimentell", en: "Experimental" }
-    grant: opt-in
-    warning:
-      de: "Experimentelle Dienste können jederzeit ohne Vorankündigung verschwinden; Daten gehen dabei möglicherweise verloren und werden nicht migriert."
-      en: "Experimental services can disappear at any time without notice; data may be lost and will not be migrated."
+  - slug: it-infra
+    label: { de: "IT-Infrastruktur", en: "IT infrastructure" }
+    claim: groups
+    match: it-service-admins

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Wrench, X } from 'lucide-react'
+import { FlaskConical, Wrench, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { assistantEnabled, type Branding } from '@/lib/branding'
 import { DESKTOP_MEDIA_QUERY } from '@/lib/breakpoints'
@@ -18,7 +18,6 @@ import {
   usePrefsMutation,
   useResultAnnouncement,
   useSearch,
-  useVisibilityOptInMutation,
 } from '@/lib/hooks'
 import { useAnnouncements } from '@/lib/admin-hooks'
 import { AdminView } from './admin/AdminView'
@@ -118,14 +117,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
 
   useApplyTheme(me.theme)
   const prefs = usePrefsMutation()
-  const visibilityOptIn = useVisibilityOptInMutation()
-  // Badge labels for the visibility groups this user holds, by slug — the
-  // tile renders the group's name in its status slot (spec §5).
-  const visibilityLabels = useMemo(() => {
-    const out: Record<string, string> = {}
-    for (const e of me.visibility.entries) out[e.slug] = localized(e.label, locale)
-    return out
-  }, [me.visibility.entries, locale])
   const announcements = useAnnouncements()
   const catalog = useCatalog()
   const favorites = useFavorites()
@@ -234,6 +225,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     if (searching) return tr.dash.searchResults
     if (tab === 'favoriten') return tr.dash.favorites
     if (filter.kind === 'maintenance') return tr.dash.inMaintenance
+    if (filter.kind === 'beta') return tr.dash.betaServices
     if (filter.kind === 'category') {
       const c = allCategories.find((x) => x.slug === filter.slug)
       return c ? localized(c.label, locale) : filter.slug
@@ -303,7 +295,8 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     onSetLocale: (next: Me['locale']) => prefs.mutate({ locale: next }),
     onAdmin: () => navigate({ ...view, admin: true }),
     isMobile,
-    onSetVisibilityOptIn: (optin: string[]) => visibilityOptIn.mutate(optin),
+    showBeta: me.show_beta,
+    onSetShowBeta: (next: boolean) => prefs.mutate({ show_beta: next }),
     focusKey: adminOpen ? 'admin' : 'dashboard',
   }
 
@@ -439,6 +432,20 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             <Wrench className="h-[13px] w-[13px]" aria-hidden="true" />
             {tr.dash.inMaintenance}
           </PillButton>
+          {/* Beta: the parallel of the maintenance facet, and only while the
+              user asked for beta services — with the pref off the catalog
+              carries none, so the pill would filter to nothing. */}
+          {me.show_beta && (
+            <PillButton
+              active={filter.kind === 'beta'}
+              aria-pressed={filter.kind === 'beta'}
+              onClick={() => selectFilter({ kind: 'beta' })}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <FlaskConical className="h-[13px] w-[13px]" aria-hidden="true" />
+              {tr.dash.betaServices}
+            </PillButton>
+          )}
           {allCategories.map((c) => (
             <PillButton
               key={c.slug}
@@ -479,7 +486,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             layout={layout}
             actions={actions}
             emptyMessage={tr.dash.favEmpty}
-            visibilityLabels={visibilityLabels}
           />
         )
       ) : searchFailed ? (
@@ -496,7 +502,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           layout={layout}
           actions={actions}
           emptyMessage={searching ? tr.dash.searchEmpty(query) : undefined}
-          visibilityLabels={visibilityLabels}
         />
       )}
     </DashboardShell>

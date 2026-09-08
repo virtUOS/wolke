@@ -47,9 +47,6 @@ type Draft struct {
 	Categories  []string // category slugs
 	Tag         string   // "" | "beta" | "wartung"
 	Keywords    []string // optional search aliases; flat, language-agnostic
-	// Visibility restricts the service to holders of a configured visibility
-	// slug; "" = public (docs/specs/service-visibility.md §4).
-	Visibility string
 }
 
 // Keyword limits keep the search aliases sane and the input bounded.
@@ -70,7 +67,6 @@ type AdminService struct {
 	Categories  []string          `json:"categories"`
 	Tag         string            `json:"tag,omitempty"`
 	Keywords    []string          `json:"keywords"`
-	Visibility  string            `json:"visibility,omitempty"`
 }
 
 // normalizeKeywords trims, drops blanks, and de-dupes case-insensitively while
@@ -98,7 +94,7 @@ func normalizeKeywords(in []string) []string {
 // MCP server behave identically (docs/02 §10). vis is the deployment's
 // configured visibility set: a service may only be restricted to a slug it
 // contains.
-func validateServiceInput(vis config.VisibilitySet, in Draft) error {
+func validateServiceInput(in Draft) error {
 	if strings.TrimSpace(in.Name) == "" {
 		return &ValidationError{Field: "name", Msg: "must not be empty"}
 	}
@@ -126,9 +122,6 @@ func validateServiceInput(vis config.VisibilitySet, in Draft) error {
 	if in.Tag != "" && in.Tag != "beta" && in.Tag != "wartung" {
 		return &ValidationError{Field: "tag", Msg: `must be "", "beta", or "wartung"`}
 	}
-	if in.Visibility != "" && !vis.Has(in.Visibility) {
-		return &ValidationError{Field: "visibility", Msg: "must be empty (public) or one of " + strings.Join(vis.Slugs(), ", ")}
-	}
 	kws := normalizeKeywords(in.Keywords)
 	if len(kws) > maxKeywords {
 		return &ValidationError{Field: "keywords", Msg: fmt.Sprintf("at most %d keywords are allowed", maxKeywords)}
@@ -148,7 +141,7 @@ func validHTTPURL(s string) bool {
 
 // ValidateDraft exposes service validation for the MCP propose step, which must
 // validate without writing (docs/02 §8).
-func ValidateDraft(vis config.VisibilitySet, in Draft) error { return validateServiceInput(vis, in) }
+func ValidateDraft(in Draft) error { return validateServiceInput(in) }
 
 // NormalizeKeywords exposes keyword normalization so the MCP propose preview
 // reflects exactly what a confirm would store (docs/02 §8).
@@ -173,8 +166,8 @@ func GetAdminService(ctx context.Context, db store.Querier, id pgtype.UUID) (Adm
 
 // CreateService validates, inserts the service + its categories, and audit-logs
 // the write — all in one transaction.
-func CreateService(ctx context.Context, db AdminDB, actor Actor, vis config.VisibilitySet, in Draft) (AdminService, error) {
-	if err := validateServiceInput(vis, in); err != nil {
+func CreateService(ctx context.Context, db AdminDB, actor Actor, in Draft) (AdminService, error) {
+	if err := validateServiceInput(in); err != nil {
 		return AdminService{}, err
 	}
 	var out AdminService
@@ -191,7 +184,6 @@ func CreateService(ctx context.Context, db AdminDB, actor Actor, vis config.Visi
 			Icon:        in.Icon,
 			Tag:         pgText(in.Tag),
 			Keywords:    normalizeKeywords(in.Keywords),
-			Visibility:  pgText(in.Visibility),
 		})
 		if err != nil {
 			return fmt.Errorf("create service: %w", err)
@@ -208,17 +200,17 @@ func CreateService(ctx context.Context, db AdminDB, actor Actor, vis config.Visi
 // UpdateService edits a service in place, replacing its category set, and audits
 // the before/after diff.
 //
-// Restricting a service (visibility set) also purges its role-default rows in
-// the same transaction and records the affected roles as `purged_roles` in the
-// diff, the way SetRoleDefaults reports its own purge. Default views are
-// public-only (service-visibility spec §7.1): without this, a public default
-// later made experimental would reach holders through /api/catalog/defaults
-// and wedge that role's editor, whose every save would then be rejected. The
-// admin's intent is unambiguous, so the write follows through rather than
-// bouncing them into a two-step dance. (CreateService needs no counterpart: a
-// fresh id cannot be anyone's default yet.)
-func UpdateService(ctx context.Context, db AdminDB, actor Actor, vis config.VisibilitySet, id pgtype.UUID, in Draft) (AdminService, error) {
-	if err := validateServiceInput(vis, in); err != nil {
+// Moving a service into a restricted category also purges its role-default
+// rows in the same transaction and records the affected roles as `purged_roles`
+// in the diff, the way SetRoleDefaults reports its own purge. Default views are
+// public-only (docs/specs/service-visibility.md §2.2): without this, a public
+// default later restricted would reach non-holders through
+// /api/catalog/defaults and wedge that role's editor, whose every save would
+// then be rejected. The admin's intent is unambiguous, so the write follows
+// through rather than bouncing them into a two-step dance. (CreateService needs
+// no counterpart: a fresh id cannot be anyone's default yet.)
+func UpdateService(ctx context.Context, db AdminDB, actor Actor, id pgtype.UUID, in Draft) (AdminService, error) {
+	if err := validateServiceInput(in); err != nil {
 		return AdminService{}, err
 	}
 	var out AdminService
@@ -244,7 +236,6 @@ func UpdateService(ctx context.Context, db AdminDB, actor Actor, vis config.Visi
 			Icon:        in.Icon,
 			Tag:         pgText(in.Tag),
 			Keywords:    normalizeKeywords(in.Keywords),
-			Visibility:  pgText(in.Visibility),
 		})
 		if err != nil {
 			return fmt.Errorf("update service: %w", err)
@@ -257,7 +248,11 @@ func UpdateService(ctx context.Context, db AdminDB, actor Actor, vis config.Visi
 			"before": toAdminService(before, beforeSlugs),
 			"after":  out,
 		}
-		if in.Visibility != "" {
+		restricted, err := q.ListServiceRestrictedCategories(ctx, id)
+		if err != nil {
+			return fmt.Errorf("check restricted categories: %w", err)
+		}
+		if len(restricted) > 0 {
 			purged, err := q.PurgeRoleDefaultsForService(ctx, id)
 			if err != nil {
 				return fmt.Errorf("purge role defaults of restricted service: %w", err)
@@ -295,9 +290,12 @@ func SoftDeleteService(ctx context.Context, db AdminDB, actor Actor, id pgtype.U
 // rows left behind by roles the claim mapping no longer defines, which is the
 // one moment we know it is safe to (spec §2.2).
 //
-// A restricted service may not be a role default (service-visibility spec
-// §7.1): default views stay public-only, so every user of a role sees the same
-// default view. Rejected with a field error naming the service.
+// A service in a restricted category may not be a role default
+// (docs/specs/service-visibility.md §2.2): default views stay public-only, so
+// every user of a role sees the same default view. Rejected with a field error
+// naming the service. A beta service is deliberately NOT rejected — it is a
+// per-user choice, not a grant, and degrades for the users who have not asked
+// for beta services exactly as a soft-deleted default does.
 func SetRoleDefaults(ctx context.Context, db AdminDB, actor Actor, roles config.RoleSet, role string, serviceIDs []pgtype.UUID) error {
 	if err := ValidateRole(roles, role); err != nil {
 		return err
@@ -326,8 +324,12 @@ func SetRoleDefaults(ctx context.Context, db AdminDB, actor Actor, roles config.
 			if err != nil {
 				return fmt.Errorf("look up service: %w", err)
 			}
-			if svc.Visibility.Valid && svc.Visibility.String != "" {
-				return &ValidationError{Field: "service_ids", Msg: fmt.Sprintf("%q is restricted (%s) and cannot be a role default", svc.Name, svc.Visibility.String)}
+			restricted, err := q.ListServiceRestrictedCategories(ctx, sid)
+			if err != nil {
+				return fmt.Errorf("check restricted categories: %w", err)
+			}
+			if len(restricted) > 0 {
+				return &ValidationError{Field: "service_ids", Msg: fmt.Sprintf("%q is in a restricted category (%s) and cannot be a role default", svc.Name, textVal(restricted[0]))}
 			}
 			if err := q.AddRoleDefault(ctx, store.AddRoleDefaultParams{Role: role, ServiceID: sid, Sort: int32(i)}); err != nil {
 				return &ValidationError{Field: "service_ids", Msg: "contains an unknown service"}
@@ -365,15 +367,49 @@ type AdminCategory struct {
 	Slug  string            `json:"slug"`
 	Label map[string]string `json:"label"`
 	Sort  int32             `json:"sort"`
+	// Visibility restricts the category — and every service in it — to holders
+	// of a configured slug; "" = public (docs/specs/service-visibility.md
+	// §2.2). Admin surfaces always see it, narrowed reads never do.
+	Visibility string `json:"visibility,omitempty"`
 }
 
 func toAdminCategory(c store.Category) AdminCategory {
-	return AdminCategory{Slug: c.Slug, Label: jsonToMap(c.Label), Sort: c.Sort}
+	return AdminCategory{
+		Slug: c.Slug, Label: jsonToMap(c.Label), Sort: c.Sort,
+		Visibility: textVal(c.Visibility),
+	}
 }
 
-// validateCategoryInput enforces the slug format and the both-languages label
-// rule for every category write path, and returns the trimmed slug.
-func validateCategoryInput(slug string, label map[string]string) (string, error) {
+// ListAdminCategories returns every category with its visibility, unnarrowed —
+// what the admin screens manage (docs/specs/service-visibility.md §5). The
+// dashboard's /api/catalog stays narrowed, admin or not.
+func ListAdminCategories(ctx context.Context, db store.Querier) ([]AdminCategory, error) {
+	rows, err := db.AdminListCategories(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list categories: %w", err)
+	}
+	out := make([]AdminCategory, 0, len(rows))
+	for _, c := range rows {
+		out = append(out, toAdminCategory(c))
+	}
+	return out, nil
+}
+
+// validateCategoryInput enforces the slug format, the both-languages label rule
+// and the configured-visibility rule for every category write path, and returns
+// the trimmed slug. A category may only be restricted to a slug this deployment
+// configures — an unconfigured one would fail closed (nobody holds it, so
+// nobody sees the category), which is a footgun, not a feature.
+func validateCategoryInput(slug string, label map[string]string, visibility string, vis config.VisibilitySet) (string, error) {
+	if visibility != "" && !vis.Has(visibility) {
+		msg := "must be empty (public)"
+		if vis.Len() > 0 {
+			msg += " or one of " + strings.Join(vis.Slugs(), ", ")
+		} else {
+			msg += "; this deployment configures no visibility groups"
+		}
+		return "", &ValidationError{Field: "visibility", Msg: msg}
+	}
 	slug = strings.TrimSpace(slug)
 	if slug == "" {
 		return "", &ValidationError{Field: "slug", Msg: "must not be empty"}
@@ -405,9 +441,10 @@ func requireFreeSlug(ctx context.Context, q *store.Queries, slug string) error {
 	}
 }
 
-// CreateCategory adds a managed category.
-func CreateCategory(ctx context.Context, db AdminDB, actor Actor, slug string, label map[string]string, sort int) (store.Category, error) {
-	slug, err := validateCategoryInput(slug, label)
+// CreateCategory adds a managed category, public or restricted to a configured
+// visibility slug.
+func CreateCategory(ctx context.Context, db AdminDB, actor Actor, vis config.VisibilitySet, slug string, label map[string]string, sort int, visibility string) (store.Category, error) {
+	slug, err := validateCategoryInput(slug, label, visibility, vis)
 	if err != nil {
 		return store.Category{}, err
 	}
@@ -416,25 +453,27 @@ func CreateCategory(ctx context.Context, db AdminDB, actor Actor, slug string, l
 		if err := requireFreeSlug(ctx, q, slug); err != nil {
 			return err
 		}
-		c, err := q.CreateCategory(ctx, store.CreateCategoryParams{Slug: slug, Label: mustJSON(label), Sort: int32(sort)})
+		c, err := q.CreateCategory(ctx, store.CreateCategoryParams{
+			Slug: slug, Label: mustJSON(label), Sort: int32(sort), Visibility: pgText(visibility),
+		})
 		if err != nil {
 			return fmt.Errorf("create category: %w", err)
 		}
 		out = c
-		return audit(ctx, q, actor, "category.create", c.ID, map[string]any{"after": map[string]any{"slug": slug, "label": label}})
+		return audit(ctx, q, actor, "category.create", c.ID, map[string]any{"after": toAdminCategory(c)})
 	})
 	return out, err
 }
 
-// UpdateCategory edits a category's slug and both labels, addressed by its
-// current slug, and audits the before/after diff.
+// UpdateCategory edits a category's slug, both labels and its visibility,
+// addressed by its current slug, and audits the before/after diff.
 //
 // Renaming is allowed: service_categories joins on the category id, so
 // attachments survive untouched, and the only slug consumer is the /?cat=<slug>
 // URL filter, which Dashboard.tsx already drops when the catalog no longer knows
 // it (issue #130 §2.2).
-func UpdateCategory(ctx context.Context, db AdminDB, actor Actor, slug, newSlug string, label map[string]string) (store.Category, error) {
-	newSlug, err := validateCategoryInput(newSlug, label)
+func UpdateCategory(ctx context.Context, db AdminDB, actor Actor, vis config.VisibilitySet, slug, newSlug string, label map[string]string, visibility string) (store.Category, error) {
+	newSlug, err := validateCategoryInput(newSlug, label, visibility, vis)
 	if err != nil {
 		return store.Category{}, err
 	}
@@ -453,16 +492,29 @@ func UpdateCategory(ctx context.Context, db AdminDB, actor Actor, slug, newSlug 
 			}
 		}
 		c, err := q.UpdateCategory(ctx, store.UpdateCategoryParams{
-			ID: before.ID, Slug: newSlug, Label: mustJSON(label),
+			ID: before.ID, Slug: newSlug, Label: mustJSON(label), Visibility: pgText(visibility),
 		})
 		if err != nil {
 			return fmt.Errorf("update category: %w", err)
 		}
 		out = c
-		return audit(ctx, q, actor, "category.update", c.ID, map[string]any{
+		diff := map[string]any{
 			"before": toAdminCategory(before),
 			"after":  toAdminCategory(c),
-		})
+		}
+		// Restricting a category takes its services out of every default view,
+		// for the same reason UpdateService does it: a default nobody may see
+		// wedges that role's editor.
+		if visibility != "" {
+			purged, err := q.PurgeRoleDefaultsForCategory(ctx, before.ID)
+			if err != nil {
+				return fmt.Errorf("purge role defaults of restricted category: %w", err)
+			}
+			if len(purged) > 0 {
+				diff["purged_roles"] = purged
+			}
+		}
+		return audit(ctx, q, actor, "category.update", c.ID, diff)
 	})
 	return out, err
 }
@@ -715,7 +767,6 @@ func toAdminService(s store.Service, slugs []string) AdminService {
 		Categories:  slugs,
 		Tag:         textVal(s.Tag),
 		Keywords:    keywords,
-		Visibility:  textVal(s.Visibility),
 	}
 }
 

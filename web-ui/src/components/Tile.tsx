@@ -75,19 +75,14 @@ interface TileProps {
    * restricted service renders its group's label in the status-badge slot next
    * to Beta/Wartung (docs/specs/service-visibility.md §5) — no new anatomy.
    */
-  visibilityLabels?: Record<string, string>
 }
 
 // Editorial tile (docs/03 §5). The main tile area is a full-coverage <a> that
 // opens the service. The star and "Dokumentation" footer link are separate
 // interactive elements layered above it via pointer-events. Description is
 // always visible — no expand/collapse in the Editorial direction.
-export function Tile({ service, locale, categories, favorited, onToggleFavorite, onLaunch, layout = 'grid', visibilityLabels }: TileProps) {
+export function Tile({ service, locale, categories, favorited, onToggleFavorite, onLaunch, layout = 'grid' }: TileProps) {
   const s = t(locale)
-  // The slug itself is the fallback: a held service always has a label in
-  // practice, but a bare slug still beats an empty badge.
-  const visibilityLabel = service.visibility ? visibilityLabels?.[service.visibility] ?? service.visibility : ''
-  const visibilityBadge = visibilityLabel ? <Badge variant="neutral">{visibilityLabel}</Badge> : null
   const launchHref = service.service_url || service.doc_url || '#'
   const docsOnly = service.doc_only
   const primaryCategory = categories.find((c) => c.slug === service.categories[0])
@@ -95,8 +90,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
   const description = localized(service.description, locale)
   // The link's accessible name carries everything a sighted user sees: the
   // status badge (Beta/Wartung) and a new-tab warning, not just the name.
-  const accessibleLabel =
-    s.tile.open(service.name, docsOnly) + s.tile.status(service.tag) + s.tile.visibility(visibilityLabel) + s.tile.newTab
+  const accessibleLabel = s.tile.open(service.name, docsOnly) + s.tile.status(service.tag) + s.tile.newTab
 
   const starBtn = onToggleFavorite ? (
     <IconButton
@@ -171,7 +165,6 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
               <TileName style={{ minWidth: 0 }}>{service.name}</TileName>
               {service.tag === 'beta' && <Badge variant="info">{s.tile.beta}</Badge>}
               {service.tag === 'wartung' && <Badge variant="warning">{s.tile.maintenance}</Badge>}
-              {visibilityBadge}
               {docsOnly && <Badge variant="neutral">{s.tile.docs}</Badge>}
             </div>
 
@@ -259,7 +252,6 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
             <TileName>{service.name}</TileName>
             {service.tag === 'beta' && <Badge variant="info">{s.tile.beta}</Badge>}
             {service.tag === 'wartung' && <Badge variant="warning">{s.tile.maintenance}</Badge>}
-            {visibilityBadge}
             {docsOnly && <Badge variant="neutral">{s.tile.docs}</Badge>}
           </div>
           <TileDescription>{description}</TileDescription>

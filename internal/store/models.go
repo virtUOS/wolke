@@ -38,10 +38,11 @@ type AuditLog struct {
 }
 
 type Category struct {
-	ID    pgtype.UUID `json:"id"`
-	Slug  string      `json:"slug"`
-	Label []byte      `json:"label"`
-	Sort  int32       `json:"sort"`
+	ID         pgtype.UUID `json:"id"`
+	Slug       string      `json:"slug"`
+	Label      []byte      `json:"label"`
+	Sort       int32       `json:"sort"`
+	Visibility pgtype.Text `json:"visibility"`
 }
 
 type ClickEvent struct {
@@ -86,7 +87,6 @@ type Service struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	Tag         pgtype.Text        `json:"tag"`
 	Keywords    []string           `json:"keywords"`
-	Visibility  pgtype.Text        `json:"visibility"`
 }
 
 type ServiceCategory struct {
@@ -128,5 +128,5 @@ type User struct {
 	Locale                string             `json:"locale"`
 	FavoritesManualSeeded bool               `json:"favorites_manual_seeded"`
 	VisibilityClaims      []string           `json:"visibility_claims"`
-	VisibilityOptin       []string           `json:"visibility_optin"`
+	ShowBeta              bool               `json:"show_beta"`
 }

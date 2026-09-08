@@ -135,26 +135,35 @@ func (q *Queries) SetCategoryOrder(ctx context.Context, slugs []string) (int64, 
 }
 
 const updateCategory = `-- name: UpdateCategory :one
-update categories set slug = $1, label = $2 where id = $3 returning id, slug, label, sort
+update categories set slug = $1, label = $2, visibility = $3
+where id = $4 returning id, slug, label, sort, visibility
 `
 
 type UpdateCategoryParams struct {
-	Slug  string      `json:"slug"`
-	Label []byte      `json:"label"`
-	ID    pgtype.UUID `json:"id"`
+	Slug       string      `json:"slug"`
+	Label      []byte      `json:"label"`
+	Visibility pgtype.Text `json:"visibility"`
+	ID         pgtype.UUID `json:"id"`
 }
 
-// Slug and both labels; renaming is safe because service_categories joins on the
-// category id (issue #130 §2.2). Uniqueness is checked in the service layer, so
-// a 23505 here means a concurrent insert took the slug first.
+// Slug, both labels and the visibility slug; renaming is safe because
+// service_categories joins on the category id (issue #130 §2.2). Uniqueness is
+// checked in the service layer, so a 23505 here means a concurrent insert took
+// the slug first.
 func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error) {
-	row := q.db.QueryRow(ctx, updateCategory, arg.Slug, arg.Label, arg.ID)
+	row := q.db.QueryRow(ctx, updateCategory,
+		arg.Slug,
+		arg.Label,
+		arg.Visibility,
+		arg.ID,
+	)
 	var i Category
 	err := row.Scan(
 		&i.ID,
 		&i.Slug,
 		&i.Label,
 		&i.Sort,
+		&i.Visibility,
 	)
 	return i, err
 }

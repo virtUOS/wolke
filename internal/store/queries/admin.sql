@@ -13,8 +13,8 @@ where sc.service_id = @service_id
 order by c.slug;
 
 -- name: CreateService :one
-insert into services (name, description, service_url, doc_url, icon, tag, keywords, visibility)
-values (@name, @description, @service_url, @doc_url, @icon, @tag, @keywords, @visibility)
+insert into services (name, description, service_url, doc_url, icon, tag, keywords)
+values (@name, @description, @service_url, @doc_url, @icon, @tag, @keywords)
 returning *;
 
 -- name: UpdateService :one
@@ -26,7 +26,6 @@ set name        = @name,
     icon        = @icon,
     tag         = @tag,
     keywords    = @keywords,
-    visibility  = @visibility,
     updated_at  = now()
 where id = @id
 returning *;
@@ -46,7 +45,37 @@ on conflict do nothing;
 select * from categories where slug = @slug;
 
 -- name: CreateCategory :one
-insert into categories (slug, label, sort) values (@slug, @label, @sort) returning *;
+insert into categories (slug, label, sort, visibility)
+values (@slug, @label, @sort, @visibility) returning *;
+
+-- name: AdminListCategories :many
+-- Every category with its visibility, unnarrowed — the admin screens manage
+-- categories they do not themselves hold (docs/specs/service-visibility.md §5).
+select * from categories order by sort, slug;
+
+-- name: ListServiceRestrictedCategories :many
+-- The visibility slugs of the restricted categories a service belongs to
+-- (empty = the service is public). One row per distinct slug; the read model's
+-- predicate needs every one of them held (docs/specs/service-visibility.md
+-- §2.2, restricted wins).
+select distinct c.visibility
+from service_categories sc
+join categories c on c.id = sc.category_id
+where sc.service_id = @service_id and c.visibility is not null;
+
+-- name: PurgeRoleDefaultsForCategory :many
+-- Deletes every role's default-view row for every service in one category and
+-- reports the affected roles. Runs when a category becomes restricted: default
+-- views stay public-only (docs/specs/service-visibility.md §2.2), and leaving
+-- the rows behind would wedge those roles' editors, whose every save would then
+-- be rejected.
+with purged as (
+    delete from role_defaults rd
+    using service_categories sc
+    where sc.service_id = rd.service_id and sc.category_id = @category_id
+    returning rd.role
+)
+select distinct role from purged;
 
 -- name: DeleteRoleDefaults :exec
 delete from role_defaults where role = @role;

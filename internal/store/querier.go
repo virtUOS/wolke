@@ -18,6 +18,9 @@ type Querier interface {
 	AddRoleDefault(ctx context.Context, arg AddRoleDefaultParams) error
 	AddServiceCategory(ctx context.Context, arg AddServiceCategoryParams) error
 	AdminListAnnouncements(ctx context.Context, lim int32) ([]Announcement, error)
+	// Every category with its visibility, unnarrowed — the admin screens manage
+	// categories they do not themselves hold (docs/specs/service-visibility.md §5).
+	AdminListCategories(ctx context.Context) ([]Category, error)
 	// Full catalog including soft-deleted (inactive) services.
 	AdminListServices(ctx context.Context) ([]Service, error)
 	CountActiveAnnouncementsBySeverity(ctx context.Context) ([]CountActiveAnnouncementsBySeverityRow, error)
@@ -101,6 +104,8 @@ type Querier interface {
 	// LEFT JOIN so rows whose actor_id is null (MCP/system, or no user) still list;
 	// actor_name resolves the acting user for the admin audit view.
 	ListAudit(ctx context.Context, lim int32) ([]ListAuditRow, error)
+	// visibility comes along: it is the primary read filter, so the snapshot
+	// carries it (docs/specs/service-visibility.md §2.2).
 	ListCategories(ctx context.Context) ([]Category, error)
 	// The first few blocking service names, to name them in the refusal.
 	ListCategoryServiceNames(ctx context.Context, arg ListCategoryServiceNamesParams) ([]string, error)
@@ -117,6 +122,11 @@ type Querier interface {
 	// is only the case before the one-time seeding below has run.
 	ListFavoritesManual(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
 	ListServiceCategorySlugs(ctx context.Context, serviceID pgtype.UUID) ([]string, error)
+	// The visibility slugs of the restricted categories a service belongs to
+	// (empty = the service is public). One row per distinct slug; the read model's
+	// predicate needs every one of them held (docs/specs/service-visibility.md
+	// §2.2, restricted wins).
+	ListServiceRestrictedCategories(ctx context.Context, serviceID pgtype.UUID) ([]pgtype.Text, error)
 	// Most-searched queries that returned nothing within the last @days days — the
 	// admin worklist for adding keywords (docs/01 §4.6). Aggregate-only.
 	ListZeroResultSearches(ctx context.Context, arg ListZeroResultSearchesParams) ([]ListZeroResultSearchesRow, error)
@@ -129,6 +139,12 @@ type Querier interface {
 	// be null for notices shown immediately, so fall back to created_at.
 	PurgeAnnouncementsBefore(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
 	PurgeOldClicks(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
+	// Deletes every role's default-view row for every service in one category and
+	// reports the affected roles. Runs when a category becomes restricted: default
+	// views stay public-only (docs/specs/service-visibility.md §2.2), and leaving
+	// the rows behind would wedge those roles' editors, whose every save would then
+	// be rejected.
+	PurgeRoleDefaultsForCategory(ctx context.Context, categoryID pgtype.UUID) ([]string, error)
 	// Deletes every role's default-view row for one service and reports which
 	// roles lost one (for the audit diff). Used when a service becomes restricted:
 	// default views stay public-only (docs/specs/service-visibility.md §7.1), so
@@ -182,17 +198,14 @@ type Querier interface {
 	SetFavoritesOrder(ctx context.Context, arg SetFavoritesOrderParams) (int64, error)
 	SoftDeleteService(ctx context.Context, id pgtype.UUID) (int64, error)
 	UpdateAnnouncement(ctx context.Context, arg UpdateAnnouncementParams) (Announcement, error)
-	// Slug and both labels; renaming is safe because service_categories joins on the
-	// category id (issue #130 §2.2). Uniqueness is checked in the service layer, so
-	// a 23505 here means a concurrent insert took the slug first.
+	// Slug, both labels and the visibility slug; renaming is safe because
+	// service_categories joins on the category id (issue #130 §2.2). Uniqueness is
+	// checked in the service layer, so a 23505 here means a concurrent insert took
+	// the slug first.
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
 	UpdateService(ctx context.Context, arg UpdateServiceParams) (Service, error)
 	// Display prefs persist server-side so they follow the user across devices.
 	UpdateUserPrefs(ctx context.Context, arg UpdateUserPrefsParams) (User, error)
-	// The user's own opt-in visibility slugs, written as a whole list
-	// (docs/specs/service-visibility.md §4). Claim-granted slugs live in
-	// visibility_claims and are never touched here.
-	UpdateUserVisibilityOptIn(ctx context.Context, arg UpdateUserVisibilityOptInParams) (User, error)
 	// Called on every login: insert the OIDC subject or refresh the mutable fields.
 	// primary_role, is_admin and visibility_claims are re-derived from claims each
 	// login (docs/02 §6, docs/specs/service-visibility.md §4), so losing the group

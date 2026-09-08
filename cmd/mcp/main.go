@@ -79,8 +79,7 @@ type serviceFields struct {
 	DocURL        string   `json:"doc_url,omitempty"`
 	Icon          string   `json:"icon"` // kebab-case lucide icon name, e.g. "graduation-cap"
 	Categories    []string `json:"categories"`
-	Keywords      []string `json:"keywords,omitempty"`   // optional search aliases (flat, DE+EN mixed)
-	Visibility    string   `json:"visibility,omitempty"` // "" = public; else a configured visibility slug (see visibility.list)
+	Keywords      []string `json:"keywords,omitempty"` // optional search aliases (flat, DE+EN mixed)
 }
 
 func (f serviceFields) draft() service.Draft {
@@ -92,7 +91,6 @@ func (f serviceFields) draft() service.Draft {
 		Icon:        f.Icon,
 		Categories:  f.Categories,
 		Keywords:    f.Keywords,
-		Visibility:  f.Visibility,
 	}
 }
 
@@ -140,13 +138,13 @@ func registerTools(s *mcp.Server, mgr *adminmcp.Manager) {
 			return nil, svc, err
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "category.list", Description: "List managed categories."},
+	mcp.AddTool(s, &mcp.Tool{Name: "category.list", Description: "List managed categories. A category's `visibility`, when set, restricts it and every service in it to holders of that group (visibility.list)."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ empty) (*mcp.CallToolResult, categoriesOut, error) {
 			cats, err := mgr.ListCategories(ctx)
 			return nil, categoriesOut{Categories: cats}, err
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "visibility.list", Description: "List the configured service-visibility slugs a service may be restricted to (empty = every service is public). Pass one as `visibility` on propose_create/propose_update; omit it for a public service."},
+	mcp.AddTool(s, &mcp.Tool{Name: "visibility.list", Description: "List the deployment's configured visibility groups (empty = nothing is restricted). A group restricts a CATEGORY and everything in it — see the `visibility` field on category.list; services carry no visibility of their own."},
 		func(_ context.Context, _ *mcp.CallToolRequest, _ empty) (*mcp.CallToolResult, visibilityOut, error) {
 			return nil, visibilityOut{Options: mgr.VisibilityOptions()}, nil
 		})
@@ -157,7 +155,7 @@ func registerTools(s *mcp.Server, mgr *adminmcp.Manager) {
 			return nil, insightsOut{Insights: list}, err
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "service.propose_create", Description: "Validate a new service and return a preview + change_token. Does NOT write. Requires both description_de and description_en, a kebab-case lucide icon name, and at least one category. Optional visibility restricts the service to holders of a configured slug (visibility.list)."},
+	mcp.AddTool(s, &mcp.Tool{Name: "service.propose_create", Description: "Validate a new service and return a preview + change_token. Does NOT write. Requires both description_de and description_en, a kebab-case lucide icon name, and at least one category."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in serviceFields) (*mcp.CallToolResult, adminmcp.Preview, error) {
 			p, err := mgr.ProposeCreate(ctx, in.draft())
 			return nil, p, err

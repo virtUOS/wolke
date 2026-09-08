@@ -47,31 +47,28 @@ oidc:
     claim: groups
     match: dashboard-admins
 
-# Service visibility (docs/specs/service-visibility.md; issues #34, #121). A
-# service is public unless an admin restricts it to one of the slugs below; a
-# user sees the public services plus those of every slug they hold. Validated
-# at startup like oidc.role: slug [a-z0-9-]{1,32}, unique, not `all`, not a role
-# slug. Two ways to hold a slug, and that is the only difference between them:
-#   grant: opt-in  — the user enables it in the account menu, after confirming
-#                    `warning` (required: "may vanish, data is not migrated").
-#   grant: claim   — the IdP grants it through a (possibly nested) claim, like
-#                    oidc.admin; requires `claim` + `match`. Derived on every
-#                    login, so removing the group at the IdP revokes access at
-#                    the next login (docs/runbooks/grant-visibility-group.md).
-# `label` is the badge on the tile (optional; defaults to the capitalized slug).
-# Leave the list out (the default) and every service is public — no UI changes.
+# Service visibility — restricted categories (docs/specs/service-visibility.md;
+# issues #34, #121). A category is public unless an admin restricts it to one of
+# the groups below, and a restricted category hides itself AND every service in
+# it from anyone who does not hold that group. Membership comes from the IdP:
+# each entry maps a (possibly nested) claim path and the value that grants it,
+# exactly like oidc.admin, and it is re-derived on every login — so removing the
+# group at the IdP revokes access at the next login
+# (docs/runbooks/grant-visibility-group.md).
+#
+# Validated at startup like oidc.role: slug [a-z0-9-]{1,32}, unique, not `all`,
+# not a role slug; claim and match are required. `label` is optional (defaults
+# to the capitalized slug) and names the group in the admin category editor.
+# Leave the list out (the default) and every category is public.
+#
+# There is deliberately nothing here for "experimental" services: that is the
+# `beta` tag, which every deployment already has, revealed per user by the
+# "Beta-Dienste anzeigen" switch in the account menu. No config, no restart.
 visibility: []
-#  - slug: experimental
-#    label:   { de: "Experimentell", en: "Experimental" }
-#    grant:   opt-in
-#    warning:
-#      de: "Experimentelle Dienste können jederzeit ohne Vorankündigung verschwinden; Daten gehen dabei möglicherweise verloren und werden nicht migriert."
-#      en: "Experimental services can disappear at any time without notice; data may be lost and will not be migrated."
 #  - slug: it-infra
-#    label:   { de: "IT-Infrastruktur", en: "IT infrastructure" }
-#    grant:   claim          # live: membership is read from the claim at login
-#    claim:   groups         # nested dot-paths work too, e.g. realm_access.roles
-#    match:   it-service-admins
+#    label: { de: "IT-Infrastruktur", en: "IT infrastructure" }
+#    claim: groups            # nested dot-paths work too, e.g. realm_access.roles
+#    match: it-service-admins # membership in this group ⇒ the slug
 
 # Branding / theme — applied by the SPA as CSS variables at runtime. Keep the
 # token NAMES stable (docs/03 §2); only values change. The brand hex values are

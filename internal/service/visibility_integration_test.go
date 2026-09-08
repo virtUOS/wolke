@@ -14,10 +14,18 @@ import (
 	"github.com/virtuos/wolke/internal/store"
 )
 
-// A restricted service round-trips through the shared write path with its
-// slug, and can never become a role default (service-visibility spec §7.1).
-// Needs DATABASE_URL.
-func TestRestrictedServiceCannotBeARoleDefault(t *testing.T) {
+// visTestSet is a deployment configuring one visibility group.
+func visTestSet() config.VisibilitySet {
+	return (&config.Config{VisibilityEntries: []config.VisibilityEntry{{
+		Slug: "it-infra", Claim: "groups", Match: "it-service-admins",
+		Label: map[string]string{"de": "IT-Infrastruktur", "en": "IT infrastructure"},
+	}}}).Visibility()
+}
+
+// A service in a restricted category can never be a role default: default views
+// stay public-only, so every user of a role sees the same one
+// (docs/specs/service-visibility.md §2.2). Needs DATABASE_URL.
+func TestServiceInARestrictedCategoryCannotBeARoleDefault(t *testing.T) {
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {
 		t.Skip("DATABASE_URL not set; skipping visibility integration test")
@@ -40,29 +48,29 @@ func TestRestrictedServiceCannotBeARoleDefault(t *testing.T) {
 		_, _ = db.Pool.Exec(ctx, "delete from role_defaults where service_id in (select id from services where name like 'Vis Test%')")
 		_, _ = db.Pool.Exec(ctx, "delete from service_categories where service_id in (select id from services where name like 'Vis Test%')")
 		_, _ = db.Pool.Exec(ctx, "delete from services where name like 'Vis Test%'")
+		_, _ = db.Pool.Exec(ctx, "delete from categories where slug like 'vis-test%'")
 		_, _ = db.Pool.Exec(ctx, "delete from audit_log where actor_id = $1", admin.ID)
 		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub = 'vis-svc-test'")
 		db.Close()
 	})
 
-	vis := (&config.Config{VisibilityEntries: []config.VisibilityEntry{{
-		Slug: "experimental", Grant: config.GrantOptIn, Warning: map[string]string{"de": "!"},
-	}}}).Visibility()
+	vis := visTestSet()
+	label := map[string]string{"de": "IT-Infrastruktur", "en": "IT infrastructure"}
+	cat, err := CreateCategory(ctx, db, actor, vis, "vis-test-infra", label, 9100, "it-infra")
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	if !cat.Visibility.Valid || cat.Visibility.String != "it-infra" {
+		t.Fatalf("created category visibility = %v, want it-infra", cat.Visibility)
+	}
 
-	restricted, err := CreateService(ctx, db, actor, vis, Draft{
+	restricted, err := CreateService(ctx, db, actor, Draft{
 		Name: "Vis Test Restricted", Description: map[string]string{"de": "x", "en": "x"},
-		ServiceURL: "https://vis.example.edu", Icon: "server", Categories: []string{"data"},
-		Visibility: "experimental",
+		ServiceURL: "https://vis.example.edu", Icon: "server",
+		Categories: []string{"vis-test-infra"},
 	})
 	if err != nil {
 		t.Fatalf("CreateService: %v", err)
-	}
-	if restricted.Visibility != "experimental" {
-		t.Fatalf("created visibility = %q, want experimental", restricted.Visibility)
-	}
-	got, err := GetAdminService(ctx, db, mustUUID(t, restricted.ID))
-	if err != nil || got.Visibility != "experimental" {
-		t.Fatalf("GetAdminService = %+v, %v; want visibility experimental", got, err)
 	}
 
 	// The rejection names the service and leaves the role's defaults untouched.
@@ -70,6 +78,9 @@ func TestRestrictedServiceCannotBeARoleDefault(t *testing.T) {
 	var ve *ValidationError
 	if !errors.As(err, &ve) || ve.Field != "service_ids" || !strings.Contains(ve.Msg, "Vis Test Restricted") {
 		t.Fatalf("SetRoleDefaults with a restricted service: err = %v, want service_ids ValidationError naming it", err)
+	}
+	if !strings.Contains(ve.Msg, "it-infra") {
+		t.Errorf("message %q should name the group", ve.Msg)
 	}
 	after, err := db.GetRoleDefaults(ctx, "staff")
 	if err != nil {
@@ -79,16 +90,9 @@ func TestRestrictedServiceCannotBeARoleDefault(t *testing.T) {
 		t.Fatalf("staff defaults changed on a rejected write: %d → %d", len(origStaff), len(after))
 	}
 
-	// Making it public again lifts the restriction — and clears the column.
-	public, err := UpdateService(ctx, db, actor, vis, mustUUID(t, restricted.ID), Draft{
-		Name: "Vis Test Restricted", Description: map[string]string{"de": "x", "en": "x"},
-		ServiceURL: "https://vis.example.edu", Icon: "server", Categories: []string{"data"},
-	})
-	if err != nil {
-		t.Fatalf("UpdateService: %v", err)
-	}
-	if public.Visibility != "" {
-		t.Fatalf("visibility after update = %q, want public", public.Visibility)
+	// Making the category public again lifts the restriction on everything in it.
+	if _, err := UpdateCategory(ctx, db, actor, vis, "vis-test-infra", "vis-test-infra", label, ""); err != nil {
+		t.Fatalf("UpdateCategory (make public): %v", err)
 	}
 	if err := SetRoleDefaults(ctx, db, actor, exampleRoles(), "staff", append(append([]pgtype.UUID{}, origStaff...), mustUUID(t, restricted.ID))); err != nil {
 		t.Fatalf("SetRoleDefaults with the now-public service: %v", err)
@@ -98,11 +102,12 @@ func TestRestrictedServiceCannotBeARoleDefault(t *testing.T) {
 	}
 }
 
-// Review finding 1: restricting a service that is already a role default must
-// purge the role_defaults rows in the same transaction (spec §7.1 holds by
-// construction, and the role's editor is not wedged), and record them in the
-// audit diff like SetRoleDefaults's purged_roles. Needs DATABASE_URL.
-func TestRestrictingAServicePurgesItsRoleDefaults(t *testing.T) {
+// The two ways a default can become unviewable, both purged in the same
+// transaction and both reported as `purged_roles` in the audit diff: moving a
+// service into a restricted category, and restricting a category that already
+// holds one. Without this the role's editor is wedged — every save afterwards
+// would be rejected. Needs DATABASE_URL.
+func TestRestrictingPurgesRoleDefaults(t *testing.T) {
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {
 		t.Skip("DATABASE_URL not set; skipping visibility integration test")
@@ -125,42 +130,92 @@ func TestRestrictingAServicePurgesItsRoleDefaults(t *testing.T) {
 		_, _ = db.Pool.Exec(ctx, "delete from role_defaults where service_id in (select id from services where name like 'Vis Purge%')")
 		_, _ = db.Pool.Exec(ctx, "delete from service_categories where service_id in (select id from services where name like 'Vis Purge%')")
 		_, _ = db.Pool.Exec(ctx, "delete from services where name like 'Vis Purge%'")
+		_, _ = db.Pool.Exec(ctx, "delete from categories where slug like 'vis-purge%'")
 		_, _ = db.Pool.Exec(ctx, "delete from audit_log where actor_id = $1", admin.ID)
 		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub = 'vis-purge-test'")
 		db.Close()
 	})
 
-	vis := (&config.Config{VisibilityEntries: []config.VisibilityEntry{{
-		Slug: "experimental", Grant: config.GrantOptIn, Warning: map[string]string{"de": "!"},
-	}}}).Visibility()
+	vis := visTestSet()
+	label := map[string]string{"de": "Purge", "en": "Purge"}
+	if _, err := CreateCategory(ctx, db, actor, vis, "vis-purge-open", label, 9200, ""); err != nil {
+		t.Fatalf("CreateCategory (public): %v", err)
+	}
+	if _, err := CreateCategory(ctx, db, actor, vis, "vis-purge-closed", label, 9210, "it-infra"); err != nil {
+		t.Fatalf("CreateCategory (restricted): %v", err)
+	}
+
 	draft := Draft{
 		Name: "Vis Purge Svc", Description: map[string]string{"de": "x", "en": "x"},
-		ServiceURL: "https://purge.example.edu", Icon: "server", Categories: []string{"data"},
+		ServiceURL: "https://purge.example.edu", Icon: "server",
+		Categories: []string{"vis-purge-open"},
 	}
-	svc, err := CreateService(ctx, db, actor, vis, draft)
+	svc, err := CreateService(ctx, db, actor, draft)
 	if err != nil {
 		t.Fatalf("CreateService: %v", err)
 	}
 	id := mustUUID(t, svc.ID)
 
-	// Public → a student default. Then restrict it.
-	if err := SetRoleDefaults(ctx, db, actor, exampleRoles(), "student", append(append([]pgtype.UUID{}, origStudent...), id)); err != nil {
+	purgedRoles := func(action string) []string {
+		t.Helper()
+		var diff []byte
+		if err := db.Pool.QueryRow(ctx,
+			"select diff from audit_log where actor_id = $1 and action = $2 order by id desc limit 1",
+			admin.ID, action).Scan(&diff); err != nil {
+			t.Fatalf("read audit diff: %v", err)
+		}
+		var parsed struct {
+			PurgedRoles []string `json:"purged_roles"`
+		}
+		if err := json.Unmarshal(diff, &parsed); err != nil {
+			t.Fatalf("parse diff %s: %v", diff, err)
+		}
+		return parsed.PurgedRoles
+	}
+	countDefaults := func() int {
+		t.Helper()
+		var n int
+		if err := db.Pool.QueryRow(ctx, "select count(*) from role_defaults where service_id = $1", id).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	studentDefaults := append(append([]pgtype.UUID{}, origStudent...), id)
+
+	// (a) The service moves into the restricted category.
+	if err := SetRoleDefaults(ctx, db, actor, exampleRoles(), "student", studentDefaults); err != nil {
 		t.Fatalf("SetRoleDefaults: %v", err)
 	}
-	draft.Visibility = "experimental"
-	if _, err := UpdateService(ctx, db, actor, vis, id, draft); err != nil {
+	draft.Categories = []string{"vis-purge-closed"}
+	if _, err := UpdateService(ctx, db, actor, id, draft); err != nil {
 		t.Fatalf("UpdateService (restrict): %v", err)
 	}
-
-	// The row is gone…
-	var n int
-	if err := db.Pool.QueryRow(ctx, "select count(*) from role_defaults where service_id = $1", id).Scan(&n); err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
+	if n := countDefaults(); n != 0 {
 		t.Fatalf("role_defaults rows for the now-restricted service = %d, want 0", n)
 	}
-	// …the other student defaults are untouched…
+	if got := purgedRoles("service.update"); len(got) != 1 || got[0] != "student" {
+		t.Fatalf("service.update purged_roles = %v, want [student]", got)
+	}
+
+	// (b) The category the service already sits in becomes restricted.
+	draft.Categories = []string{"vis-purge-open"}
+	if _, err := UpdateService(ctx, db, actor, id, draft); err != nil {
+		t.Fatalf("UpdateService (back to public): %v", err)
+	}
+	if err := SetRoleDefaults(ctx, db, actor, exampleRoles(), "student", studentDefaults); err != nil {
+		t.Fatalf("SetRoleDefaults: %v", err)
+	}
+	if _, err := UpdateCategory(ctx, db, actor, vis, "vis-purge-open", "vis-purge-open", label, "it-infra"); err != nil {
+		t.Fatalf("UpdateCategory (restrict): %v", err)
+	}
+	if n := countDefaults(); n != 0 {
+		t.Fatalf("role_defaults rows after restricting the category = %d, want 0", n)
+	}
+	if got := purgedRoles("category.update"); len(got) != 1 || got[0] != "student" {
+		t.Fatalf("category.update purged_roles = %v, want [student]", got)
+	}
+
+	// The other student defaults are untouched, and the editor still saves.
 	after, err := db.GetRoleDefaults(ctx, "student")
 	if err != nil {
 		t.Fatal(err)
@@ -168,19 +223,53 @@ func TestRestrictingAServicePurgesItsRoleDefaults(t *testing.T) {
 	if len(after) != len(origStudent) {
 		t.Fatalf("student defaults = %d rows, want the original %d", len(after), len(origStudent))
 	}
-	// …the audit diff says which roles lost a default…
-	var diff []byte
-	if err := db.Pool.QueryRow(ctx, "select diff from audit_log where actor_id = $1 and action = 'service.update' order by id desc limit 1", admin.ID).Scan(&diff); err != nil {
-		t.Fatal(err)
-	}
-	var parsed struct {
-		PurgedRoles []string `json:"purged_roles"`
-	}
-	if err := json.Unmarshal(diff, &parsed); err != nil || len(parsed.PurgedRoles) != 1 || parsed.PurgedRoles[0] != "student" {
-		t.Fatalf("audit diff purged_roles = %v (%v), want [student]; diff = %s", parsed.PurgedRoles, err, diff)
-	}
-	// …and the role's editor still saves afterwards (not wedged by a 400).
 	if err := SetRoleDefaults(ctx, db, actor, exampleRoles(), "student", origStudent); err != nil {
 		t.Fatalf("SetRoleDefaults after the purge: %v", err)
+	}
+}
+
+// ListAdminCategories is unnarrowed by construction: it reports restricted
+// categories with their slug, whoever asks (spec §5). Needs DATABASE_URL.
+func TestListAdminCategoriesReportsVisibility(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("DATABASE_URL not set; skipping visibility integration test")
+	}
+	ctx := context.Background()
+	db, err := store.Open(ctx, url)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	admin, err := db.UpsertUser(ctx, store.UpsertUserParams{OidcSub: "vis-list-test", DisplayName: "Vis", PrimaryRole: "staff", IsAdmin: true})
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	actor := Actor{ID: admin.ID, Kind: ActorForm}
+	t.Cleanup(func() {
+		_, _ = db.Pool.Exec(ctx, "delete from categories where slug like 'vis-list%'")
+		_, _ = db.Pool.Exec(ctx, "delete from audit_log where actor_id = $1", admin.ID)
+		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub = 'vis-list-test'")
+		db.Close()
+	})
+
+	label := map[string]string{"de": "Liste", "en": "List"}
+	if _, err := CreateCategory(ctx, db, actor, visTestSet(), "vis-list-closed", label, 9300, "it-infra"); err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	list, err := ListAdminCategories(ctx, db)
+	if err != nil {
+		t.Fatalf("ListAdminCategories: %v", err)
+	}
+	var found bool
+	for _, c := range list {
+		if c.Slug == "vis-list-closed" {
+			found = true
+			if c.Visibility != "it-infra" {
+				t.Errorf("visibility = %q, want it-infra", c.Visibility)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("the restricted category is missing from the admin list")
 	}
 }

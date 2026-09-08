@@ -25,19 +25,24 @@ type Service struct {
 	Icon        string            `json:"icon"`
 	Categories  []string          `json:"categories"` // category slugs
 	DocOnly     bool              `json:"doc_only"`
-	Tag         string            `json:"tag,omitempty"` // "beta" | "wartung" | ""
-	// Visibility is the configured slug this service is restricted to, or ""
-	// for a public service (docs/specs/service-visibility.md). Only ever
-	// present on a service the reader holds — a View never carries a service
-	// whose slug the reader lacks.
-	Visibility string `json:"visibility,omitempty"`
+	// Tag is at most one status badge. "beta" additionally means the service is
+	// hidden unless the reader asked for beta services
+	// (docs/specs/service-visibility.md §2.1); "wartung" is cosmetic plus its
+	// filter, as before. The asymmetry is deliberate.
+	Tag string `json:"tag,omitempty"` // "beta" | "wartung" | ""
 }
 
-// Category is the read model of a managed category.
+// Category is the read model of a managed category. Visibility is the
+// configured slug that restricts it, or "" for a public category
+// (docs/specs/service-visibility.md §2.2): only holders of that slug see the
+// category and everything in it. It is not serialized — a View never carries a
+// category the reader may not see, and the admin screens read the unnarrowed
+// GET /api/admin/categories instead.
 type Category struct {
-	Slug  string            `json:"slug"`
-	Label map[string]string `json:"label"`
-	Sort  int               `json:"sort"`
+	Slug       string            `json:"slug"`
+	Label      map[string]string `json:"label"`
+	Sort       int               `json:"sort"`
+	Visibility string            `json:"-"`
 }
 
 // Snapshot is an immutable, fully-assembled view of the active catalog — the
@@ -49,11 +54,13 @@ type Category struct {
 type Snapshot struct {
 	services   []Service
 	categories []Category
-	// public is the pre-narrowed view for a reader holding nothing. When no
-	// service is restricted it IS the whole catalog, and VisibleTo hands it
-	// out without copying — the unconfigured deployment pays nothing.
+	// public is the pre-narrowed view for the commonest reader: holding no
+	// group and not asking for beta services. When no category is restricted
+	// and nothing is tagged beta it IS the whole catalog, and VisibleTo hands
+	// it out without copying — the plain deployment pays nothing.
 	public     *View
-	restricted bool
+	restricted bool // some category carries a visibility slug
+	hasBeta    bool // some service is tagged beta
 }
 
 // NewSnapshot assembles a snapshot from already-built services and categories.
@@ -66,45 +73,86 @@ func NewSnapshot(services []Service, categories []Category) *Snapshot {
 		categories = []Category{}
 	}
 	s := &Snapshot{services: services, categories: categories}
-	for _, svc := range services {
-		if svc.Visibility != "" {
+	for _, c := range categories {
+		if c.Visibility != "" {
 			s.restricted = true
 			break
 		}
 	}
-	if s.restricted {
-		s.public = s.narrow(nil)
+	for _, svc := range services {
+		if svc.Tag == TagBeta {
+			s.hasBeta = true
+			break
+		}
+	}
+	if s.restricted || s.hasBeta {
+		s.public = s.narrow(nil, false)
 	} else {
 		s.public = newView(services, categories)
 	}
 	return s
 }
 
-// VisibleTo returns the catalog as one reader sees it: public services plus
-// those whose visibility slug is in held, and only the categories that still
-// contain a service this reader can see. held may be nil (public only — what
-// the catalog MCP server passes, unconditionally).
+// TagBeta is the tag that both badges a service and hides it until the reader
+// switches beta services on (docs/specs/service-visibility.md §2.1).
+const TagBeta = "beta"
+
+// VisibleTo returns the catalog as one reader sees it. Two independent rules
+// narrow it (docs/specs/service-visibility.md §3):
 //
-// Category narrowing is what makes a restricted group's category vanish for
-// non-holders instead of rendering as an empty filter pill. A category that has
-// no services for anyone stays, exactly as today — narrowing only drops
-// categories that filtering emptied, so an unconfigured deployment's output is
-// byte-identical to the raw catalog.
-func (s *Snapshot) VisibleTo(held []string) *View {
-	if !s.restricted || len(held) == 0 {
+//	visible(service) = every restricted category of the service is in held
+//	                   AND (service.Tag != beta OR showBeta)
+//
+// "Restricted wins": a service in both a restricted and a public category is
+// hidden from non-holders, so restriction cannot be bypassed by filing the
+// service under a second category.
+//
+// held may be nil and showBeta false — public, no beta, which is what the
+// catalog MCP passes unconditionally (it has no user to ask).
+//
+// Categories narrow too, which is what makes a restricted group's category
+// vanish for non-holders instead of rendering as an empty filter pill: a
+// restricted category the reader does not hold is dropped, and so is any
+// category that filtering emptied. A category that has no services for anyone
+// stays, exactly as today — so a deployment with no restricted category and no
+// beta service gets byte-identical output to the raw catalog.
+func (s *Snapshot) VisibleTo(held []string, showBeta bool) *View {
+	// Nothing to narrow, or the pre-narrowed reader: hand out the cached view.
+	if (!s.restricted && !s.hasBeta) || (len(held) == 0 && !showBeta) {
 		if s.public == nil {
 			// The zero Snapshot (never assembled): empty, not nil.
 			return newView([]Service{}, []Category{})
 		}
 		return s.public
 	}
-	return s.narrow(held)
+	return s.narrow(held, showBeta)
 }
 
-func (s *Snapshot) narrow(held []string) *View {
+// visible is the predicate itself, in one place. restrictedBy maps a category
+// slug to the visibility slug restricting it (absent = public).
+func visible(svc Service, restrictedBy map[string]string, held []string, showBeta bool) bool {
+	if svc.Tag == TagBeta && !showBeta {
+		return false
+	}
+	for _, cat := range svc.Categories {
+		if slug := restrictedBy[cat]; slug != "" && !slices.Contains(held, slug) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Snapshot) narrow(held []string, showBeta bool) *View {
+	restrictedBy := make(map[string]string, len(s.categories))
+	for _, c := range s.categories {
+		if c.Visibility != "" {
+			restrictedBy[c.Slug] = c.Visibility
+		}
+	}
+
 	services := make([]Service, 0, len(s.services))
 	for _, svc := range s.services {
-		if svc.Visibility == "" || slices.Contains(held, svc.Visibility) {
+		if visible(svc, restrictedBy, held, showBeta) {
 			services = append(services, svc)
 		}
 	}
@@ -123,6 +171,9 @@ func (s *Snapshot) narrow(held []string) *View {
 	}
 	categories := make([]Category, 0, len(s.categories))
 	for _, c := range s.categories {
+		if slug := restrictedBy[c.Slug]; slug != "" && !slices.Contains(held, slug) {
+			continue
+		}
 		if !populated[c.Slug] || visible[c.Slug] {
 			categories = append(categories, c)
 		}
@@ -186,7 +237,9 @@ func Load(ctx context.Context, db Store) (*Snapshot, error) {
 		if err != nil {
 			return nil, fmt.Errorf("category %s label: %w", c.Slug, err)
 		}
-		categories = append(categories, Category{Slug: c.Slug, Label: label, Sort: int(c.Sort)})
+		categories = append(categories, Category{
+			Slug: c.Slug, Label: label, Sort: int(c.Sort), Visibility: textStr(c.Visibility),
+		})
 	}
 
 	catsBySvc := map[string][]string{}
@@ -212,7 +265,6 @@ func Load(ctx context.Context, db Store) (*Snapshot, error) {
 			Categories:  catsBySvc[id],
 			DocOnly:     !r.ServiceUrl.Valid || r.ServiceUrl.String == "",
 			Tag:         textStr(r.Tag),
-			Visibility:  textStr(r.Visibility),
 		}
 		if svc.Categories == nil {
 			svc.Categories = []string{}

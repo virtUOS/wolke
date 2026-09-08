@@ -50,13 +50,13 @@ func TestReadServerActiveOnly(t *testing.T) {
 	// cleanup above so the lock is released before the pool closes.
 	storetest.LockCategorySet(ctx, t, db.Pool)
 
-	if _, err := service.CreateCategory(ctx, db, actor, "rm-test-cat", map[string]string{"de": "RM Test", "en": "RM Test"}, 9999); err != nil {
+	if _, err := service.CreateCategory(ctx, db, actor, config.VisibilitySet{}, "rm-test-cat", map[string]string{"de": "RM Test", "en": "RM Test"}, 9999, ""); err != nil {
 		t.Fatalf("create category: %v", err)
 	}
 
 	// A normal active service, an active one in maintenance, and one we then
 	// soft-delete so it must NOT appear in any read.
-	normal, err := service.CreateService(ctx, db, actor, config.VisibilitySet{}, service.Draft{
+	normal, err := service.CreateService(ctx, db, actor, service.Draft{
 		Name: "RM Test Normal", Description: map[string]string{"de": "Normal.", "en": "Normal."},
 		ServiceURL: "https://normal.example.edu", DocURL: "https://docs.example.edu/normal",
 		Icon: "server", Categories: []string{"rm-test-cat"},
@@ -64,14 +64,14 @@ func TestReadServerActiveOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create normal: %v", err)
 	}
-	if _, err := service.CreateService(ctx, db, actor, config.VisibilitySet{}, service.Draft{
+	if _, err := service.CreateService(ctx, db, actor, service.Draft{
 		Name: "RM Test Maint", Description: map[string]string{"de": "In Wartung.", "en": "In maintenance."},
 		ServiceURL: "https://maint.example.edu", Icon: "server",
 		Categories: []string{"rm-test-cat"}, Tag: "wartung",
 	}); err != nil {
 		t.Fatalf("create maint: %v", err)
 	}
-	gone, err := service.CreateService(ctx, db, actor, config.VisibilitySet{}, service.Draft{
+	gone, err := service.CreateService(ctx, db, actor, service.Draft{
 		Name: "RM Test Gone", Description: map[string]string{"de": "Gelöscht.", "en": "Deleted."},
 		ServiceURL: "https://gone.example.edu", Icon: "server", Categories: []string{"rm-test-cat"},
 	})

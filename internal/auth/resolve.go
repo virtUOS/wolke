@@ -65,16 +65,12 @@ func ResolveAdmin(claims map[string]any, m config.AdminMapping) bool {
 // grant, in config order. It mirrors ResolveAdmin — same claim extraction, so
 // nested paths like realm_access.roles work identically — and is re-derived on
 // every login for the same reason: removing the group at the IdP revokes the
-// slug at next login (docs/specs/service-visibility.md §4).
-//
-// Only entries with grant: claim are considered. An opt-in slug is never
-// claim-grantable, even if the entry happens to carry a claim/match pair that
-// the token satisfies: self-granted and IdP-granted membership are stored in
-// different columns precisely so one cannot masquerade as the other.
+// slug, and with it every restricted category it opened, at next login
+// (docs/specs/service-visibility.md §2.2).
 func ResolveVisibilityClaims(claims map[string]any, vis config.VisibilitySet) []string {
 	granted := make([]string, 0, vis.Len())
 	for _, v := range vis.List() {
-		if v.Grant != config.GrantClaim || v.Claim == "" || v.Match == "" {
+		if v.Claim == "" || v.Match == "" {
 			continue
 		}
 		for _, got := range claimStrings(claimByPath(claims, v.Claim)) {

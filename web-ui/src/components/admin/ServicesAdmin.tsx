@@ -21,6 +21,19 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
   const visibilityOptions = me.data?.visibility.entries ?? []
   const visibilityLabel = (slug: string) =>
     localized(visibilityOptions.find((v) => v.slug === slug)?.label, locale) || slug
+  // A service is restricted by the categories it sits in, so the list badge is
+  // derived from them (docs/specs/service-visibility.md §2.2). The categories
+  // come in unnarrowed from GET /api/admin/categories.
+  const restrictingGroup = (svc: { categories: string[] }) => {
+    const labels: string[] = []
+    for (const slug of svc.categories) {
+      const group = categories.find((c) => c.slug === slug)?.visibility
+      if (!group) continue
+      const label = visibilityLabel(group)
+      if (!labels.includes(label)) labels.push(label)
+    }
+    return labels.join(', ')
+  }
   const [mode, setMode] = useState<Mode>({ kind: 'list' })
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | undefined>()
@@ -80,7 +93,7 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
             <ListItem key={svc.id} className="flex-wrap">
               <span className="min-w-0 flex-1 hyphenate-compound">
                 <span className="font-medium">{svc.name}</span>
-                {svc.visibility && <Badge className="ml-2">{visibilityLabel(svc.visibility)}</Badge>}
+                {restrictingGroup(svc) && <Badge className="ml-2">{restrictingGroup(svc)}</Badge>}
                 {!svc.is_active && <Badge className="ml-2">{s.admin.inactive}</Badge>}
               </span>
               <span className="flex items-center gap-2">
