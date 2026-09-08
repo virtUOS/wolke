@@ -1,192 +1,128 @@
-# Spec — Service visibility: experimental opt-in (#34) and claim-gated groups (#121)
+# Spec — Service visibility, v2: the beta tag and restricted categories
 
-Status: **Done — Stage 1 (PR for #34, 2026-09-08) and Stage 2 (claim derivation at login,
-Keycloak docs, runbook; PR for #121, 2026-09-08) both implemented.** Decisions settled (§7).
-Owner: supervisor session · Written 2026-09-08, simplified 2026-09-08 (no tabs, relaxed
-confidentiality — see §1.1)
-Issues: **#34** (experimental mode, stakeholder request), **#121** (visibility groups),
-**#36** (group-scoped categories — subsumed, see §6).
+Status: **REWORK, ready to implement.** Supersedes the v1 design, whose Stage 1 shipped in
+PR #131 (2026-09-08) and was judged unshippable on UX grounds before any deployment configured
+it. Owner: supervisor session · Rewritten 2026-09-08
+Issues: **#34** (experimental mode, reopened), **#121** (restricted groups), **#36** (subsumed).
 
-## 1. Why one feature and not two
+## 1. What was wrong with v1
 
-Both issues ask the same question of the read model — *may this user see this service?* —
-and differ only in **who decides** and **how it is shown**:
+v1 invented a configurable *visibility slug* per service, with two grant types and its own badge.
+Three things followed, all bad:
 
-| | #34 experimental | #121 groups (IT infrastructure) |
-|---|---|---|
-| Who grants access | the user, opting in | the IdP, via a claim |
-| Confidentiality | none — not secret, just off by default | hidden, not classified (§1.1) |
-| Display | inline in the normal views, clearly labelled | inline too (§1.1) |
-| Extra requirement | warning at opt-in ("data may vanish, no migration") | Keycloak group mapper docs |
+- **It duplicated a concept the product already had.** `services.tag = 'beta'` already means "early
+  software" and already renders a badge. v1 added an `experimental` slug next to it, so an admin
+  set a tag *and* a visibility, and a tile could render `[Beta] [Experimentell]` — two badges for
+  one idea that no user distinguishes.
+- **It made experimental services leave their category.** They belong in `ai-tools` or wherever
+  they actually belong; "experimental" is a property of the service, not a place in the catalog.
+- **It required config for something that needs none.** Turning on experimental services meant
+  editing `config.yaml`, restarting, then marking services — for a concept the schema already
+  carried.
 
-### 1.1 Two simplifications (user decision, 2026-09-08)
-
-**No tabs — everything renders inline.** A restricted service sits in an ordinary category
-alongside everything else; non-holders simply never see it, so the category appears empty and
-drops out for them. This removes the `display` axis from the config, the per-group tab, and the
-mobile tab-strip work at 324px — which was the riskiest UI in the whole feature.
-
-**Confidentiality is "hidden", not "classified".** The bar is *other users do not see these
-services*, not *a determined user cannot prove they exist*. Note this changes the design less
-than it sounds: because every read surface funnels through one seam (§3), filtering them all
-costs the same either way. What it relaxes is the edge-case surface — a favourite of a service
-that later became invisible, or a search result count, need care but not paranoia. Recommendation
-kept regardless: the compile-time-safe snapshot type in §3 is an hour's work and rules out a
-whole class of future leak, so build it even at the lower bar.
-
-Building them separately means two service-level markers, two per-user membership notions, two
-filter implementations across the same six read surfaces, and two test suites — then a merge
-when the second lands. Worse, two filtering paths is exactly the shape of bug that leaks a
-hidden service. **One mechanism, two flavours** is both less work and safer.
+And it shipped a real defect: the admin screens read the **narrowed** `/api/catalog`, so an admin
+who does not hold a group cannot see or manage its category or services (§5).
 
 ## 2. The model
 
-A **visibility slug** marks a service as non-public. A user's **visible set** is
-`{public} ∪ {slugs the user holds}`. A slug is held either because a claim granted it or
-because the user opted in — that is the only difference between the two features.
+Two distinct needs, each expressed with the smallest thing that already exists.
 
-```yaml
-# config.yaml — provider-agnostic, validated at startup like oidc.role (docs/specs/configurable-roles.md)
-visibility:
-  - slug: it-infra                     # [a-z0-9-]{1,32}; must not collide with a role slug or 'all'
-    label:   { de: "IT-Infrastruktur", en: "IT infrastructure" }
-    grant:   claim                     # membership comes from the IdP
-    claim:   groups                    # nested paths supported, like oidc.admin.claim
-    match:   it-service-admins
-  - slug: experimental
-    label:   { de: "Experimentell", en: "Experimental" }
-    grant:   opt-in                    # the user enables it in the account menu
-    warning: { de: "Experimentelle Dienste können jederzeit ohne Vorankündigung
-                    verschwinden; Daten gehen dabei möglicherweise verloren und
-                    werden nicht migriert.",
-               en: "Experimental services can disappear at any time without notice;
-                    data may be lost and will not be migrated." }
+### 2.1 Experimental = the `beta` tag, and nothing else
+
+`services.tag = 'beta'` becomes the single flag. It already renders the Beta badge; it now also
+means **hidden unless the user asks for them**:
+
+- A boolean user pref (`users.show_beta`, sibling of `favorites_separate_tab`) reveals them,
+  behind a confirm dialog carrying a **built-in** warning — data may vanish, nothing is migrated
+  (i18n strings, not config; the stakeholder requirement from #34 survives, its configurability
+  does not).
+- Revealed services appear inline **in their own categories**, badged Beta exactly as today.
+- A **Beta filter** appears beside the existing maintenance filter, and only while the pref is on.
+  It is a direct parallel of what exists: `filter: {kind:'maintenance'}` counted from
+  `s.tag === 'wartung'` (`Dashboard.tsx`).
+- Admin sets one field: the tag. No config, no category, no visibility.
+
+`wartung` keeps its present meaning — cosmetic label plus its filter. Only `beta` gains the
+hiding semantics; the asymmetry is deliberate and documented.
+
+### 2.2 Restricted groups = a restricted category
+
+Visibility moves **from the service to the category**. Assigning a service to
+"IT-Infrastruktur" *is* restricting it:
+
+- `categories.visibility text NULL` — NULL = public (today's behaviour), a slug = only holders of
+  that slug see the category **and everything in it**.
+- Set once, in the category editor from #132. The service form shows **at most a hint** ("in
+  IT-Infrastruktur — visible only to that group"), never a control of its own.
+- Non-holders see neither the category (no filter pill) nor its services, anywhere.
+- Config keeps only the **claim mapping** — slug, label, claim, match — because there is no way to
+  guess which IdP group grants membership. `grant:` and `warning:` disappear; there are no
+  opt-in entries in config at all.
+
+**Restricted wins (decided 2026-09-08).** A service in several categories is visible only if the
+user holds *every* restricted category it belongs to. The alternative — visible via any public
+category — would make restriction bypassable by filing the service under a second category.
+
+## 3. What survives from v1
+
+The expensive half is unchanged, because only the *predicate* moves:
+
+- `catalog.Snapshot`'s unexported fields and `VisibleTo(held) *View` as the sole readable type —
+  a handler that forgets to narrow still fails to compile.
+- Every read surface already wired: catalog, defaults, search, favourites, frequent, the click
+  metric, and the always-public catalog MCP.
+- The no-oracle write paths (unknown and restricted ids share one no-op response).
+- Category narrowing — now the *primary* filter rather than a derived one.
+- `users.visibility_claims` and the claim resolver from PR #134: claims → held slugs is
+  unchanged in substance.
+
+The new predicate:
+
+```
+visible(service, user) =
+      every restricted category of the service is held by the user   // §2.2, restricted wins
+  AND (service.tag != 'beta' OR user.show_beta)                       // §2.1
 ```
 
-No configured entries → **zero behaviour change**, every service public, no new UI anywhere.
+## 4. What changes
 
-## 3. The one thing that makes this cheap
+- **Migration**: add `categories.visibility text`, add `users.show_beta boolean not null default
+  false`; **drop** `services.visibility` and `users.visibility_optin`. Safe: no deployment has
+  ever configured visibility, and the production catalog has no beta-tagged service, so no data
+  depends on either column.
+- **Config**: `visibility:` entries lose `grant` and `warning`, keep slug/label/claim/match.
+- **API**: `PUT /api/me/visibility` disappears; `show_beta` joins `PATCH /api/me/prefs`.
+  `/api/me` reports `show_beta` and the held group slugs.
+- **UI**: the v1 opt-in switch becomes one built-in "Beta-Dienste anzeigen" toggle; the v1
+  visibility badge disappears (the tag badge was always the right one); the service form's
+  visibility chips become the category hint; the category editor gains the visibility selector.
+- **MCP**: the admin `visibility` field moves from service propose to category management; the
+  read-only `visibility.list` reflects configured groups.
 
-Every user-facing read surface already resolves service data through the catalog snapshot —
-verified 2026-09-08:
+## 5. The admin-narrowing fix (defect, ship with this)
 
-| Surface | How it resolves |
-|---|---|
-| `/api/catalog` | `snap.Services` |
-| `/api/catalog/defaults` | ids → `snap.ServiceByID` |
-| `/api/search` | `SearchServiceIDs` returns **ids** → `snap.ServiceByID` |
-| `/api/favorites` | ids → `snap.ServiceByID` |
-| `/api/usage/frequent` | ids → `snap.ServiceByID` |
-| `POST /api/events/click` | `snap.ServiceByID` (metric label) |
-| catalog MCP (`internal/readmcp`) | `snap.Services` / `ServiceByID` |
+`AdminView` feeds the admin screens from `useCatalog()` → the narrowed `/api/catalog`, so an
+admin who does not hold a group cannot manage its category or services. Admin surfaces must read
+**unnarrowed** data: `GET /api/admin/services` already exists; add `GET /api/admin/categories`
+(all categories with their visibility) and point the admin screens at both. `/api/catalog` itself
+stays narrowed for everyone — an admin is still an ordinary user in their own dashboard.
 
-So filtering lands in **one seam**, not in six SQL queries: `Snapshot.VisibleTo(held []string)`
-returning a narrowed snapshot. Search needs no SQL change — a restricted id simply fails to
-resolve, and the result count follows.
+## 6. Definition of done
 
-**`VisibleTo` must narrow categories too.** `/api/catalog` returns `categories` as its own list,
-and the SPA renders the category filter pills straight from it (`Dashboard.tsx`). Without
-narrowing, a non-holder would see an empty "IT-Infrastruktur" pill that filters to nothing —
-leaking the name and offering a dead control. Dropping categories with no visible service for
-this user is what produces the "invisible category" effect, and it is three lines in the same
-seam.
+- No restricted category and no beta service → behaviour identical to today (regression test).
+- A beta service is invisible until the pref is on; then it appears in its own categories, badged,
+  and the Beta filter appears. Turning the pref off hides them again.
+- A service in a restricted category is absent from catalog, defaults, search, favourites,
+  frequent and the catalog MCP for non-holders; its category renders for nobody else.
+- A service in a restricted *and* a public category is hidden from non-holders (restricted wins).
+- An admin who holds no group can still see, edit and reorder every category and service in the
+  admin screens.
+- Docs: concept §5, technical spec §4/§6/§8/§9/§12, `config.example.yaml`, Keycloak guide,
+  `docs/runbooks/grant-visibility-group.md`, README.
+- Full gates incl. the viewport matrix for the toggle, the filter and the category editor.
 
-**Make filtering non-optional by construction.** The narrowed snapshot should be the only type
-the handlers can consume (e.g. `cache.Get` yields a raw snapshot whose service accessors are
-unexported, with `VisibleTo` the sole way to obtain a readable view). A future handler that
-forgets to filter must fail to compile, not leak. This is the single most important design
-decision here — worth the extra hour.
+## 7. Effort
 
-## 4. Data model
-
-- Migration (next free number): `alter table services add column visibility text` — NULL =
-  public (today's behaviour). One slug per service in v1; a m2m table is a compatible later
-  extension. Validated in `/internal/service` against the configured slugs, shared by the form
-  and MCP write paths, audited like any catalog write.
-- `users.visibility_claims text[] not null default '{}'` — recomputed **on every login**, like
-  `is_admin`, so revoking the IdP group revokes access at next login.
-- `users.visibility_optin text[] not null default '{}'` — the user's own choices.
-- Effective held set = `visibility_claims ∪ visibility_optin`, each filtered to slugs that still
-  exist in config **and whose `grant` type matches the source** — so flipping a slug from
-  `opt-in` to `claim` in config cannot leave self-granted access behind.
-
-## 5. Behaviour
-
-- **Non-holders**: a restricted service is absent from catalog, defaults, search, favourites and
-  frequently-used — no existence oracle anywhere. A favourite that becomes invisible degrades
-  like a soft-deleted one.
-- **Catalog MCP** (no identity) sees **public only**, unconditionally — keep the compile-time
-  least-privilege property of `internal/readmcp` true.
-- **Opt-in flavour (#34)**: a toggle in the account menu (precedent: `favorites_separate_tab`),
-  gated behind a confirm dialog carrying the configured `warning` text. Services appear inline in
-  the normal views with the slug's label as a badge — reuse the tile's existing status-label slot
-  (`services.tag` styling), no new tile anatomy. Turning it off hides them again; nothing is lost.
-- **Claim flavour (#121)**: no UI of its own. Held services appear inline in the normal views
-  and search exactly like public ones (badged with the slug's label, same as the opt-in flavour);
-  their category renders for holders and disappears for everyone else. No tab, no tab strip, no
-  new viewport states — the difference from #34 is purely *who* holds the slug.
-- **Admin**: the service form and the MCP propose path get a visibility selector
-  (Öffentlich / each configured label). Admins always see everything in the admin views.
-- `/api/me` exposes the held set (the UI needs it for tabs and the toggle state).
-
-## 6. Relationship to #36
-
-#36 (group-scoped *categories*) is satisfied in substance by per-service visibility plus its
-tab: "RZ infrastructure" becomes a slug, not a category. Its only genuine remainder is
-**invite-based** membership (neither claim nor self-serve), which this spec does not cover.
-Close #36 as subsumed when this ships, or keep it open narrowed to invites.
-
-## 7. Decisions (settled 2026-09-08)
-
-1. **`role_defaults` may not reference a restricted service.** Default views stay public-only:
-   validated in `/internal/service` on the role-defaults write path (reject with a field error
-   naming the service), and the admin role-defaults picker only offers public services. Keeps
-   every role's default view identical for every user of that role.
-2. **Announcement audiences stay role-based.** No per-visibility-slug audience in v1.
-3. (Moot with the no-tabs simplification: holders see restricted services inline, everywhere —
-   normal views and search alike.)
-
-## 8. Delivery in two stages, one mechanism
-
-**Stage 1 — core + #34 (the stakeholder request).** Migration, config block with both grant
-types validated, `VisibleTo` seam + all read surfaces + MCP, admin write path, opt-in toggle with
-the warning dialog, inline badge, `/api/me`. Ships experimental mode end to end; the claim
-plumbing is present but unused until a deployment configures a `grant: claim` entry.
-
-**Stage 2 — #121's claim grants. Shipped 2026-09-08.** Claim-derived membership recomputed at
-login (the `is_admin` pattern): `ResolveVisibilityClaims` in `internal/auth/resolve.go` reads the
-`grant: claim` entries — and only those — with the same nested-path extraction as the admin
-mapping, and the login upsert writes the result to `users.visibility_claims` while leaving the
-user's own `visibility_optin` untouched. Plus the Keycloak group-mapper section
-(`docs/oidc-keycloak.md` §3c) and the admin runbook
-(`docs/runbooks/grant-visibility-group.md`). **No UI work at all**, as planned — Stage 1 already
-renders held services inline; Stage 2 only added a second way to hold a slug.
-
-Building Stage 1 to Stage 2's confidentiality standard from the start is the point: #34 alone
-would tolerate a leak, #121 would not, and the second one to arrive must not require reworking
-the first.
-
-## 9. Estimate
-
-| | Combined, simplified (this spec) | Separately, with tabs |
-|---|---|---|
-| Stage 1 / #34 | 1–1.5 sessions (opus) | ~2 sessions |
-| Stage 2 / #121 | 0.5–1 session (opus) | ~2 sessions + rework of #34's filter |
-| **Total** | **2–2.5 coding sessions** | **4+, with two divergent filter paths** |
-
-Dropping the tabs took roughly a session out of Stage 2 (tab strip, mobile 324px states, per-tab
-e2e) and simplified the config. The bulk of Stage 1 remains the test surface — one "non-holder
-cannot see it" test per read surface — not the feature code. The riskiest half hour is still the
-compile-time-safe snapshot type.
-
-## 10. Definition of done
-
-- No configured visibility entries → byte-identical behaviour to today (regression test).
-- Per read surface, a test proving a non-holder cannot obtain a restricted service — catalog,
-  defaults, search, favourites, frequent, click, catalog MCP.
-- Opt-in flow: toggle + warning dialog, services appear/disappear, badge visible, e2e at the full
-  viewport matrix.
-- Claim flow: membership re-derived at login; revoking the group revokes access at next login;
-  a held service renders inline for holders and its category vanishes for everyone else.
-- Docs: `config.example.yaml`, docs/01 §3/§5, docs/02 §4/§6/§8/§9, Keycloak guide, admin runbook.
-- Full gates incl. `make e2e`.
+**1–1.5 sessions.** The seam, the read surfaces and the claim resolver are done; this reworks the
+predicate, moves one column, swaps one pref, simplifies three UI surfaces and fixes the admin
+read. The Beta filter is a copy of the maintenance filter.
