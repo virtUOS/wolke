@@ -111,6 +111,40 @@
           "legendFormat": "{{severity}}"
         }
       ]
+    },
+    {
+      "id": 7,
+      "title": "Favorites per service (top 10)",
+      "type": "bargauge",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 }, "overrides": [] },
+      "options": { "orientation": "horizontal", "displayMode": "gradient" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "topk(10, wolke_service_favorites)",
+          "legendFormat": "{{service}}",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Clicks per service and target (total)",
+      "type": "table",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (service, target) (wolke_service_clicks_total)",
+          "format": "table",
+          "instant": true
+        }
+      ]
     }
   ]
 }

@@ -393,11 +393,14 @@ wolke_active_sessions                                           # gauge
 wolke_http_request_duration_seconds{route,method,code}          # histogram
 wolke_catalog_services{state="active|inactive"}                 # gauge
 wolke_announcements_active{severity}                            # gauge
+wolke_service_favorites{service="MyShare"}                      # gauge
 ```
 `wolke_service_clicks_total` is the usage-by-role requirement. It is fed from the same click
 ingestion that powers "frequently used", incremented in-process and reconciled against
-`usage_daily` so a restart doesn't lose history. Ship a Grafana dashboard JSON alongside
-(doc 04 §maintenance). **Exported labels are aggregate only — never a user identifier.**
+`usage_daily` so a restart doesn't lose history. `wolke_service_favorites` counts the users
+currently having each **active** service pinned — zeros included, refreshed from the DB by the
+same gauge ticker, and labelled by service name so it joins the click counter. Ship a Grafana
+dashboard JSON alongside (doc 04 §maintenance). **Exported labels are aggregate only — never a user identifier.**
 
 ## 8. Admin MCP server
 

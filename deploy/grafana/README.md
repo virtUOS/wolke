@@ -22,4 +22,6 @@ scrape_configs:
 Import `wolke-dashboard.json` (Dashboards → New → Import) and pick your
 Prometheus data source when prompted. Panels: clicks per service (rate), clicks
 per service+role (table), request p95 latency by route, active sessions, catalog
-services by state, and active announcements by severity.
+services by state, active announcements by severity, favorites per service
+(top 10 — `wolke_service_favorites`), and clicks per service+target (table —
+launch link vs. documentation link).

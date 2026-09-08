@@ -53,6 +53,42 @@ func (q *Queries) CountActiveSessions(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countFavoritesByService = `-- name: CountFavoritesByService :many
+select s.name, count(f.user_id) as n
+from services s
+left join favorites f on f.service_id = s.id
+where s.is_active = true
+group by s.name
+`
+
+type CountFavoritesByServiceRow struct {
+	Name string `json:"name"`
+	N    int64  `json:"n"`
+}
+
+// Favorites per active service. The left join keeps a service nobody has
+// pinned in the result with n = 0, so its gauge series exists rather than
+// silently dropping out of the dashboard.
+func (q *Queries) CountFavoritesByService(ctx context.Context) ([]CountFavoritesByServiceRow, error) {
+	rows, err := q.db.Query(ctx, countFavoritesByService)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountFavoritesByServiceRow{}
+	for rows.Next() {
+		var i CountFavoritesByServiceRow
+		if err := rows.Scan(&i.Name, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countServicesByState = `-- name: CountServicesByState :many
 select is_active, count(*) as n from services group by is_active
 `
