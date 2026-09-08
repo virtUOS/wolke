@@ -44,6 +44,11 @@ Open **http://localhost:5173** in your browser. The mock IdP lets you log in wit
 
 > **Note:** after any schema change (`migrations/` gets a new file), run `make migrate` before restarting the server.
 
+To try **experimental mode** (opt-in service visibility, issue #34) locally, start the server with
+the e2e config, which defines one opt-in group the seed's "Zettelkasten Labor" is restricted to:
+`CONFIG_FILE=dev/config.e2e.yaml make run`. Without it the restricted seed entry is simply
+invisible to everyone.
+
 ### End-to-end viewport tests
 
 Layout correctness on real phone widths is a gate, not a polish pass
@@ -125,6 +130,14 @@ Caddy serves HTTPS on :443 (its internal CA for `localhost`; real certificates f
 ### Notes
 
 **Branding and OIDC claim mapping** live in `config.yaml` (copy from `config.example.yaml`). This is the one file you edit to reskin for a different institution — colors, logo paths, product name, and which OIDC claim maps to which role. **The roles themselves come from that mapping**: the distinct slugs in `oidc.role.values` ∪ `precedence` ∪ `{default}` are the role set (optional `labels:` give them display names), so a deployment whose IdP only tells students from employees configures two roles and sees exactly two everywhere — admin editors, default views, announcement audiences. Slugs are `[a-z0-9-]{1,32}` and `all` is reserved; more than five roles works but logs a startup warning, since the per-role admin screens are built for a handful. Supplying the `role:` block in your config file replaces the built-in one whole — set all of it (claim, values, precedence, default, optional labels), not just the keys you want to change. OIDC is provider-agnostic (Keycloak, Authentik, Zitadel, Entra, …); for a step-by-step Keycloak setup see **[docs/oidc-keycloak.md](docs/oidc-keycloak.md)**. wolke also implements **OIDC back-channel logout** — logging out at the IdP ends the wolke session too. Register `PUBLIC_URL` + `/auth/backchannel-logout` as the client's back-channel logout URL at your IdP (with "session required" enabled where offered); that registration is the only knob, the endpoint is always on. `TRUSTED_PROXIES` must cover the proxy's network so `X-Forwarded-For` is trusted (it's preset to the compose `edge` subnet).
+
+**Service visibility** is the third block in `config.yaml`: a list of non-public service groups
+(`visibility:`), each held either by users who **opt in** through the account menu after a
+configured warning (experimental mode) or by users an IdP **claim** grants it to. Admins restrict a
+service to a group on the service form or via the admin MCP server; everyone else never sees it —
+not in the catalog, search, favorites, or the public catalog MCP server. Leaving the list out keeps
+every service public. Slugs follow the role rules and may not collide with a role; an opt-in group
+must carry its `warning`. See `config.example.yaml` and `docs/specs/service-visibility.md`.
 
 **Branding assets** are plain files: mount a directory over the bundled `branding/`
 (compose: `- ./branding:/branding:ro,z`). The mount **replaces the bundled set
@@ -406,9 +419,10 @@ For **Claude Desktop**, add to `claude_desktop_config.json`:
 
 | Tool | Description |
 |------|-------------|
-| `propose_create` | Stage a new service |
+| `propose_create` | Stage a new service (optional `visibility`: a configured slug, see `visibility.list`) |
 | `propose_update` | Stage an edit to an existing service |
 | `propose_delete` | Stage a soft-delete |
+| `visibility.list` | The configured visibility groups a service may be restricted to (read-only) |
 
 **Commit or discard:**
 
@@ -421,7 +435,7 @@ For **Claude Desktop**, add to `claude_desktop_config.json`:
 
 ## Public catalog MCP server
 
-A second, read-only MCP server that any university member can run — no admin rights, no user identity required. It exposes the same public catalog the web UI shows: which services exist, which are in **maintenance** or **beta**, where their **documentation** lives, plus search and active announcements. It has **no write path at all** (enforced at the package level), and never returns soft-deleted services.
+A second, read-only MCP server that any university member can run — no admin rights, no user identity required. It exposes the same public catalog the web UI shows: which services exist, which are in **maintenance** or **beta**, where their **documentation** lives, plus search and active announcements. It has **no write path at all** (enforced at the package level), and never returns soft-deleted services — nor restricted ones: with no identity it reads the catalog as a holder of nothing, so a visibility-restricted service is never served here.
 
 ### Setup
 

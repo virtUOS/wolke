@@ -1,6 +1,7 @@
 # Spec — Service visibility: experimental opt-in (#34) and claim-gated groups (#121)
 
-Status: **READY TO IMPLEMENT — all decisions settled (§7). Stage 1 first.**
+Status: **Stage 1 implemented (PR for #34, 2026-09-08) — Stage 2 (claim derivation at login,
+Keycloak docs, runbook) open.** Decisions settled (§7).
 Owner: supervisor session · Written 2026-09-08, simplified 2026-09-08 (no tabs, relaxed
 confidentiality — see §1.1)
 Issues: **#34** (experimental mode, stakeholder request), **#121** (visibility groups),
