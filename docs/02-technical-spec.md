@@ -291,7 +291,8 @@ requirement for open-source reuse: nothing in the code may assume Keycloak speci
 1. Unauthenticated request → server redirects to the configured IdP (authorization code + PKCE).
 2. IdP returns to `/auth/callback`; server exchanges the code, validates the ID token against the
    discovered JWKS.
-3. Server maps claims → `primary_role` and `is_admin` using the **configurable claim mapping** below.
+3. Server maps claims → `primary_role`, `is_admin` and the claim-granted **visibility slugs** using
+   the **configurable claim mapping** below.
 4. Server upserts the `users` row and creates a **server-side session**; sets a `Secure`,
    `HttpOnly`, `SameSite=Lax` cookie. The SPA only ever sees the cookie.
 5. API calls are authorized from the session. Logout clears the session and uses the discovered
@@ -367,6 +368,20 @@ Rules:
 - The set is served to the SPA at `GET /api/roles` in precedence order, and it is what every
   role-shaped write is validated against (§4).
 
+**Claim-derived visibility** resolves beside role and admin, from the same claims and with the same
+extraction (nested dot-paths included). A `visibility:` entry with `grant: claim` names a claim and
+the value that grants its slug; `ResolveVisibilityClaims` (`internal/auth/resolve.go`) returns the
+granted slugs in config order and the login upsert writes them to `users.visibility_claims`. Three
+properties matter:
+
+- **Re-derived on every login**, exactly like `is_admin` — removing the group at the IdP removes the
+  access at the next login (for instant lockout, end the session too: `docs/runbooks/revoke-admin.md`
+  Part 2 applies unchanged).
+- **Only `grant: claim` entries participate.** An `opt-in` slug is the user's own, held in
+  `users.visibility_optin`; no claim can grant it, and a login never touches that column.
+- **No claim configured, nothing granted.** An unconfigured deployment writes an empty array and
+  behaves exactly as before (docs/specs/service-visibility.md §4).
+
 The resolver reads these at startup; swapping IdP, claim names, or the number of roles is a config
 change. Ship sensible defaults plus this documented example so a new adopter is productive quickly.
 
@@ -379,6 +394,8 @@ stateless). Move to Redis only when you run multiple instances (see §9).
 - `is_admin` is re-derived from the configured admin claim **on every login**, so revoking the
   group/role at the IdP revokes admin access at next login. (For instant revocation, also re-check
   on a short session refresh.)
+- Claim-granted visibility slugs are re-derived the same way and on the same login, so revoking the
+  IdP group hides the restricted services again at next login.
 
 > **UOS deployment:** the IdM can only distinguish students from employees, so the launch
 > configuration is the two-role mapping shown above (`student`, `employee → staff`). The exact

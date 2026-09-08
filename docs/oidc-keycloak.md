@@ -173,15 +173,57 @@ claims by dot-path, so use Keycloak's built-in `realm_access.roles`:
 The admin check can use realm roles the same way (`admin.claim: realm_access.roles`,
 `match: wolke-admin`), or stay on groups — they're independent.
 
+### 3c. Optional: a group that unlocks restricted services
+
+Services can be marked non-public with a **visibility slug**
+(`docs/specs/service-visibility.md`). A slug with `grant: claim` is held by
+whoever the IdP says holds it — resolved from a claim exactly like `is_admin`,
+and re-derived on every login, so removing the group revokes access at the next
+login. Users who don't hold it never see those services anywhere: not in the
+catalog, not in search, and the category they sit in disappears for them.
+
+1. **Realm → Groups** → create the group, e.g. `it-service-admins`, and assign
+   the IT staff who should see the infrastructure services.
+2. Reuse the `groups` mapper from step 3a if you have it — one Group Membership
+   mapper feeds roles, admin and visibility alike. If you're adding a mapper
+   just for this, it's the same recipe: **Clients → wolke → Client scopes →
+   `wolke-dedicated` → Add mapper → By configuration → Group Membership**, with
+   **Token Claim Name:** `groups`, **Full group path: Off**, and
+   **Add to ID token: On** ← the same critical setting, and the same trap: a
+   mapper that only writes the access token grants nothing, silently.
+3. Map it in `config.yaml` (top level, next to `oidc:`, not inside it):
+
+   ```yaml
+   visibility:
+     - slug: it-infra                       # [a-z0-9-]{1,32}, unique, not a role slug, not `all`
+       label: { de: "IT-Infrastruktur", en: "IT infrastructure" }
+       grant: claim
+       claim: groups                        # nested dot-paths work, e.g. realm_access.roles
+       match: it-service-admins             # membership in this group ⇒ the slug
+   ```
+
+   Realm roles work the same way — `claim: realm_access.roles` with the role
+   name as `match`, once that mapper has **Add to ID token: On** (step 3b's
+   alternative).
+4. Restart wolke, then mark a service: **Administration → Dienste →** (the
+   service) **→ Sichtbarkeit → IT-Infrastruktur**. Members see it inline in the
+   normal views, badged with the label; nobody else can obtain it.
+
+Granting and revoking day to day is
+`docs/runbooks/grant-visibility-group.md`.
+
 ---
 
 ## 4. Verify
 
 1. Browse to `https://wolke.example.edu` → you're redirected to Keycloak, log in,
    and land back on the dashboard.
-2. `GET /api/me` (with the session cookie) shows your resolved `primary_role` and
-   `is_admin`. An admin also sees the **Administration** entry in the account menu.
-3. The server logs one structured line per login: `{"msg":"login","sub":…,"role":…,"admin":…}`.
+2. `GET /api/me` (with the session cookie) shows your resolved `primary_role`,
+   `is_admin` and, if you configured any, the visibility slugs you hold under
+   `visibility.held`. An admin also sees the **Administration** entry in the
+   account menu.
+3. The server logs one structured line per login:
+   `{"msg":"login","sub":…,"role":…,"admin":…,"visibility":[…]}`.
 4. Back-channel logout: while logged in to wolke, log out at the Keycloak account
    console (`https://id.example.edu/realms/uni/account`) — the next wolke request
    is unauthenticated within seconds, and the server logs
@@ -199,10 +241,11 @@ The admin check can use realm roles the same way (`admin.claim: realm_access.rol
 |---|---|
 | Everyone is `student`, nobody is admin | The role/group claim isn't in the **ID token**. Enable **Add to ID token** on the Group Membership / realm-roles mapper (step 3a). Verify by decoding the ID token at jwt.io — the claim must be present. |
 | Admin never granted | `groups` carries full paths (`/dashboard-admins`). Set **Full group path: Off**, or set `admin.match: /dashboard-admins`. |
+| A visibility group grants nothing | Same two causes as admin: the `groups` mapper lacks **Add to ID token**, or the claim carries full paths (`/it-service-admins`) while `match` doesn't. The login log line names what was granted: `{"msg":"login", …, "visibility":["it-infra"]}` — an empty list means the claim didn't match. |
 | `invalid_redirect_uri` at Keycloak | The client's Valid redirect URIs must contain `PUBLIC_URL` + `/auth/callback`, exactly. |
 | Login loops / "id_token nonce mismatch" or issuer errors | `OIDC_ISSUER_URL` must equal the `iss` in the token byte-for-byte (mind the `/realms/<realm>` path and `http` vs `https`). Check the discovery URL (step 2). |
 | Session cookie not set / immediately logged out | `PUBLIC_URL` must match the browser origin and be `https://…` in production (the `Secure` cookie flag is derived from its scheme). Make sure Caddy/your proxy forwards `X-Forwarded-Proto`. |
-| Role/admin change at Keycloak doesn't take effect | They're re-derived per login — the user must log out and back in. |
+| Role/admin/visibility change at Keycloak doesn't take effect | They're re-derived per login — the user must log out and back in. |
 | Logging out at Keycloak doesn't log wolke out | The client's **Backchannel logout URL** isn't set (or Keycloak can't reach it server-to-server — check network/firewall from the Keycloak host to `PUBLIC_URL`). The wolke log shows a `backchannel logout` warn/info line for every attempt that arrived. |
 | Back-channel logout ends *all* of a user's sessions instead of one | **Backchannel logout session required** is off, so the logout token carries only `sub`, no `sid`. Turn it on. |
 

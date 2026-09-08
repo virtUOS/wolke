@@ -484,6 +484,7 @@ actually does (not just what the spec aspires to):
 - [Add / edit / remove a catalog service (form + MCP)](docs/runbooks/manage-service.md)
 - [Restore PostgreSQL from backup](docs/runbooks/restore-postgres.md) (see also [Backups](#backups) for the scheduled job)
 - [Revoke a compromised admin](docs/runbooks/revoke-admin.md)
+- [Grant / revoke access to a restricted service group](docs/runbooks/grant-visibility-group.md)
 
 ---
 

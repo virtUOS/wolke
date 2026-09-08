@@ -15,6 +15,10 @@ type Identity struct {
 	Email       string
 	Role        string // one of the deployment's configured role slugs (config.RoleSet)
 	IsAdmin     bool
+	// VisibilityClaims are the claim-granted visibility slugs
+	// (docs/specs/service-visibility.md §4). Like IsAdmin they are re-derived
+	// on every login, so losing the IdP group loses the slug at next login.
+	VisibilityClaims []string
 }
 
 // ResolveRole maps the affiliation claim's value(s) to one role using the
@@ -55,6 +59,32 @@ func ResolveAdmin(claims map[string]any, m config.AdminMapping) bool {
 		}
 	}
 	return false
+}
+
+// ResolveVisibilityClaims returns the configured visibility slugs the claims
+// grant, in config order. It mirrors ResolveAdmin — same claim extraction, so
+// nested paths like realm_access.roles work identically — and is re-derived on
+// every login for the same reason: removing the group at the IdP revokes the
+// slug at next login (docs/specs/service-visibility.md §4).
+//
+// Only entries with grant: claim are considered. An opt-in slug is never
+// claim-grantable, even if the entry happens to carry a claim/match pair that
+// the token satisfies: self-granted and IdP-granted membership are stored in
+// different columns precisely so one cannot masquerade as the other.
+func ResolveVisibilityClaims(claims map[string]any, vis config.VisibilitySet) []string {
+	granted := make([]string, 0, vis.Len())
+	for _, v := range vis.List() {
+		if v.Grant != config.GrantClaim || v.Claim == "" || v.Match == "" {
+			continue
+		}
+		for _, got := range claimStrings(claimByPath(claims, v.Claim)) {
+			if got == v.Match {
+				granted = append(granted, v.Slug)
+				break
+			}
+		}
+	}
+	return granted
 }
 
 // claimByPath extracts a value from possibly-nested claims using a dot-separated

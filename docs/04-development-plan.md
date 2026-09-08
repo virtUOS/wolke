@@ -154,7 +154,8 @@ Caddy, take `PUBLIC_URL` from config for OIDC redirects and `Secure` cookies.
   (2) [add/remove a service via form and via MCP](runbooks/manage-service.md);
   (3) [restore from backup](runbooks/restore-postgres.md); (4) [revoke a compromised admin](runbooks/revoke-admin.md)
   (remove the admin-granting IdP group/role — Keycloak is one example provider, not the only
-  supported one). Write these as the features land, not after.
+  supported one); (5) [grant/revoke a restricted service group](runbooks/grant-visibility-group.md).
+  Write these as the features land, not after.
 
 ## 6. Definition of done (whole product)
 - Logged-in users of all three roles get a sensible default view and can find, launch, favorite,

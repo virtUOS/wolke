@@ -144,19 +144,13 @@ func (s *Service) Callback(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
-	id := buildIdentity(claims, s.cfg.OIDC)
+	id := buildIdentity(claims, s.cfg.OIDC, s.cfg.Visibility())
 	if id.Subject == "" {
 		s.fail(w, r, "no subject in claims", nil)
 		return
 	}
 
-	user, err := s.users.UpsertUser(r.Context(), store.UpsertUserParams{
-		OidcSub:     id.Subject,
-		DisplayName: id.DisplayName,
-		Email:       pgText(id.Email),
-		PrimaryRole: id.Role,
-		IsAdmin:     id.IsAdmin,
-	})
+	user, err := s.persist(r.Context(), id)
 	if err != nil {
 		s.fail(w, r, "upsert user", err)
 		return
@@ -177,7 +171,10 @@ func (s *Service) Callback(w http.ResponseWriter, r *http.Request) {
 	sc := s.cookie(SessionCookieName, token, "/", int(time.Until(expires).Seconds()))
 	http.SetCookie(w, sc)
 
-	s.log.Info("login", "sub", id.Subject, "role", id.Role, "admin", id.IsAdmin)
+	// visibility lists the claim-granted slugs (config names, not claim values)
+	// — the one line an operator needs when checking a group mapper landed.
+	s.log.Info("login", "sub", id.Subject, "role", id.Role, "admin", id.IsAdmin,
+		"visibility", id.VisibilityClaims)
 	http.Redirect(w, r, h.ReturnTo, http.StatusFound)
 }
 
@@ -230,15 +227,31 @@ func (s *Service) cookie(name, value, path string, maxAge int) *http.Cookie {
 }
 
 // buildIdentity maps verified claims to our domain identity.
-func buildIdentity(claims map[string]any, oidcCfg config.OIDC) Identity {
+func buildIdentity(claims map[string]any, oidcCfg config.OIDC, vis config.VisibilitySet) Identity {
 	sub, _ := claims["sub"].(string)
 	return Identity{
-		Subject:     sub,
-		DisplayName: firstString(claims, "name", "preferred_username", "email", "sub"),
-		Email:       stringClaim(claims, "email"),
-		Role:        ResolveRole(claims, oidcCfg.Role),
-		IsAdmin:     ResolveAdmin(claims, oidcCfg.Admin),
+		Subject:          sub,
+		DisplayName:      firstString(claims, "name", "preferred_username", "email", "sub"),
+		Email:            stringClaim(claims, "email"),
+		Role:             ResolveRole(claims, oidcCfg.Role),
+		IsAdmin:          ResolveAdmin(claims, oidcCfg.Admin),
+		VisibilityClaims: ResolveVisibilityClaims(claims, vis),
 	}
+}
+
+// persist writes the freshly derived identity to the users table — the login
+// write path, so role, is_admin and the claim-granted visibility slugs are all
+// re-derived together and a revoked group is gone at next login. The user's own
+// opt-in slugs and display prefs are untouched (see the UpsertUser query).
+func (s *Service) persist(ctx context.Context, id Identity) (store.User, error) {
+	return s.users.UpsertUser(ctx, store.UpsertUserParams{
+		OidcSub:          id.Subject,
+		DisplayName:      id.DisplayName,
+		Email:            pgText(id.Email),
+		PrimaryRole:      id.Role,
+		IsAdmin:          id.IsAdmin,
+		VisibilityClaims: id.VisibilityClaims,
+	})
 }
 
 func firstString(claims map[string]any, keys ...string) string {

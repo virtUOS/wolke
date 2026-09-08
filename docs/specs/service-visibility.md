@@ -1,7 +1,7 @@
 # Spec — Service visibility: experimental opt-in (#34) and claim-gated groups (#121)
 
-Status: **Stage 1 implemented (PR for #34, 2026-09-08) — Stage 2 (claim derivation at login,
-Keycloak docs, runbook) open.** Decisions settled (§7).
+Status: **Done — Stage 1 (PR for #34, 2026-09-08) and Stage 2 (claim derivation at login,
+Keycloak docs, runbook; PR for #121, 2026-09-08) both implemented.** Decisions settled (§7).
 Owner: supervisor session · Written 2026-09-08, simplified 2026-09-08 (no tabs, relaxed
 confidentiality — see §1.1)
 Issues: **#34** (experimental mode, stakeholder request), **#121** (visibility groups),
@@ -153,9 +153,14 @@ types validated, `VisibleTo` seam + all read surfaces + MCP, admin write path, o
 the warning dialog, inline badge, `/api/me`. Ships experimental mode end to end; the claim
 plumbing is present but unused until a deployment configures a `grant: claim` entry.
 
-**Stage 2 — #121's claim grants.** Claim-derived membership recomputed at login (the `is_admin`
-pattern), Keycloak group-mapper docs, admin runbook. **No UI work at all** — Stage 1 already
-renders held services inline; Stage 2 only adds a second way to hold a slug.
+**Stage 2 — #121's claim grants. Shipped 2026-09-08.** Claim-derived membership recomputed at
+login (the `is_admin` pattern): `ResolveVisibilityClaims` in `internal/auth/resolve.go` reads the
+`grant: claim` entries — and only those — with the same nested-path extraction as the admin
+mapping, and the login upsert writes the result to `users.visibility_claims` while leaving the
+user's own `visibility_optin` untouched. Plus the Keycloak group-mapper section
+(`docs/oidc-keycloak.md` §3c) and the admin runbook
+(`docs/runbooks/grant-visibility-group.md`). **No UI work at all**, as planned — Stage 1 already
+renders held services inline; Stage 2 only added a second way to hold a slug.
 
 Building Stage 1 to Stage 2's confidentiality standard from the start is the point: #34 alone
 would tolerate a leak, #121 would not, and the second one to arrive must not require reworking

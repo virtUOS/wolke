@@ -163,28 +163,36 @@ func (q *Queries) UpdateUserVisibilityOptIn(ctx context.Context, arg UpdateUserV
 }
 
 const upsertUser = `-- name: UpsertUser :one
-insert into users (oidc_sub, display_name, email, primary_role, is_admin)
-values ($1, $2, $3, $4, $5)
+insert into users (oidc_sub, display_name, email, primary_role, is_admin, visibility_claims)
+values ($1, $2, $3, $4, $5,
+        coalesce($6::text[], '{}'))
 on conflict (oidc_sub) do update
-set display_name = excluded.display_name,
-    email        = excluded.email,
-    primary_role = excluded.primary_role,
-    is_admin     = excluded.is_admin,
-    last_seen_at = now()
+set display_name      = excluded.display_name,
+    email             = excluded.email,
+    primary_role      = excluded.primary_role,
+    is_admin          = excluded.is_admin,
+    visibility_claims = excluded.visibility_claims,
+    last_seen_at      = now()
 returning id, oidc_sub, display_name, email, primary_role, is_admin, view_mode, theme, created_at, last_seen_at, favorites_order, favorites_separate_tab, favorites_seeded, locale, favorites_manual_seeded, visibility_claims, visibility_optin
 `
 
 type UpsertUserParams struct {
-	OidcSub     string      `json:"oidc_sub"`
-	DisplayName string      `json:"display_name"`
-	Email       pgtype.Text `json:"email"`
-	PrimaryRole string      `json:"primary_role"`
-	IsAdmin     bool        `json:"is_admin"`
+	OidcSub          string      `json:"oidc_sub"`
+	DisplayName      string      `json:"display_name"`
+	Email            pgtype.Text `json:"email"`
+	PrimaryRole      string      `json:"primary_role"`
+	IsAdmin          bool        `json:"is_admin"`
+	VisibilityClaims []string    `json:"visibility_claims"`
 }
 
 // Called on every login: insert the OIDC subject or refresh the mutable fields.
-// primary_role and is_admin are re-derived from claims each login (docs/02 §6);
-// user prefs (view_mode, theme) are intentionally not touched here.
+// primary_role, is_admin and visibility_claims are re-derived from claims each
+// login (docs/02 §6, docs/specs/service-visibility.md §4), so losing the group
+// at the IdP loses the access at next login. User prefs (view_mode, theme) are
+// intentionally not touched here, and neither is visibility_optin: the claims
+// are recomputed, the user's own opt-ins are never overwritten by a login.
+// coalesce keeps a nil slice meaning "no claim-granted slugs" rather than
+// violating the column's not-null constraint.
 func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, upsertUser,
 		arg.OidcSub,
@@ -192,6 +200,7 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		arg.Email,
 		arg.PrimaryRole,
 		arg.IsAdmin,
+		arg.VisibilityClaims,
 	)
 	var i User
 	err := row.Scan(

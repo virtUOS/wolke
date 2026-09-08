@@ -55,8 +55,9 @@ oidc:
 #   grant: opt-in  — the user enables it in the account menu, after confirming
 #                    `warning` (required: "may vanish, data is not migrated").
 #   grant: claim   — the IdP grants it through a (possibly nested) claim, like
-#                    oidc.admin; requires `claim` + `match`. Login-side
-#                    derivation ships in the spec's Stage 2; configurable now.
+#                    oidc.admin; requires `claim` + `match`. Derived on every
+#                    login, so removing the group at the IdP revokes access at
+#                    the next login (docs/runbooks/grant-visibility-group.md).
 # `label` is the badge on the tile (optional; defaults to the capitalized slug).
 # Leave the list out (the default) and every service is public — no UI changes.
 visibility: []
@@ -68,8 +69,8 @@ visibility: []
 #      en: "Experimental services can disappear at any time without notice; data may be lost and will not be migrated."
 #  - slug: it-infra
 #    label:   { de: "IT-Infrastruktur", en: "IT infrastructure" }
-#    grant:   claim
-#    claim:   groups
+#    grant:   claim          # live: membership is read from the claim at login
+#    claim:   groups         # nested dot-paths work too, e.g. realm_access.roles
 #    match:   it-service-admins
 
 # Branding / theme — applied by the SPA as CSS variables at runtime. Keep the
