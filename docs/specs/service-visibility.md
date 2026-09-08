@@ -1,7 +1,8 @@
 # Spec — Service visibility: experimental opt-in (#34) and claim-gated groups (#121)
 
-Status: **PLANNED — awaiting go-ahead and the three open decisions in §7.**
-Owner: supervisor session · Written 2026-09-08
+Status: **PLANNED — awaiting go-ahead and the two open decisions in §7.**
+Owner: supervisor session · Written 2026-09-08, simplified 2026-09-08 (no tabs, relaxed
+confidentiality — see §1.1)
 Issues: **#34** (experimental mode, stakeholder request), **#121** (visibility groups),
 **#36** (group-scoped categories — subsumed, see §6).
 
@@ -13,9 +14,24 @@ and differ only in **who decides** and **how it is shown**:
 | | #34 experimental | #121 groups (IT infrastructure) |
 |---|---|---|
 | Who grants access | the user, opting in | the IdP, via a claim |
-| Confidentiality | none — not secret, just off by default | **required** — a non-member must not learn it exists |
-| Display | inline in the normal views, clearly labelled | its own tab |
+| Confidentiality | none — not secret, just off by default | hidden, not classified (§1.1) |
+| Display | inline in the normal views, clearly labelled | inline too (§1.1) |
 | Extra requirement | warning at opt-in ("data may vanish, no migration") | Keycloak group mapper docs |
+
+### 1.1 Two simplifications (user decision, 2026-09-08)
+
+**No tabs — everything renders inline.** A restricted service sits in an ordinary category
+alongside everything else; non-holders simply never see it, so the category appears empty and
+drops out for them. This removes the `display` axis from the config, the per-group tab, and the
+mobile tab-strip work at 324px — which was the riskiest UI in the whole feature.
+
+**Confidentiality is "hidden", not "classified".** The bar is *other users do not see these
+services*, not *a determined user cannot prove they exist*. Note this changes the design less
+than it sounds: because every read surface funnels through one seam (§3), filtering them all
+costs the same either way. What it relaxes is the edge-case surface — a favourite of a service
+that later became invisible, or a search result count, need care but not paranoia. Recommendation
+kept regardless: the compile-time-safe snapshot type in §3 is an hour's work and rules out a
+whole class of future leak, so build it even at the lower bar.
 
 Building them separately means two service-level markers, two per-user membership notions, two
 filter implementations across the same six read surfaces, and two test suites — then a merge
@@ -36,7 +52,6 @@ visibility:
     grant:   claim                     # membership comes from the IdP
     claim:   groups                    # nested paths supported, like oidc.admin.claim
     match:   it-service-admins
-    display: tab                       # own tab next to Favoriten/Dienste
   - slug: experimental
     label:   { de: "Experimentell", en: "Experimental" }
     grant:   opt-in                    # the user enables it in the account menu
@@ -45,7 +60,6 @@ visibility:
                     werden nicht migriert.",
                en: "Experimental services can disappear at any time without notice;
                     data may be lost and will not be migrated." }
-    display: inline                    # in the normal views, with the label as a badge
 ```
 
 No configured entries → **zero behaviour change**, every service public, no new UI anywhere.
@@ -68,6 +82,13 @@ verified 2026-09-08:
 So filtering lands in **one seam**, not in six SQL queries: `Snapshot.VisibleTo(held []string)`
 returning a narrowed snapshot. Search needs no SQL change — a restricted id simply fails to
 resolve, and the result count follows.
+
+**`VisibleTo` must narrow categories too.** `/api/catalog` returns `categories` as its own list,
+and the SPA renders the category filter pills straight from it (`Dashboard.tsx`). Without
+narrowing, a non-holder would see an empty "IT-Infrastruktur" pill that filters to nothing —
+leaking the name and offering a dead control. Dropping categories with no visible service for
+this user is what produces the "invisible category" effect, and it is three lines in the same
+seam.
 
 **Make filtering non-optional by construction.** The narrowed snapshot should be the only type
 the handlers can consume (e.g. `cache.Get` yields a raw snapshot whose service accessors are
@@ -99,9 +120,10 @@ decision here — worth the extra hour.
   gated behind a confirm dialog carrying the configured `warning` text. Services appear inline in
   the normal views with the slug's label as a badge — reuse the tile's existing status-label slot
   (`services.tag` styling), no new tile anatomy. Turning it off hides them again; nothing is lost.
-- **Tab flavour (#121)**: one extra tab per held `display: tab` slug, labelled from config.
-  The mobile tab strip must stay viewport-clean with three or four tabs at 360/390 and pass at
-  324 (CLAUDE.md) — the known risk of this half.
+- **Claim flavour (#121)**: no UI of its own. Held services appear inline in the normal views
+  and search exactly like public ones (badged with the slug's label, same as the opt-in flavour);
+  their category renders for holders and disappears for everyone else. No tab, no tab strip, no
+  new viewport states — the difference from #34 is purely *who* holds the slug.
 - **Admin**: the service form and the MCP propose path get a visibility selector
   (Öffentlich / each configured label). Admins always see everything in the admin views.
 - `/api/me` exposes the held set (the UI needs it for tabs and the toggle state).
@@ -115,12 +137,12 @@ Close #36 as subsumed when this ships, or keep it open narrowed to invites.
 
 ## 7. Open decisions (settle at kickoff)
 
-1. For a **holder**, does a restricted service also appear in the normal views and search, or
-   only in its tab? (Proposal: everywhere — the restriction is about non-holders. Note this
-   makes `display` purely additive: `tab` adds a tab, `inline` does not.)
-2. May `role_defaults` include restricted services? (Proposal: **no** — default views stay
+1. May `role_defaults` include restricted services? (Proposal: **no** — default views stay
    public-only; simpler, and avoids a default view that differs per holder.)
-3. Announcement audiences per visibility slug? (Proposal: out of scope v1.)
+2. Announcement audiences per visibility slug? (Proposal: out of scope v1.)
+
+(A third decision — whether holders see restricted services outside their tab — became moot with
+the no-tabs simplification: everything is inline, for holders, everywhere.)
 
 ## 8. Delivery in two stages, one mechanism
 
@@ -129,8 +151,9 @@ types validated, `VisibleTo` seam + all read surfaces + MCP, admin write path, o
 the warning dialog, inline badge, `/api/me`. Ships experimental mode end to end; the claim
 plumbing is present but unused until a deployment configures a `grant: claim` entry.
 
-**Stage 2 — #121's tab.** Claim-derived membership at login, the extra tab per held slug and its
-mobile strip work, Keycloak group-mapper docs, admin runbook.
+**Stage 2 — #121's claim grants.** Claim-derived membership recomputed at login (the `is_admin`
+pattern), Keycloak group-mapper docs, admin runbook. **No UI work at all** — Stage 1 already
+renders held services inline; Stage 2 only adds a second way to hold a slug.
 
 Building Stage 1 to Stage 2's confidentiality standard from the start is the point: #34 alone
 would tolerate a leak, #121 would not, and the second one to arrive must not require reworking
@@ -138,15 +161,16 @@ the first.
 
 ## 9. Estimate
 
-| | Combined (this spec) | Separately |
+| | Combined, simplified (this spec) | Separately, with tabs |
 |---|---|---|
-| Stage 1 / #34 | 1–2 sessions (opus) | ~2 sessions |
-| Stage 2 / #121 | 1–1.5 sessions (opus) | ~2 sessions + rework of #34's filter |
-| **Total** | **2.5–3.5 coding sessions** | **4+, with two divergent filter paths** |
+| Stage 1 / #34 | 1–1.5 sessions (opus) | ~2 sessions |
+| Stage 2 / #121 | 0.5–1 session (opus) | ~2 sessions + rework of #34's filter |
+| **Total** | **2–2.5 coding sessions** | **4+, with two divergent filter paths** |
 
-The bulk of Stage 1 is the security test surface (one "non-holder cannot see it" test per read
-surface), not the feature code. The riskiest half hour is the compile-time-safe snapshot type;
-the riskiest UI is Stage 2's tab strip at 324px.
+Dropping the tabs took roughly a session out of Stage 2 (tab strip, mobile 324px states, per-tab
+e2e) and simplified the config. The bulk of Stage 1 remains the test surface — one "non-holder
+cannot see it" test per read surface — not the feature code. The riskiest half hour is still the
+compile-time-safe snapshot type.
 
 ## 10. Definition of done
 
@@ -155,6 +179,7 @@ the riskiest UI is Stage 2's tab strip at 324px.
   defaults, search, favourites, frequent, click, catalog MCP.
 - Opt-in flow: toggle + warning dialog, services appear/disappear, badge visible, e2e at the full
   viewport matrix.
-- Claim flow: membership re-derived at login; revoking the group revokes access at next login.
+- Claim flow: membership re-derived at login; revoking the group revokes access at next login;
+  a held service renders inline for holders and its category vanishes for everyone else.
 - Docs: `config.example.yaml`, docs/01 §3/§5, docs/02 §4/§6/§8/§9, Keycloak guide, admin runbook.
 - Full gates incl. `make e2e`.
