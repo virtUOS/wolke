@@ -1,6 +1,6 @@
 # Spec — Service visibility: experimental opt-in (#34) and claim-gated groups (#121)
 
-Status: **PLANNED — awaiting go-ahead and the two open decisions in §7.**
+Status: **READY TO IMPLEMENT — all decisions settled (§7). Stage 1 first.**
 Owner: supervisor session · Written 2026-09-08, simplified 2026-09-08 (no tabs, relaxed
 confidentiality — see §1.1)
 Issues: **#34** (experimental mode, stakeholder request), **#121** (visibility groups),
@@ -135,14 +135,15 @@ tab: "RZ infrastructure" becomes a slug, not a category. Its only genuine remain
 **invite-based** membership (neither claim nor self-serve), which this spec does not cover.
 Close #36 as subsumed when this ships, or keep it open narrowed to invites.
 
-## 7. Open decisions (settle at kickoff)
+## 7. Decisions (settled 2026-09-08)
 
-1. May `role_defaults` include restricted services? (Proposal: **no** — default views stay
-   public-only; simpler, and avoids a default view that differs per holder.)
-2. Announcement audiences per visibility slug? (Proposal: out of scope v1.)
-
-(A third decision — whether holders see restricted services outside their tab — became moot with
-the no-tabs simplification: everything is inline, for holders, everywhere.)
+1. **`role_defaults` may not reference a restricted service.** Default views stay public-only:
+   validated in `/internal/service` on the role-defaults write path (reject with a field error
+   naming the service), and the admin role-defaults picker only offers public services. Keeps
+   every role's default view identical for every user of that role.
+2. **Announcement audiences stay role-based.** No per-visibility-slug audience in v1.
+3. (Moot with the no-tabs simplification: holders see restricted services inline, everywhere —
+   normal views and search alike.)
 
 ## 8. Delivery in two stages, one mechanism
 
