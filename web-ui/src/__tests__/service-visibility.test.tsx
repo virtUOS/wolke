@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -237,5 +237,31 @@ describe('Role-defaults picker', () => {
     const options = within(select).getAllByRole('option').map((o) => o.textContent)
     expect(options).toContain('VPN')
     expect(options).not.toContain('Zettelkasten Labor')
+  })
+})
+
+// Review finding 2: an id in the role's saved list that the (narrowed) catalog
+// cannot resolve — a restricted default this admin does not hold, or a service
+// that left the catalog — must render as an unavailable placeholder row and
+// survive Save, never be silently dropped and deleted.
+describe('Role-defaults editor with an unresolvable default', () => {
+  it('renders a placeholder row and preserves the id on Save', async () => {
+    const roles: Role[] = [{ slug: 'student', label: { de: 'Studierende', en: 'Students' } }]
+    vi.spyOn(api, 'roles').mockResolvedValue(roles)
+    vi.spyOn(api, 'catalog').mockResolvedValue({ services: [publicSvc], categories })
+    vi.spyOn(api, 'roleDefaults').mockResolvedValue({ service_ids: ['p1', 'hidden-1'] })
+    const save = vi.spyOn(api, 'setRoleDefaults').mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(withClient(<RoleDefaultsAdmin locale="de" />))
+
+    const list = await screen.findByRole('list')
+    const rows = () => within(list).getAllByRole('listitem').map((li) => li.textContent ?? '')
+    // The list renders its empty-state row until the defaults arrive.
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(rows()[0]).toMatch(/VPN/)
+    expect(rows()[1]).toMatch(/Nicht verfügbar/)
+
+    await user.click(screen.getByRole('button', { name: 'Speichern' }))
+    expect(save).toHaveBeenCalledWith('student', ['p1', 'hidden-1'])
   })
 })

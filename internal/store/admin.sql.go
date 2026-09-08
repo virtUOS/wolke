@@ -307,6 +307,37 @@ func (q *Queries) ListServiceCategorySlugs(ctx context.Context, serviceID pgtype
 	return items, nil
 }
 
+const purgeRoleDefaultsForService = `-- name: PurgeRoleDefaultsForService :many
+with purged as (
+    delete from role_defaults where service_id = $1 returning role
+)
+select distinct role from purged order by role
+`
+
+// Deletes every role's default-view row for one service and reports which
+// roles lost one (for the audit diff). Used when a service becomes restricted:
+// default views stay public-only (docs/specs/service-visibility.md §7.1), so
+// the write that restricts a service is the write that removes it as a default.
+func (q *Queries) PurgeRoleDefaultsForService(ctx context.Context, serviceID pgtype.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, purgeRoleDefaultsForService, serviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var role string
+		if err := rows.Scan(&role); err != nil {
+			return nil, err
+		}
+		items = append(items, role)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const purgeRoleDefaultsNotIn = `-- name: PurgeRoleDefaultsNotIn :many
 with purged as (
     delete from role_defaults where role <> all($1::text[]) returning role

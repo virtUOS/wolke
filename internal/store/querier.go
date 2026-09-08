@@ -115,6 +115,11 @@ type Querier interface {
 	// be null for notices shown immediately, so fall back to created_at.
 	PurgeAnnouncementsBefore(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
 	PurgeOldClicks(ctx context.Context, cutoff pgtype.Timestamptz) (int64, error)
+	// Deletes every role's default-view row for one service and reports which
+	// roles lost one (for the audit diff). Used when a service becomes restricted:
+	// default views stay public-only (docs/specs/service-visibility.md §7.1), so
+	// the write that restricts a service is the write that removes it as a default.
+	PurgeRoleDefaultsForService(ctx context.Context, serviceID pgtype.UUID) ([]string, error)
 	// Deletes the default-view rows of every role outside the configured set and
 	// reports which roles those were (for the audit diff). One statement, so the
 	// read and the delete cannot disagree. The role set is config, not schema —

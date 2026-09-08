@@ -206,6 +206,16 @@ func CreateService(ctx context.Context, db AdminDB, actor Actor, vis config.Visi
 
 // UpdateService edits a service in place, replacing its category set, and audits
 // the before/after diff.
+//
+// Restricting a service (visibility set) also purges its role-default rows in
+// the same transaction and records the affected roles as `purged_roles` in the
+// diff, the way SetRoleDefaults reports its own purge. Default views are
+// public-only (service-visibility spec §7.1): without this, a public default
+// later made experimental would reach holders through /api/catalog/defaults
+// and wedge that role's editor, whose every save would then be rejected. The
+// admin's intent is unambiguous, so the write follows through rather than
+// bouncing them into a two-step dance. (CreateService needs no counterpart: a
+// fresh id cannot be anyone's default yet.)
 func UpdateService(ctx context.Context, db AdminDB, actor Actor, vis config.VisibilitySet, id pgtype.UUID, in Draft) (AdminService, error) {
 	if err := validateServiceInput(vis, in); err != nil {
 		return AdminService{}, err
@@ -242,10 +252,20 @@ func UpdateService(ctx context.Context, db AdminDB, actor Actor, vis config.Visi
 			return err
 		}
 		out = toAdminService(svc, in.Categories)
-		return audit(ctx, q, actor, "service.update", id, map[string]any{
+		diff := map[string]any{
 			"before": toAdminService(before, beforeSlugs),
 			"after":  out,
-		})
+		}
+		if in.Visibility != "" {
+			purged, err := q.PurgeRoleDefaultsForService(ctx, id)
+			if err != nil {
+				return fmt.Errorf("purge role defaults of restricted service: %w", err)
+			}
+			if len(purged) > 0 {
+				diff["purged_roles"] = purged
+			}
+		}
+		return audit(ctx, q, actor, "service.update", id, diff)
 	})
 	return out, err
 }

@@ -75,3 +75,13 @@ select a.*, u.display_name as actor_name
 from audit_log a
 left join users u on u.id = a.actor_id
 order by a.created_at desc limit @lim;
+
+-- name: PurgeRoleDefaultsForService :many
+-- Deletes every role's default-view row for one service and reports which
+-- roles lost one (for the audit diff). Used when a service becomes restricted:
+-- default views stay public-only (docs/specs/service-visibility.md §7.1), so
+-- the write that restricts a service is the write that removes it as a default.
+with purged as (
+    delete from role_defaults where service_id = @service_id returning role
+)
+select distinct role from purged order by role;

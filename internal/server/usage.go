@@ -17,8 +17,12 @@ import (
 // service launch from a documentation-link click. Fire-and-forget from the SPA;
 // returns 204.
 //
-// The metric label resolves through the user's narrowed view: a click on a
-// service the user cannot see mints no series (and reveals nothing).
+// The service is resolved through the user's narrowed view BEFORE anything is
+// recorded: a click on a service the user cannot see — restricted, soft-deleted
+// or unknown, all indistinguishable — writes no usage row, mints no metric
+// series, and answers exactly like a visible one, so the status is never an
+// existence oracle and the admin usage insights never carry a service the
+// clicking user was not shown.
 func recordClick(db usage.Store, cache *catalog.Cache, m *metrics.Metrics, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
@@ -46,16 +50,23 @@ func recordClick(db usage.Store, cache *catalog.Cache, m *metrics.Metrics, vis c
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_target", "Unknown click target.")
 			return
 		}
+		snap, err := visibleCatalog(r.Context(), cache, vis)
+		if err != nil {
+			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			return
+		}
+		svc, ok := snap.ServiceByID(body.ServiceID)
+		if !ok {
+			// Fire-and-forget from the SPA: a no-op success, not an error.
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		if err := usage.Record(r.Context(), db, user.ID, serviceID, user.PrimaryRole, target); err != nil {
 			httpx.WriteProblem(w, http.StatusInternalServerError, "click_failed", "Could not record the event.")
 			return
 		}
-		if m != nil && cache != nil {
-			if snap, err := visibleCatalog(r.Context(), cache, vis); err == nil {
-				if svc, ok := snap.ServiceByID(body.ServiceID); ok {
-					m.IncClick(svc.Name, user.PrimaryRole, target)
-				}
-			}
+		if m != nil {
+			m.IncClick(svc.Name, user.PrimaryRole, target)
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}

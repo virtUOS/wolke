@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -54,6 +55,7 @@ func toMeResponse(u store.User, vis config.VisibilitySet) meResponse {
 	// The stored opt-in list is reported filtered the same way it is granted:
 	// a slug that no longer exists or changed grant type is not "on".
 	optin := vis.Held(nil, u.VisibilityOptin)
+	held := heldByUser(u, vis)
 	return meResponse{
 		ID:                   uuidString(u.ID),
 		DisplayName:          u.DisplayName,
@@ -66,11 +68,31 @@ func toMeResponse(u store.User, vis config.VisibilitySet) meResponse {
 		FavoritesOrder:       u.FavoritesOrder,
 		FavoritesSeparateTab: u.FavoritesSeparateTab,
 		Visibility: meVisibility{
-			Held:    heldByUser(u, vis),
+			Held:    held,
 			OptIn:   optin,
-			Entries: vis.List(),
+			Entries: visibleEntries(u, vis, held),
 		},
 	}
+}
+
+// visibleEntries is what one user may learn about the configured groups: the
+// opt-in ones (they render as the user's own switches) plus the labels of
+// whatever else they hold (for the tile badge). A claim-granted group the user
+// does not hold is never named here — categories are narrowed precisely so a
+// group's name cannot leak, and /api/me must not undo that. Admins get the
+// whole list: the service form is the one consumer that needs it.
+func visibleEntries(u store.User, vis config.VisibilitySet, held []string) []config.Visibility {
+	all := vis.List()
+	if u.IsAdmin {
+		return all
+	}
+	out := make([]config.Visibility, 0, len(all))
+	for _, v := range all {
+		if v.Grant == config.GrantOptIn || slices.Contains(held, v.Slug) {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func uuidString(u pgtype.UUID) string {

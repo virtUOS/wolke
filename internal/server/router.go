@@ -166,16 +166,14 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 		if deps.Favorites != nil {
 			if deps.Catalog != nil {
 				pr.With(requireUserJSON).Get("/api/favorites", listFavorites(deps.Catalog, deps.Favorites, vis))
+				pr.With(requireUserJSON).Post("/api/favorites/items", addFavorite(deps.Favorites, deps.Catalog, vis))
 			}
-			pr.With(requireUserJSON).Post("/api/favorites/items", addFavorite(deps.Favorites))
 			pr.With(requireUserJSON).Delete("/api/favorites/items", removeFavorite(deps.Favorites))
 			pr.With(requireUserJSON).Put("/api/favorites/order", setFavoritesOrder(deps.Favorites))
 		}
-		if deps.Usage != nil {
+		if deps.Usage != nil && deps.Catalog != nil {
 			pr.With(requireUserJSON).Post("/api/events/click", recordClick(deps.Usage, deps.Catalog, deps.Metrics, vis))
-			if deps.Catalog != nil {
-				pr.With(requireUserJSON).Get("/api/usage/frequent", frequent(deps.Catalog, deps.Usage, vis))
-			}
+			pr.With(requireUserJSON).Get("/api/usage/frequent", frequent(deps.Catalog, deps.Usage, vis))
 		}
 		if deps.Announce != nil {
 			pr.With(requireUserJSON).Get("/api/announcements", userAnnouncements(deps.Announce, roles))

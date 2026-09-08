@@ -14,8 +14,15 @@ import { mkdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-/** A lock older than this is a crashed worker's leftover, not a live holder. */
-const STALE_MS = 90_000
+/**
+ * A lock older than this is a crashed worker's leftover, not a live holder. The
+ * directory's mtime is set once at acquisition, so this measures the holder's
+ * AGE, not its liveness — it must exceed the longest a holder can legitimately
+ * run, i.e. the spec's own `test.setTimeout` (120 s), or a slow-but-alive
+ * holder gets its lock reclaimed and its `finally` then deletes the reclaimer's
+ * directory, cascading. Comfortably above that timeout.
+ */
+const STALE_MS = 180_000
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 

@@ -139,17 +139,31 @@ func (f *fakeSearch) InsertSearchEvent(_ context.Context, arg store.InsertSearch
 }
 
 type fakeFavorites struct {
-	service.FavoritesStore // nil: only the usage listing is reached
+	service.FavoritesStore // nil: only the methods below are reached
 	ids                    []pgtype.UUID
+	added                  *int
 }
 
 func (f fakeFavorites) ListFavoritesByUsage(context.Context, pgtype.UUID) ([]pgtype.UUID, error) {
 	return f.ids, nil
 }
+func (f fakeFavorites) NextFavoriteSort(context.Context, pgtype.UUID) (int32, error) { return 0, nil }
+func (f fakeFavorites) AddFavorite(context.Context, store.AddFavoriteParams) error {
+	*f.added++
+	return nil
+}
 
-type fakeUsage struct{ ids []pgtype.UUID }
+type fakeUsage struct {
+	ids      []pgtype.UUID
+	recorded *int
+}
 
-func (fakeUsage) RecordClick(context.Context, store.RecordClickParams) error { return nil }
+func (f fakeUsage) RecordClick(context.Context, store.RecordClickParams) error {
+	if f.recorded != nil {
+		*f.recorded++
+	}
+	return nil
+}
 func (f fakeUsage) FrequentServiceIDs(context.Context, store.FrequentServiceIDsParams) ([]pgtype.UUID, error) {
 	return f.ids, nil
 }
@@ -198,13 +212,12 @@ func TestNonHolderCannotObtainRestrictedService(t *testing.T) {
 		s := &fakeSearch{ids: both}
 		h := search(cache, s, vis)
 		assertOnlyPublic(t, "/api/search", serveServices(t, h, http.MethodGet, "/api/search?q=secret", "", nonHolder()))
-		// The logged result count follows the narrowed list — no count oracle.
-		if len(s.logged) != 1 || s.logged[0] != 1 {
-			t.Fatalf("logged result counts = %v, want [1] for the non-holder", s.logged)
-		}
 		assertBoth(t, "/api/search", serveServices(t, h, http.MethodGet, "/api/search?q=secret", "", holder()))
-		if s.logged[1] != 2 {
-			t.Fatalf("logged result count for the holder = %d, want 2", s.logged[1])
+		// The zero-result insights log the catalog's match count, not the
+		// viewer's slice: a non-holder's search for a restricted name is not a
+		// keyword gap for the admin worklist (review finding 5).
+		if len(s.logged) != 2 || s.logged[0] != 2 || s.logged[1] != 2 {
+			t.Fatalf("logged result counts = %v, want [2 2] (pre-narrowing) for both viewers", s.logged)
 		}
 	})
 
@@ -215,44 +228,130 @@ func TestNonHolderCannotObtainRestrictedService(t *testing.T) {
 	})
 
 	t.Run("frequent", func(t *testing.T) {
-		h := frequent(cache, fakeUsage{both}, vis)
+		h := frequent(cache, fakeUsage{ids: both}, vis)
 		assertOnlyPublic(t, "/api/usage/frequent", serveServices(t, h, http.MethodGet, "/api/usage/frequent", "", nonHolder()))
 		assertBoth(t, "/api/usage/frequent", serveServices(t, h, http.MethodGet, "/api/usage/frequent", "", holder()))
 	})
 
-	t.Run("click metric", func(t *testing.T) {
+	t.Run("click", func(t *testing.T) {
 		m := metrics.New()
-		h := recordClick(fakeUsage{}, cache, m, vis)
+		recorded := 0
+		h := recordClick(fakeUsage{recorded: &recorded}, cache, m, vis)
 		body := `{"service_id":"` + restrictedID + `"}`
 
+		// Non-holder: nothing recorded, no metric series, and the same 204 an
+		// unknown id gets — no existence oracle in the status.
 		rec := httptest.NewRecorder()
 		h(rec, reqWithUser(http.MethodPost, "/api/events/click", body, nonHolder()))
 		if rec.Code != http.StatusNoContent {
 			t.Fatalf("status = %d, want 204", rec.Code)
 		}
+		if recorded != 0 {
+			t.Fatalf("a non-holder's click wrote %d usage rows for the restricted service, want 0", recorded)
+		}
 		if n := testutil.CollectAndCount(m.ClicksTotal); n != 0 {
 			t.Fatalf("a non-holder's click minted %d click series naming the restricted service, want 0", n)
+		}
+		rec = httptest.NewRecorder()
+		h(rec, reqWithUser(http.MethodPost, "/api/events/click", `{"service_id":"33333333-3333-3333-3333-333333333333"}`, nonHolder()))
+		if rec.Code != http.StatusNoContent || recorded != 0 {
+			t.Fatalf("unknown id: status = %d, recorded = %d; want 204 and nothing recorded", rec.Code, recorded)
 		}
 
 		rec = httptest.NewRecorder()
 		h(rec, reqWithUser(http.MethodPost, "/api/events/click", body, holder()))
-		if rec.Code != http.StatusNoContent {
-			t.Fatalf("status = %d, want 204", rec.Code)
+		if rec.Code != http.StatusNoContent || recorded != 1 {
+			t.Fatalf("holder: status = %d, recorded = %d; want 204 and one row", rec.Code, recorded)
 		}
 		if got := testutil.ToFloat64(m.ClicksTotal.WithLabelValues("Secret Lab", "student", "service")); got != 1 {
 			t.Fatalf("holder click counter = %v, want 1", got)
 		}
 	})
+
+	t.Run("add favorite", func(t *testing.T) {
+		added := 0
+		h := addFavorite(fakeFavorites{added: &added}, cache, vis)
+		body := `{"service_id":"` + restrictedID + `"}`
+
+		// Non-holder: not stored, and the same 404 an unknown id gets.
+		rec := httptest.NewRecorder()
+		h(rec, reqWithUser(http.MethodPost, "/api/favorites/items", body, nonHolder()))
+		if rec.Code != http.StatusNotFound || added != 0 {
+			t.Fatalf("non-holder: status = %d, added = %d; want 404 and nothing stored", rec.Code, added)
+		}
+		rec = httptest.NewRecorder()
+		h(rec, reqWithUser(http.MethodPost, "/api/favorites/items", `{"service_id":"33333333-3333-3333-3333-333333333333"}`, nonHolder()))
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("unknown id: status = %d, want 404 (indistinguishable from restricted)", rec.Code)
+		}
+
+		rec = httptest.NewRecorder()
+		h(rec, reqWithUser(http.MethodPost, "/api/favorites/items", body, holder()))
+		if rec.Code != http.StatusNoContent || added != 1 {
+			t.Fatalf("holder: status = %d, added = %d; want 204 and one row", rec.Code, added)
+		}
+	})
 }
 
-// /api/me exposes the held set, the user's own opt-in list, and the configured
-// entries (labels + warnings) — and nothing when nothing is configured.
+// /api/me exposes the held set, the user's own opt-in list, and the entries a
+// user may learn about: opt-in ones plus the labels of held slugs — never a
+// claim group they do not hold (that name is what category narrowing protects).
+// Admins get every entry; the service form needs them. Nothing when nothing is
+// configured.
 func TestMeExposesVisibility(t *testing.T) {
-	_, vis := visibilityFixture(t)
+	vis := (&config.Config{VisibilityEntries: []config.VisibilityEntry{
+		{Slug: "experimental", Grant: config.GrantOptIn, Label: map[string]string{"de": "Experimentell"}, Warning: map[string]string{"de": "Kann verschwinden."}},
+		{Slug: "it-infra", Grant: config.GrantClaim, Claim: "groups", Match: "x", Label: map[string]string{"de": "IT-Infrastruktur"}},
+	}}).Visibility()
 
+	entrySlugs := func(b meResponse) []string {
+		out := []string{}
+		for _, e := range b.Visibility.Entries {
+			out = append(out, e.Slug)
+		}
+		return out
+	}
+
+	// A non-admin non-holder learns about the opt-in group only.
 	rec := httptest.NewRecorder()
-	me(vis)(rec, reqWithUser(http.MethodGet, "/api/me", "", holder()))
+	me(vis)(rec, reqWithUser(http.MethodGet, "/api/me", "", nonHolder()))
 	var body meResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if got := entrySlugs(body); len(got) != 1 || got[0] != "experimental" {
+		t.Errorf("non-holder entries = %v, want [experimental] only", got)
+	}
+	if strings.Contains(rec.Body.String(), "IT-Infrastruktur") || strings.Contains(rec.Body.String(), "it-infra") {
+		t.Errorf("/api/me leaks a claim group the user does not hold: %s", rec.Body.String())
+	}
+
+	// Holding the claim slug reveals its label (for the badge).
+	claimHolder := nonHolder()
+	claimHolder.VisibilityClaims = []string{"it-infra"}
+	rec = httptest.NewRecorder()
+	me(vis)(rec, reqWithUser(http.MethodGet, "/api/me", "", claimHolder))
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if got := entrySlugs(body); len(got) != 2 {
+		t.Errorf("claim holder entries = %v, want both", got)
+	}
+
+	// An admin sees the whole list: the service form offers every group.
+	adminUser := nonHolder()
+	adminUser.IsAdmin = true
+	rec = httptest.NewRecorder()
+	me(vis)(rec, reqWithUser(http.MethodGet, "/api/me", "", adminUser))
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if got := entrySlugs(body); len(got) != 2 {
+		t.Errorf("admin entries = %v, want both", got)
+	}
+
+	rec = httptest.NewRecorder()
+	me(vis)(rec, reqWithUser(http.MethodGet, "/api/me", "", holder()))
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}

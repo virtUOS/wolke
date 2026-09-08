@@ -77,10 +77,18 @@ func search(c *catalog.Cache, s SearchStore, vis config.VisibilitySet) http.Hand
 		// Best-effort log for the zero-result insights (docs/01 §4.6): a failure
 		// here must never break or slow the actual search response. Skip very short
 		// queries to keep mid-typing fragments out of the insights worklist.
+		//
+		// The logged count is the PRE-narrowing one (len(ids), what the catalog
+		// matched), not what this viewer was shown. The event measures the
+		// catalog's keyword coverage for the admin worklist; a non-holder
+		// searching a restricted service's name is not a gap in coverage, and
+		// logging it as zero results would fill the worklist with false gaps that
+		// are already covered. The count is an aggregate, never tied to a user,
+		// so it reveals nothing to the viewer either.
 		if norm := normalizeSearchQuery(q); len([]rune(norm)) >= minLoggedQueryLen {
 			if err := s.InsertSearchEvent(r.Context(), store.InsertSearchEventParams{
 				QueryNorm:   norm,
-				ResultCount: int32(len(services)),
+				ResultCount: int32(len(ids)),
 			}); err != nil {
 				slog.WarnContext(r.Context(), "search event log failed", "error", err)
 			}

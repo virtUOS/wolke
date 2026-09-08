@@ -265,6 +265,9 @@ const de = {
     moveDown: 'Nach unten',
     remove: 'Entfernen',
     noRoleDefaults: 'Keine Standarddienste für diese Rolle.',
+    // Ein gespeicherter Standarddienst, den der Katalog dieser Admin-Sitzung
+    // nicht auflösen kann (eingeschränkt oder nicht mehr im Katalog).
+    unavailableService: 'Nicht verfügbar',
     add: 'Hinzufügen',
     chooseService: 'Dienst wählen…',
     saved: 'Gespeichert.',
@@ -491,6 +494,7 @@ const en: Strings = {
     moveDown: 'Move down',
     remove: 'Remove',
     noRoleDefaults: 'No default services for this role.',
+    unavailableService: 'Unavailable',
     add: 'Add',
     chooseService: 'Choose a service…',
     saved: 'Saved.',
