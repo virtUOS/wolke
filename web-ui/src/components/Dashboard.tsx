@@ -18,6 +18,7 @@ import {
   usePrefsMutation,
   useResultAnnouncement,
   useSearch,
+  useVisibilityOptInMutation,
 } from '@/lib/hooks'
 import { useAnnouncements } from '@/lib/admin-hooks'
 import { AdminView } from './admin/AdminView'
@@ -117,6 +118,14 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
 
   useApplyTheme(me.theme)
   const prefs = usePrefsMutation()
+  const visibilityOptIn = useVisibilityOptInMutation()
+  // Badge labels for the visibility groups this user holds, by slug — the
+  // tile renders the group's name in its status slot (spec §5).
+  const visibilityLabels = useMemo(() => {
+    const out: Record<string, string> = {}
+    for (const e of me.visibility.entries) out[e.slug] = localized(e.label, locale)
+    return out
+  }, [me.visibility.entries, locale])
   const announcements = useAnnouncements()
   const catalog = useCatalog()
   const favorites = useFavorites()
@@ -294,6 +303,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     onSetLocale: (next: Me['locale']) => prefs.mutate({ locale: next }),
     onAdmin: () => navigate({ ...view, admin: true }),
     isMobile,
+    onSetVisibilityOptIn: (optin: string[]) => visibilityOptIn.mutate(optin),
     focusKey: adminOpen ? 'admin' : 'dashboard',
   }
 
@@ -469,6 +479,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             layout={layout}
             actions={actions}
             emptyMessage={tr.dash.favEmpty}
+            visibilityLabels={visibilityLabels}
           />
         )
       ) : searchFailed ? (
@@ -485,6 +496,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           layout={layout}
           actions={actions}
           emptyMessage={searching ? tr.dash.searchEmpty(query) : undefined}
+          visibilityLabels={visibilityLabels}
         />
       )}
     </DashboardShell>

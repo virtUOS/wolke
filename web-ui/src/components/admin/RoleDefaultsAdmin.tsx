@@ -88,7 +88,10 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
     setOrdered((o) => (o.includes(id) ? o : [...o, id]))
   }
 
-  const available = services.filter((s: Service) => !visible.includes(s.id))
+  // Public services only (docs/specs/service-visibility.md §7.1): a default
+  // view is the same for every user of a role, so a restricted service can
+  // neither be offered here nor — the server enforces it — saved.
+  const available = services.filter((s: Service) => !s.visibility && !visible.includes(s.id))
 
   return (
     <div className="space-y-4">

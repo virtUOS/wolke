@@ -73,6 +73,12 @@ const de = {
     langAuto: 'Automatisch',
     langDe: 'Deutsch',
     langEn: 'English',
+    // Sichtbarkeit (Issue #34): Opt-in-Gruppen wie „Experimentell" schaltet
+    // der Nutzer selbst frei — nach einer Warnung.
+    visibility: 'Sichtbarkeit',
+    visibilityToggle: (label: string) => `${label} anzeigen`,
+    visibilityEnableTitle: (label: string) => `${label} anzeigen?`,
+    visibilityEnable: 'Anzeigen',
   },
   greeting: {
     salutation: (): string => {
@@ -127,6 +133,8 @@ const de = {
     // screen-reader user hears what a sighted user sees (the badge) and is warned
     // about the new tab. Empty when there's no status.
     status: (tag: string | undefined): string => (tag === 'wartung' ? ' (in Wartung)' : tag === 'beta' ? ' (Beta)' : ''),
+    // The visibility badge, folded into the accessible name like the status.
+    visibility: (label: string): string => (label ? ` (${label})` : ''),
     newTab: ' (öffnet in neuem Tab)',
     addFav: (name: string) => `${name} zu Favoriten hinzufügen`,
     removeFav: (name: string) => `${name} aus Favoriten entfernen`,
@@ -198,6 +206,9 @@ const de = {
     statusNone: 'Keins',
     statusBeta: 'Beta',
     statusWartung: 'Wartung',
+    fVisibility: 'Sichtbarkeit',
+    visibilityPublic: 'Öffentlich',
+    visibilityHint: 'Eingeschränkte Dienste sehen nur Nutzer, die die Gruppe halten; sie können nicht in Rollen-Standardansichten stehen.',
     fIcon: 'Icon',
     iconSearch: 'Icon suchen…',
     iconNoResults: 'Keine Icons gefunden.',
@@ -301,6 +312,10 @@ const en: Strings = {
     langAuto: 'Automatic',
     langDe: 'Deutsch',
     langEn: 'English',
+    visibility: 'Visibility',
+    visibilityToggle: (label: string) => `Show ${label}`,
+    visibilityEnableTitle: (label: string) => `Show ${label}?`,
+    visibilityEnable: 'Show',
   },
   greeting: {
     salutation: () => {
@@ -346,6 +361,7 @@ const en: Strings = {
   tile: {
     open: (name: string, docsOnly: boolean) => (docsOnly ? `${name} – open documentation` : `Open ${name}`),
     status: (tag: string | undefined) => (tag === 'wartung' ? ' (in maintenance)' : tag === 'beta' ? ' (Beta)' : ''),
+    visibility: (label: string) => (label ? ` (${label})` : ''),
     newTab: ' (opens in new tab)',
     addFav: (name: string) => `Add ${name} to favorites`,
     removeFav: (name: string) => `Remove ${name} from favorites`,
@@ -417,6 +433,9 @@ const en: Strings = {
     statusNone: 'None',
     statusBeta: 'Beta',
     statusWartung: 'Maintenance',
+    fVisibility: 'Visibility',
+    visibilityPublic: 'Public',
+    visibilityHint: 'Restricted services are only seen by users holding the group; they cannot be role defaults.',
     fIcon: 'Icon',
     iconSearch: 'Search icons…',
     iconNoResults: 'No icons found.',

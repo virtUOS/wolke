@@ -19,6 +19,11 @@ export interface Service {
   categories: string[]
   doc_only: boolean
   tag?: ServiceTag
+  // The visibility slug this service is restricted to (docs/specs/
+  // service-visibility.md). Only ever present on a service the current user
+  // holds — the server never sends a service the user may not see. The label
+  // for the badge comes from Me.visibility.entries.
+  visibility?: string
 }
 
 export interface Category {
@@ -50,6 +55,27 @@ export interface Me {
   // 'manual' is the user's own arrangement, reordered via PUT /api/favorites/order.
   favorites_order: FavoritesOrder
   favorites_separate_tab: boolean
+  visibility: MeVisibility
+}
+
+// One configured service-visibility slug: a non-public group of services.
+// `claim` slugs are granted by the IdP; `opt-in` slugs the user enables in the
+// account menu after confirming the configured warning.
+export interface VisibilityEntry {
+  slug: string
+  label: Localized
+  grant: 'claim' | 'opt-in'
+  warning?: Localized
+}
+
+// The user's visibility state: the slugs they effectively hold, the ones they
+// opted into themselves (the toggle state), and every configured entry (labels
+// for tile badges, warnings for the opt-in dialog). All empty when the
+// deployment configures no visibility — then no visibility UI renders.
+export interface MeVisibility {
+  held: string[]
+  optin: string[]
+  entries: VisibilityEntry[]
 }
 
 export interface DefaultsView {
@@ -124,6 +150,9 @@ export const api = {
     getJSON<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`, signal),
   updatePrefs: (patch: Partial<Pick<Me, 'theme' | 'view_mode' | 'locale' | 'favorites_order' | 'favorites_separate_tab'>>) =>
     send<Me>('PATCH', '/api/me/prefs', patch),
+  // The whole list of opt-in visibility slugs the user has enabled (issue #34);
+  // answers with the refreshed Me.
+  setVisibilityOptIn: (optin: string[]) => send<Me>('PUT', '/api/me/visibility', { optin }),
 
   // favorites — a flat per-user set (no lists; docs/01 §4.4)
   favorites: (signal?: AbortSignal) => getJSON<{ services: Service[] }>('/api/favorites', signal),
@@ -188,6 +217,8 @@ export interface AdminService {
   tag?: ServiceTag
   // Search aliases (flat, language-agnostic). Search-only; not in /api/catalog.
   keywords: string[]
+  // Restricting visibility slug; absent = public.
+  visibility?: string
 }
 
 export interface ServiceDraft {
@@ -200,6 +231,8 @@ export interface ServiceDraft {
   // '' means "no status label"; the backend treats empty as unset.
   tag: ServiceTag | ''
   keywords: string[]
+  // '' = public; otherwise one of the configured visibility slugs.
+  visibility: string
 }
 
 export type Severity = 'info' | 'warning' | 'critical'

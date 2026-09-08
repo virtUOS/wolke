@@ -45,6 +45,7 @@ const ME: Me = {
   locale: 'de',
   favorites_order: 'usage',
   favorites_separate_tab: false,
+  visibility: { held: [], optin: [], entries: [] },
 }
 
 function jsonResponse(body: unknown) {

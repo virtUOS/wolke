@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { type AdminService, type Category } from '@/lib/api'
+import { localized, type AdminService, type Category } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { useAdminActions, useAdminServices } from '@/lib/admin-hooks'
+import { useMe } from '@/lib/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
@@ -14,6 +15,12 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
   const s = t(locale)
   const services = useAdminServices()
   const actions = useAdminActions()
+  // The configured visibility groups ride on /api/me (labels for the list, the
+  // selector's options for the form).
+  const me = useMe()
+  const visibilityOptions = me.data?.visibility.entries ?? []
+  const visibilityLabel = (slug: string) =>
+    localized(visibilityOptions.find((v) => v.slug === slug)?.label, locale) || slug
   const [mode, setMode] = useState<Mode>({ kind: 'list' })
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | undefined>()
@@ -34,6 +41,7 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
         key={initial?.id ?? 'new'}
         categories={categories}
         locale={locale}
+        visibilityOptions={visibilityOptions}
         initial={initial}
         error={formError}
         submitting={actions.createService.isPending || actions.updateService.isPending}
@@ -72,6 +80,7 @@ export function ServicesAdmin({ categories, locale }: { categories: Category[]; 
             <ListItem key={svc.id} className="flex-wrap">
               <span className="min-w-0 flex-1 hyphenate-compound">
                 <span className="font-medium">{svc.name}</span>
+                {svc.visibility && <Badge className="ml-2">{visibilityLabel(svc.visibility)}</Badge>}
                 {!svc.is_active && <Badge className="ml-2">{s.admin.inactive}</Badge>}
               </span>
               <span className="flex items-center gap-2">
