@@ -125,7 +125,10 @@ Adding staged category writes to the MCP is a separate change (it needs a second
 in `internal/adminmcp`) and is not in the §4 list.
 
 
-- No restricted category and no beta service → behaviour identical to today (regression test).
+- No restricted category and no beta service → the same services as today, served as one
+  shared view without copying (regression test). **Amended by `docs/specs/empty-facets.md`
+  (issue #139):** a category with no services is now dropped from the reader-facing catalog,
+  so the payload is no longer byte-identical to the raw catalog for a deployment that has one.
 - A beta service is invisible until the pref is on; then it appears in its own categories, badged,
   and the Beta filter appears. Turning the pref off hides them again.
 - A service in a restricted category is absent from catalog, defaults, search, favourites,

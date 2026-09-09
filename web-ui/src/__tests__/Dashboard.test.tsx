@@ -411,3 +411,153 @@ describe('the restricted marker on the dashboard (issue #121)', () => {
     expect(within(heading).queryByText(/Nur für/)).not.toBeInTheDocument()
   })
 })
+
+
+// Issue #139 (docs/specs/empty-facets.md §3): a facet pill is offered only when
+// it selects something. "In Wartung" used to render unconditionally and "Beta"
+// on the pref alone, so both could lead to an empty page. Categories are the
+// server's job — narrowing drops an empty one before it reaches the client
+// (internal/catalog) — so what is covered here is the two tag counts and the
+// stale-filter corrections they need.
+describe('empty facets are not offered (issue #139)', () => {
+  interface CatalogService {
+    id: string
+    name: string
+    tag?: string
+  }
+
+  /** Serves a catalog of the given services, all in one category. */
+  function stubCatalog(services: CatalogService[]) {
+    stubMatchMedia()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.startsWith('/api/catalog')) {
+          return jsonResponse({
+            services: services.map((s) => ({
+              id: s.id,
+              name: s.name,
+              description: { de: 'Beschreibung', en: 'Description' },
+              service_url: `https://${s.id}.example.edu`,
+              icon: 'shield',
+              categories: ['data'],
+              doc_only: false,
+              ...(s.tag ? { tag: s.tag } : {}),
+            })),
+            categories: [{ slug: 'data', label: { de: 'Netz & Daten', en: 'Network & Data' }, sort: 10 }],
+          })
+        }
+        if (url.startsWith('/api/favorites')) return jsonResponse({ services: [] })
+        if (url.startsWith('/api/announcements')) return jsonResponse({ announcements: [] })
+        if (url.startsWith('/api/usage/frequent')) return jsonResponse({ services: [] })
+        return jsonResponse({})
+      }),
+    )
+  }
+
+  const VPN: CatalogService = { id: 's1', name: 'VPN' }
+  const MAINT: CatalogService = { id: 's2', name: 'Webmail', tag: 'wartung' }
+  const BETA: CatalogService = { id: 's3', name: 'Zettelkasten Labor', tag: 'beta' }
+
+  it('hides "In Wartung" when nothing is in maintenance, and shows it when something is', async () => {
+    setURL('/?tab=dienste')
+    stubCatalog([VPN])
+    const { unmount } = renderDashboard()
+    await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
+    expect(screen.queryByRole('button', { name: /In Wartung/ })).not.toBeInTheDocument()
+    unmount()
+
+    stubCatalog([VPN, MAINT])
+    renderDashboard()
+    await waitFor(() => expect(screen.getByRole('button', { name: /In Wartung/ })).toBeVisible())
+  })
+
+  it('hides "Beta" when the pref is on but no beta service is visible', async () => {
+    setURL('/?tab=dienste')
+    stubCatalog([VPN])
+    const { unmount } = renderDashboard({ ...ME, show_beta: true })
+    await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
+    expect(screen.queryByRole('button', { name: 'Beta' })).not.toBeInTheDocument()
+    unmount()
+
+    // The pref alone is not enough, and neither is the service alone: both.
+    stubCatalog([VPN, BETA])
+    renderDashboard({ ...ME, show_beta: true })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Beta' })).toBeVisible())
+  })
+
+  it('sends ?filter=wartung back to "Alle" when the facet has no services', async () => {
+    stubCatalog([VPN])
+    setURL('/?filter=wartung')
+    renderDashboard()
+
+    // Corrected during render, exactly like the stale Beta facet: no pill, no
+    // "In Wartung" heading over an empty page, and the URL drops the filter.
+    await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
+    expect(screen.queryByRole('button', { name: /In Wartung/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Alle Dienste' })).toBeVisible()
+    expect(window.location.search).toBe('?tab=dienste')
+  })
+
+  it('keeps ?filter=wartung when the facet does have services', async () => {
+    stubCatalog([VPN, MAINT])
+    setURL('/?filter=wartung')
+    renderDashboard()
+
+    await waitFor(() => expect(screen.getByRole('link', { name: /Webmail/ })).toBeVisible())
+    expect(screen.queryByRole('link', { name: /VPN/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /In Wartung/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(window.location.search).toBe('?filter=wartung')
+  })
+
+  it('sends ?filter=beta back to "Alle" when the pref is on but nothing is tagged beta', async () => {
+    stubCatalog([VPN])
+    setURL('/?filter=beta')
+    renderDashboard({ ...ME, show_beta: true })
+
+    await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
+    expect(screen.queryByRole('button', { name: 'Beta' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Alle Dienste' })).toBeVisible()
+    expect(window.location.search).toBe('?tab=dienste')
+  })
+
+  it('leaves a deep-linked facet alone until the catalog has actually loaded', async () => {
+    // Every count is 0 before /api/catalog answers; correcting then would wipe
+    // a legitimate deep link, so the guards wait for the data.
+    let release: (() => void) | undefined
+    const gate = new Promise<void>((r) => (release = r))
+    stubMatchMedia()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.startsWith('/api/catalog')) {
+          await gate
+          return jsonResponse({
+            services: [
+              {
+                id: 's2', name: 'Webmail', description: { de: 'E-Mail', en: 'Email' },
+                service_url: 'https://mail.example.edu', icon: 'mail',
+                categories: ['data'], doc_only: false, tag: 'wartung',
+              },
+            ],
+            categories: [{ slug: 'data', label: { de: 'Netz & Daten', en: 'Network & Data' }, sort: 10 }],
+          })
+        }
+        if (url.startsWith('/api/favorites')) return jsonResponse({ services: [] })
+        if (url.startsWith('/api/announcements')) return jsonResponse({ announcements: [] })
+        if (url.startsWith('/api/usage/frequent')) return jsonResponse({ services: [] })
+        return jsonResponse({})
+      }),
+    )
+
+    setURL('/?filter=wartung')
+    renderDashboard()
+    // Still loading: the filter survives.
+    expect(window.location.search).toBe('?filter=wartung')
+    release?.()
+    await waitFor(() => expect(screen.getByRole('link', { name: /Webmail/ })).toBeVisible())
+    expect(window.location.search).toBe('?filter=wartung')
+  })
+})

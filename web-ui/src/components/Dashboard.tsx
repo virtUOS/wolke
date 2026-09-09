@@ -129,6 +129,19 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   // un-starring the last favorite) closes it without a second state to sync.
   const [arrangeRequested, setArrangeRequested] = useState(false)
 
+  const allServices: Service[] = catalog.data?.services ?? NO_SERVICES
+  // Facet counts over the *narrowed* catalog, so they are this reader's counts:
+  // a tag facet is only offered when it selects something (issue #139,
+  // docs/specs/empty-facets.md §3). They sit above the view invariants because
+  // the stale-filter guards below need them.
+  const maintenanceCount = useMemo(
+    () => allServices.filter((s) => s.tag === 'wartung').length,
+    [allServices],
+  )
+  const betaCount = useMemo(() => allServices.filter((s) => s.tag === 'beta').length, [allServices])
+  const showMaintenanceFacet = maintenanceCount > 0
+  const showBetaFacet = me.show_beta && betaCount > 0
+
   // View invariants, enforced during render (the repo's adjust-during-render
   // pattern — the lint rule forbids sync setState in effects). All corrections
   // use replace(): no history entries, and each guard fails on the corrected
@@ -147,11 +160,17 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   ) {
     // Unknown category slug in a deep link — validated once the catalog loads.
     replace({ ...view, filter: { kind: 'all' } })
-  } else if (filter.kind === 'beta' && !me.show_beta) {
+  } else if (filter.kind === 'beta' && (!me.show_beta || (catalog.data && betaCount === 0))) {
     // The Beta facet outlived its pill: the user switched beta services off (or
-    // deep-linked ?filter=beta without them). Leaving it would head the page
-    // "Beta" with no tiles and no active pill — same correction, same reason as
-    // the stale category above (review finding 3).
+    // deep-linked ?filter=beta without them), or nothing is tagged beta any
+    // more. Leaving it would head the page "Beta" with no tiles and no active
+    // pill — same correction, same reason as the stale category above (review
+    // finding 3; the count half is issue #139).
+    replace({ ...view, filter: { kind: 'all' } })
+  } else if (filter.kind === 'maintenance' && catalog.data && maintenanceCount === 0) {
+    // The same correction for the maintenance facet, whose pill is now gated on
+    // its count too (issue #139) — a ?filter=maintenance link outlives the
+    // outage that made it meaningful.
     replace({ ...view, filter: { kind: 'all' } })
   }
 
@@ -160,7 +179,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const debouncedQuery = useDebouncedValue(query, 150)
   const searchResults = useSearch(debouncedQuery)
 
-  const allServices: Service[] = catalog.data?.services ?? NO_SERVICES
   const allCategories: Category[] = catalog.data?.categories ?? NO_CATEGORIES
   const favoriteServices: Service[] = favorites.data?.services ?? NO_SERVICES
   const favoritedIDs = useMemo(() => new Set(favoriteServices.map((s) => s.id)), [favoriteServices])
@@ -221,11 +239,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   // True only until the first results for the current search arrive; subsequent
   // keystrokes keep the previous list (placeholderData) so it doesn't flicker.
   const searchPending = searching && !searchFailed && searchResults.data === undefined
-
-  const maintenanceCount = useMemo(
-    () => allServices.filter((s) => s.tag === 'wartung').length,
-    [allServices],
-  )
 
   // The visibility group restricting a category, by slug, and its label — the
   // marker names the group, not the category. Only ever populated for a
@@ -439,7 +452,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
 
       {/* Single-select filters: desktop only (mobile relies on search). Hidden
           while searching, since a search is global and deactivates filters.
-          "In Wartung" is always shown so maintenance is reachable as a facet. */}
+          Every facet is gated on having something to show (issue #139). */}
       {!isMobile && tab === 'dienste' && !searching && (
         <div
           role="group"
@@ -453,19 +466,21 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           >
             {tr.dash.all}
           </PillButton>
-          <PillButton
-            active={filter.kind === 'maintenance'}
-            aria-pressed={filter.kind === 'maintenance'}
-            onClick={() => selectFilter({ kind: 'maintenance' })}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-          >
-            <Wrench className="h-[13px] w-[13px]" aria-hidden="true" />
-            {tr.dash.inMaintenance}
-          </PillButton>
-          {/* Beta: the parallel of the maintenance facet, and only while the
-              user asked for beta services — with the pref off the catalog
-              carries none, so the pill would filter to nothing. */}
-          {me.show_beta && (
+          {showMaintenanceFacet && (
+            <PillButton
+              active={filter.kind === 'maintenance'}
+              aria-pressed={filter.kind === 'maintenance'}
+              onClick={() => selectFilter({ kind: 'maintenance' })}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <Wrench className="h-[13px] w-[13px]" aria-hidden="true" />
+              {tr.dash.inMaintenance}
+            </PillButton>
+          )}
+          {/* Beta: the parallel of the maintenance facet, and on the same two
+              conditions — the user asked for beta services (with the pref off
+              the catalog carries none) and at least one is actually there. */}
+          {showBetaFacet && (
             <PillButton
               active={filter.kind === 'beta'}
               aria-pressed={filter.kind === 'beta'}
