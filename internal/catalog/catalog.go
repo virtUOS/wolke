@@ -59,9 +59,10 @@ type Snapshot struct {
 	services   []Service
 	categories []Category
 	// public is the pre-narrowed view for the commonest reader: holding no
-	// group and not asking for beta services. When no category is restricted
-	// and nothing is tagged beta it IS the whole catalog, and VisibleTo hands
-	// it out without copying — the plain deployment pays nothing.
+	// group and not asking for beta services. When no category is restricted,
+	// nothing is tagged beta and every category has a service, it IS the whole
+	// catalog, and VisibleTo hands it out without copying — the plain
+	// deployment pays nothing.
 	public     *View
 	restricted bool // some category carries a visibility slug
 	hasBeta    bool // some service is tagged beta
@@ -89,7 +90,25 @@ func NewSnapshot(services []Service, categories []Category) *Snapshot {
 			break
 		}
 	}
-	if s.restricted || s.hasBeta {
+	// An unused category is dropped for every reader alike
+	// (docs/specs/empty-facets.md §2), so a deployment that has one also takes
+	// the assembling path — once, here, not per request. It does not make the
+	// snapshot reader-dependent: restricted and hasBeta alone decide that,
+	// which is why VisibleTo below still serves this one view to everyone.
+	populated := make(map[string]bool, len(categories))
+	for _, svc := range services {
+		for _, c := range svc.Categories {
+			populated[c] = true
+		}
+	}
+	hasEmptyCat := false
+	for _, c := range categories {
+		if !populated[c.Slug] {
+			hasEmptyCat = true
+			break
+		}
+	}
+	if s.restricted || s.hasBeta || hasEmptyCat {
 		s.public = s.narrow(nil, false)
 	} else {
 		s.public = newView(services, categories)
@@ -114,12 +133,12 @@ const TagBeta = "beta"
 // held may be nil and showBeta false — public, no beta, which is what the
 // catalog MCP passes unconditionally (it has no user to ask).
 //
-// Categories narrow too, which is what makes a restricted group's category
-// vanish for non-holders instead of rendering as an empty filter pill: a
-// restricted category the reader does not hold is dropped, and so is any
-// category that filtering emptied. A category that has no services for anyone
-// stays, exactly as today — so a deployment with no restricted category and no
-// beta service gets byte-identical output to the raw catalog.
+// Categories narrow too, under one rule: a category is offered only if it has
+// at least one service THIS reader can see (docs/specs/empty-facets.md §2).
+// That covers a restricted category the reader does not hold, a category that
+// filtering emptied, and a category no service is filed under at all — each of
+// them would otherwise render as a filter pill leading to an empty page (and
+// the restricted one would leak the group's name besides).
 func (s *Snapshot) VisibleTo(held []string, showBeta bool) *View {
 	// Nothing to narrow, or the pre-narrowed reader: hand out the cached view.
 	if (!s.restricted && !s.hasBeta) || (len(held) == 0 && !showBeta) {
@@ -160,13 +179,7 @@ func (s *Snapshot) narrow(held []string, showBeta bool) *View {
 			services = append(services, svc)
 		}
 	}
-	// Categories populated by ANY service vs. by a VISIBLE one.
-	populated := map[string]bool{}
-	for _, svc := range s.services {
-		for _, c := range svc.Categories {
-			populated[c] = true
-		}
-	}
+	// A category survives only if a service this reader sees is filed under it.
 	stillPopulated := map[string]bool{}
 	for _, svc := range services {
 		for _, c := range svc.Categories {
@@ -175,10 +188,7 @@ func (s *Snapshot) narrow(held []string, showBeta bool) *View {
 	}
 	categories := make([]Category, 0, len(s.categories))
 	for _, c := range s.categories {
-		if slug := restrictedBy[c.Slug]; slug != "" && !slices.Contains(held, slug) {
-			continue
-		}
-		if !populated[c.Slug] || stillPopulated[c.Slug] {
+		if stillPopulated[c.Slug] {
 			categories = append(categories, c)
 		}
 	}

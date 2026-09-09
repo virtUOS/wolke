@@ -134,3 +134,28 @@ resolvable), the action, and a truncated target id. There is no filtering/
 search UI on that page today — for anything beyond "scan the last 100–500
 entries" you'll need to query `audit_log` directly in Postgres (see
 `docs/runbooks/restore-postgres.md` for how to get a `psql` shell).
+
+## G. A new category stays invisible until a service uses it
+
+Expected, and the thing most likely to make you think a category write failed:
+**an empty category does not appear on the dashboard.** Since issue #139 the
+reader-facing catalog offers a filter only when it selects at least one visible
+service (`docs/specs/empty-facets.md`), so a category you just created — or one
+whose last service you soft-deleted or moved — has no pill and no section for
+anybody, admins included, in their own dashboard.
+
+Nothing is lost, and nothing needs fixing:
+
+- **Administration → Kategorien still lists it**, and it stays editable,
+  reorderable and deletable. The admin screens read the unnarrowed
+  `GET /api/admin/categories` / `GET /api/admin/services`
+  (`docs/specs/service-visibility.md` §5), not the narrowed catalog.
+- **Assign one service to it and it appears immediately** — the catalog cache is
+  invalidated by the service write, so a reload of the dashboard is enough.
+- The same rule hides the two tag facets: "In Wartung" only while at least one
+  visible service is tagged `wartung`, "Beta" only while the reader has beta
+  services switched on *and* one is tagged `beta`.
+
+So the order that avoids the confusion is: create the category, then edit (or
+create) a service into it. Creating a batch of empty categories up front is
+still fine — they are simply invisible to readers until they are used.
