@@ -37,18 +37,21 @@ func TestReadServerActiveOnly(t *testing.T) {
 	}
 	actor := service.Actor{ID: admin.ID, Kind: service.ActorMCP}
 
+	// This test adds and drops a category, which changes the set a concurrent
+	// whole-list reorder validates against (issue #130). Cleanups run LIFO, so
+	// these three registrations run in reverse: rm-test-cat is deleted while the
+	// lock is still held, then the lock is released, then the pool closes last
+	// (issue #142; see storetest.LockCategorySet). Every row this test asserts
+	// on is one it created — nothing is borrowed from ambient state.
+	t.Cleanup(db.Close)
+	storetest.LockCategorySet(ctx, t, db.Pool)
 	t.Cleanup(func() {
 		_, _ = db.Pool.Exec(ctx, "delete from service_categories sc using services s where sc.service_id = s.id and s.name like 'RM Test%'")
 		_, _ = db.Pool.Exec(ctx, "delete from services where name like 'RM Test%'")
 		_, _ = db.Pool.Exec(ctx, "delete from categories where slug = 'rm-test-cat'")
 		_, _ = db.Pool.Exec(ctx, "delete from audit_log where actor_id = $1", admin.ID)
 		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub = 'readmcp-test'")
-		db.Close()
 	})
-	// This test adds and drops a category, which changes the set a concurrent
-	// whole-list reorder validates against (issue #130). Registered after the
-	// cleanup above so the lock is released before the pool closes.
-	storetest.LockCategorySet(ctx, t, db.Pool)
 
 	if _, err := service.CreateCategory(ctx, db, actor, config.VisibilitySet{}, "rm-test-cat", map[string]string{"de": "RM Test", "en": "RM Test"}, 9999, ""); err != nil {
 		t.Fatalf("create category: %v", err)

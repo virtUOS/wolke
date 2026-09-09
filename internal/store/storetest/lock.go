@@ -24,8 +24,17 @@ const categorySetKey = 130130
 // keeps the tests honest about the real whole-list contract instead of weakening
 // the assertion.
 //
-// Call it *after* registering the cleanup that closes the pool: cleanups run
-// LIFO, so this one has to release its connection before Close waits for it.
+// Cleanup ordering matters in both directions, and `t.Cleanup` runs LIFO — so
+// register, in this order:
+//
+//  1. the pool close (runs last: the lock's connection must go back first),
+//  2. this lock,
+//  3. every cleanup that deletes or rewrites category rows (runs first).
+//
+// Putting the category cleanup *before* this call inverts step 3: the lock is
+// released while the rows it protects still exist, and the next test to take
+// the lock can read a category that is about to be deleted out from under it
+// (issue #142). Category-mutating cleanup has to run while the lock is held.
 func LockCategorySet(ctx context.Context, t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	conn, err := pool.Acquire(ctx)

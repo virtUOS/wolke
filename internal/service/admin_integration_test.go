@@ -182,16 +182,20 @@ func TestCategoryWritesAudited(t *testing.T) {
 		_, _ = db.Pool.Exec(ctx, "delete from categories where slug in ('cat-test','cat-test-renamed','cat-test-used')")
 		_, _ = db.Pool.Exec(ctx, "delete from audit_log where actor_id = $1", admin.ID)
 	}
+	// Cleanups run LIFO, so these three registrations run in reverse: the
+	// category fixtures are deleted and the seeded sorts restored while the lock
+	// is still held, then the lock is released, then the pool closes last. The
+	// old order released the lock first, which let the next lock holder read
+	// cat-test-used after this test had stopped protecting it (issue #142).
+	t.Cleanup(db.Close)
+	storetest.LockCategorySet(ctx, t, db.Pool)
 	t.Cleanup(func() {
 		cleanupSQL()
 		for _, r := range origSorts {
 			_, _ = db.Pool.Exec(ctx, "update categories set sort = $1 where slug = $2", r.sort, r.slug)
 		}
 		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub = 'cat-admin-test'")
-		db.Close()
 	})
-	// After the cleanup above, so the lock is released before the pool closes.
-	storetest.LockCategorySet(ctx, t, db.Pool)
 	cleanupSQL()
 
 	rows, err := db.Pool.Query(ctx, "select slug, sort from categories order by sort, slug")
@@ -262,9 +266,20 @@ func TestCategoryWritesAudited(t *testing.T) {
 			t.Errorf("err = %v, want NotFoundError", err)
 		}
 	}
+	// The collision target is a category this test owns, not whichever category
+	// happened to sort first (`origSorts[0]`) — that borrowed a row from ambient
+	// database state, which a parallel package's cleanup can delete mid-test
+	// (issue #142; same repair the #130 session applied to
+	// usage.TestRollupAndPurge, which borrowed `ListActiveServices()[0]`).
+	// cat-test-used doubles as the still-used category for the guarded delete
+	// further down, so it is created once, here.
+	if _, err := CreateCategory(ctx, db, actor, config.VisibilitySet{}, "cat-test-used", label, 9010, ""); err != nil {
+		t.Fatalf("CreateCategory (used): %v", err)
+	}
+
 	// Renaming onto a slug that exists is a field-level validation error, not a
 	// raw 23505 from the unique index.
-	if _, err := UpdateCategory(ctx, db, actor, config.VisibilitySet{}, "cat-test", origSorts[0].slug, label, ptr("")); err == nil {
+	if _, err := UpdateCategory(ctx, db, actor, config.VisibilitySet{}, "cat-test", "cat-test-used", label, ptr("")); err == nil {
 		t.Error("UpdateCategory onto an existing slug should fail validation")
 	} else {
 		var ve *ValidationError
@@ -303,10 +318,7 @@ func TestCategoryWritesAudited(t *testing.T) {
 
 	// Delete is guarded: a category a service still uses is refused with the
 	// blocking count, not a raw constraint violation.
-	used, err := CreateCategory(ctx, db, actor, config.VisibilitySet{}, "cat-test-used", label, 9010, "")
-	if err != nil {
-		t.Fatalf("CreateCategory (used): %v", err)
-	}
+	// cat-test-used was created above, as the rename-collision target.
 	svcIn := Draft{
 		Name:        "Cat Test Service",
 		Description: map[string]string{"de": "Testdienst.", "en": "Test service."},
@@ -331,7 +343,6 @@ func TestCategoryWritesAudited(t *testing.T) {
 	if _, err := db.GetCategoryBySlug(ctx, "cat-test-used"); err != nil {
 		t.Errorf("the refused category must still exist: %v", err)
 	}
-	_ = used
 
 	// Delete of an unused category succeeds and is audited with its before state.
 	if err := DeleteCategory(ctx, db, actor, "cat-test-renamed"); err != nil {
