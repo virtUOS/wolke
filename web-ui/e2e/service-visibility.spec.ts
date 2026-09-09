@@ -82,7 +82,15 @@ test('turning on beta reveals the beta service, badged, with its filter; turning
         await betaFilter.click()
         await expect(main.getByRole('link', { name: BETA_SERVICE })).toHaveCount(1)
         await expectViewportHealthy(page, { isMobile, label: 'beta filter active' })
-        await page.getByRole('button', { name: /^Alle$|^All$/ }).click()
+
+        // The facet is a real view: it is in the URL and survives a reload
+        // (review finding 2). Back then walks out of it again.
+        await expect(page).toHaveURL(/\?filter=beta/)
+        await page.reload()
+        await expect(page.getByRole('button', { name: /^Beta$/ })).toHaveAttribute('aria-pressed', 'true')
+        await expect(main.getByRole('link', { name: BETA_SERVICE })).toHaveCount(1)
+        await page.goBack()
+        await expect(page.getByRole('button', { name: /^Alle$|^All$/ })).toHaveAttribute('aria-pressed', 'true')
       }
       await expectViewportHealthy(page, { isMobile, label: 'beta service visible' })
 

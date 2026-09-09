@@ -154,6 +154,7 @@ type fakeFavorites struct {
 	service.FavoritesStore // nil: only the methods below are reached
 	ids                    []pgtype.UUID
 	added                  *int
+	ordered                *[][]pgtype.UUID
 }
 
 func (f fakeFavorites) ListFavoritesByUsage(context.Context, pgtype.UUID) ([]pgtype.UUID, error) {
@@ -163,6 +164,13 @@ func (f fakeFavorites) NextFavoriteSort(context.Context, pgtype.UUID) (int32, er
 func (f fakeFavorites) AddFavorite(context.Context, store.AddFavoriteParams) error {
 	*f.added++
 	return nil
+}
+func (f fakeFavorites) ListActiveFavoriteIDs(context.Context, pgtype.UUID) ([]pgtype.UUID, error) {
+	return f.ids, nil
+}
+func (f fakeFavorites) SetFavoritesOrder(_ context.Context, arg store.SetFavoritesOrderParams) (int64, error) {
+	*f.ordered = append(*f.ordered, arg.ServiceIds)
+	return int64(len(arg.ServiceIds)), nil
 }
 
 type fakeUsage struct {
@@ -401,6 +409,71 @@ func TestBetaServiceHiddenUntilTheUserAsksForIt(t *testing.T) {
 			t.Fatalf("revealed beta: status = %d, added = %d; want 204 and one row", rec.Code, added)
 		}
 	})
+}
+
+// Review finding 1: a favorite that became invisible must neither block a
+// reorder nor be written away. /api/favorites drops it, so the list the client
+// sends back cannot contain it — and validating the write against the
+// unnarrowed set would 400 every reorder, with no way out: the user cannot
+// un-star a tile that does not render.
+//
+// Both causes are covered, because they are different states with one
+// behaviour: the beta service the reader stopped asking for, and the service in
+// a category whose group the IdP stopped granting.
+func TestReorderIgnoresFavoritesTheReaderCannotSee(t *testing.T) {
+	cache, vis := visibilityFixture(t)
+	pub, restricted, beta := mustParseUUID(t, publicID), mustParseUUID(t, restrictedID), mustParseUUID(t, betaID)
+
+	cases := []struct {
+		name   string
+		user   store.User
+		hidden pgtype.UUID
+	}{
+		{"a beta favorite after the pref went off", nonHolder(), beta},
+		{"a favorite in a category whose group was revoked", betaReader(), restricted},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// The user favorited both; only the public one still resolves.
+			stored := []pgtype.UUID{pub, tc.hidden}
+			var writes [][]pgtype.UUID
+			db := fakeFavorites{ids: stored, ordered: &writes}
+
+			// What the client was shown, and so what it sends back.
+			shown := serveServices(t, listFavorites(cache, db, vis), http.MethodGet, "/api/favorites", "", tc.user)
+			if len(shown) != 1 || shown[0].ID != publicID {
+				t.Fatalf("/api/favorites = %v, want just the public service", names(shown))
+			}
+
+			rec := httptest.NewRecorder()
+			body := `{"service_ids":["` + publicID + `"]}`
+			setFavoritesOrder(cache, db, vis)(rec, reqWithUser(http.MethodPut, "/api/favorites/order", body, tc.user))
+			if rec.Code != http.StatusNoContent {
+				t.Fatalf("status = %d (%s); an invisible favorite must not block the reorder", rec.Code, rec.Body.String())
+			}
+			if len(writes) != 1 {
+				t.Fatalf("order writes = %d, want 1", len(writes))
+			}
+			for _, id := range writes[0] {
+				if id == tc.hidden {
+					t.Fatal("the invisible favorite was renumbered; its stored order must stay untouched")
+				}
+			}
+
+			// It is still stored: nothing about the reorder drops it, so it
+			// comes back where it was once it is visible again.
+			back := serveServices(t, listFavorites(cache, db, vis), http.MethodGet, "/api/favorites", "",
+				func() store.User {
+					u := tc.user
+					u.ShowBeta = true
+					u.VisibilityClaims = []string{"it-infra"}
+					return u
+				}())
+			if len(back) != 2 {
+				t.Fatalf("after the reorder the favorite is gone: %v", names(back))
+			}
+		})
+	}
 }
 
 // /api/me exposes the held group slugs, the show_beta pref, and the entries a

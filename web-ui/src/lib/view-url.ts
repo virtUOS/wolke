@@ -7,6 +7,8 @@
 //   /?tab=dienste        Dienste tab, no filter
 //   /?cat=<slug>         category filter (implies tab=dienste, tab omitted)
 //   /?filter=wartung     maintenance filter (implies tab=dienste)
+//   /?filter=beta        beta filter (implies tab=dienste; only reachable while
+//                        the show_beta pref is on — Dashboard drops it otherwise)
 //   /?admin=1            admin view; combines with the above
 // Invariant: filter ≠ all ⟹ tab = dienste (filter params win over a
 // contradictory tab). Parsing is lenient — unknown values fall back to the
@@ -35,6 +37,8 @@ export function viewToURL(view: View): string {
     q.set('cat', view.filter.slug)
   } else if (view.filter.kind === 'maintenance') {
     q.set('filter', 'wartung')
+  } else if (view.filter.kind === 'beta') {
+    q.set('filter', 'beta')
   } else if (view.tab === 'dienste') {
     q.set('tab', 'dienste')
   }
@@ -51,6 +55,8 @@ export function parseViewURL(search: string): View {
     filter = { kind: 'category', slug: cat }
   } else if (q.get('filter') === 'wartung') {
     filter = { kind: 'maintenance' }
+  } else if (q.get('filter') === 'beta') {
+    filter = { kind: 'beta' }
   }
   const tab: Tab = filter.kind !== 'all' || q.get('tab') === 'dienste' ? 'dienste' : 'favoriten'
   return { tab, filter, admin: q.get('admin') === '1' }

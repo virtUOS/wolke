@@ -146,6 +146,12 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   ) {
     // Unknown category slug in a deep link — validated once the catalog loads.
     replace({ ...view, filter: { kind: 'all' } })
+  } else if (filter.kind === 'beta' && !me.show_beta) {
+    // The Beta facet outlived its pill: the user switched beta services off (or
+    // deep-linked ?filter=beta without them). Leaving it would head the page
+    // "Beta" with no tiles and no active pill — same correction, same reason as
+    // the stale category above (review finding 3).
+    replace({ ...view, filter: { kind: 'all' } })
   }
 
   // Search is server-side and debounced (the one search path; matching + ranking

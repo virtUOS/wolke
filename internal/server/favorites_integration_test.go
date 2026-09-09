@@ -186,7 +186,7 @@ func TestFavoritesManualOrderFlow(t *testing.T) {
 		for i, id := range ids {
 			quoted[i] = `"` + id + `"`
 		}
-		return call(setFavoritesOrder(db), http.MethodPut, "/api/favorites/order",
+		return call(setFavoritesOrder(cache, db, config.VisibilitySet{}), http.MethodPut, "/api/favorites/order",
 			`{"service_ids":[`+strings.Join(quoted, ",")+`]}`)
 	}
 

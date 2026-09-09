@@ -163,10 +163,10 @@ func (s *Snapshot) narrow(held []string, showBeta bool) *View {
 			populated[c] = true
 		}
 	}
-	visible := map[string]bool{}
+	stillPopulated := map[string]bool{}
 	for _, svc := range services {
 		for _, c := range svc.Categories {
-			visible[c] = true
+			stillPopulated[c] = true
 		}
 	}
 	categories := make([]Category, 0, len(s.categories))
@@ -174,7 +174,7 @@ func (s *Snapshot) narrow(held []string, showBeta bool) *View {
 		if slug := restrictedBy[c.Slug]; slug != "" && !slices.Contains(held, slug) {
 			continue
 		}
-		if !populated[c.Slug] || visible[c.Slug] {
+		if !populated[c.Slug] || stillPopulated[c.Slug] {
 			categories = append(categories, c)
 		}
 	}

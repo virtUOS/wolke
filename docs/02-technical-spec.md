@@ -653,8 +653,10 @@ GET    /api/favorites              → the user's favorited services, in favorit
 POST   /api/favorites/items        → add a service to favorites {service_id}
 DELETE /api/favorites/items        → remove a service from favorites {service_id}
 PUT    /api/favorites/order        → the manual order, whole list {service_ids: [...]}
-                                     idempotent; must be a permutation of exactly
-                                     the caller's favorites (400 otherwise)
+                                     idempotent; must be a permutation of exactly the
+                                     favorites this reader can see — soft-deleted, beta-
+                                     hidden and restricted ones are neither required nor
+                                     renumbered, and keep their stored order (400 otherwise)
 GET    /api/usage/frequent         → the user's frequently-used services
 
 # events
@@ -674,6 +676,9 @@ PUT    /api/admin/role-defaults/:role 🔒 set the ordered default view (public 
 GET    /api/admin/categories       🔒 every category with its visibility group — UNNARROWED, which is
                                      what the admin screens read (service-visibility §5)
 POST   /api/admin/categories       🔒 manage categories (incl. the visibility group restricting one)
+PATCH  /api/admin/categories/:slug 🔒 rename/relabel/restrict; an omitted `visibility` leaves the
+                                     current group alone (absent ≠ public — it is the one field
+                                     with an access-control effect)
 POST   /api/admin/announcements    🔒 create (rejected if one already exists — singleton)
 PATCH  /api/admin/announcements/:id 🔒 edit/expire
 DELETE /api/admin/announcements/:id 🔒 remove (hard delete; dismissals cascade)

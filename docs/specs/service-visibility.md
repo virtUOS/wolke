@@ -110,6 +110,13 @@ stays narrowed for everyone — an admin is still an ordinary user in their own 
 
 ## 6. Definition of done
 
+Review round 1 (2026-09-09) found eight issues, all fixed on the branch. The one that mattered:
+`/api/favorites` is narrowed but the order write validated against the unnarrowed set, so a
+favorite that went invisible — a beta service after the pref went off, or one in a category whose
+group was revoked — 400'd every reorder with no way out. The write now validates against the same
+view the client is rendered from, and an invisible favorite keeps its stored `manual_sort`
+untouched: neither required in the list nor written by it, so it slots back in where it was.
+
 All met by PR #134 except one deliberate omission: **the MCP has no category write path** to move
 the `visibility` field onto. `category.list` reports each category's group and `visibility.list`
 lists the configured ones, and the field is gone from `service.propose_*` — but category

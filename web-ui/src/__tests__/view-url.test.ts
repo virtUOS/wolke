@@ -3,6 +3,7 @@ import { DEFAULT_VIEW, parseViewURL, viewEq, viewToURL, type View } from '@/lib/
 const dienste: View = { tab: 'dienste', filter: { kind: 'all' }, admin: false }
 const lehre: View = { tab: 'dienste', filter: { kind: 'category', slug: 'lehre' }, admin: false }
 const wartung: View = { tab: 'dienste', filter: { kind: 'maintenance' }, admin: false }
+const beta: View = { tab: 'dienste', filter: { kind: 'beta' }, admin: false }
 const admin: View = { ...DEFAULT_VIEW, admin: true }
 
 describe('viewToURL', () => {
@@ -14,6 +15,7 @@ describe('viewToURL', () => {
     expect(viewToURL(dienste)).toBe('/?tab=dienste')
     expect(viewToURL(lehre)).toBe('/?cat=lehre')
     expect(viewToURL(wartung)).toBe('/?filter=wartung')
+    expect(viewToURL(beta)).toBe('/?filter=beta')
     expect(viewToURL(admin)).toBe('/?admin=1')
   })
 
@@ -25,7 +27,7 @@ describe('viewToURL', () => {
 
 describe('parseViewURL', () => {
   it('round-trips every view shape', () => {
-    for (const v of [DEFAULT_VIEW, dienste, lehre, wartung, admin, { ...wartung, admin: true }]) {
+    for (const v of [DEFAULT_VIEW, dienste, lehre, wartung, beta, admin, { ...wartung, admin: true }]) {
       const url = new URL(viewToURL(v), 'http://x')
       expect(parseViewURL(url.search)).toEqual(v)
     }
@@ -40,6 +42,7 @@ describe('parseViewURL', () => {
     expect(parseViewURL('?tab=favoriten&cat=lehre')).toEqual(lehre)
     expect(parseViewURL('?cat=lehre&filter=wartung')).toEqual(lehre)
     expect(parseViewURL('?filter=wartung')).toEqual(wartung)
+    expect(parseViewURL('?filter=beta')).toEqual(beta)
   })
 })
 

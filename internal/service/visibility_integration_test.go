@@ -91,7 +91,7 @@ func TestServiceInARestrictedCategoryCannotBeARoleDefault(t *testing.T) {
 	}
 
 	// Making the category public again lifts the restriction on everything in it.
-	if _, err := UpdateCategory(ctx, db, actor, vis, "vis-test-infra", "vis-test-infra", label, ""); err != nil {
+	if _, err := UpdateCategory(ctx, db, actor, vis, "vis-test-infra", "vis-test-infra", label, ptr("")); err != nil {
 		t.Fatalf("UpdateCategory (make public): %v", err)
 	}
 	if err := SetRoleDefaults(ctx, db, actor, exampleRoles(), "staff", append(append([]pgtype.UUID{}, origStaff...), mustUUID(t, restricted.ID))); err != nil {
@@ -205,7 +205,7 @@ func TestRestrictingPurgesRoleDefaults(t *testing.T) {
 	if err := SetRoleDefaults(ctx, db, actor, exampleRoles(), "student", studentDefaults); err != nil {
 		t.Fatalf("SetRoleDefaults: %v", err)
 	}
-	if _, err := UpdateCategory(ctx, db, actor, vis, "vis-purge-open", "vis-purge-open", label, "it-infra"); err != nil {
+	if _, err := UpdateCategory(ctx, db, actor, vis, "vis-purge-open", "vis-purge-open", label, ptr("it-infra")); err != nil {
 		t.Fatalf("UpdateCategory (restrict): %v", err)
 	}
 	if n := countDefaults(); n != 0 {
@@ -225,6 +225,84 @@ func TestRestrictingPurgesRoleDefaults(t *testing.T) {
 	}
 	if err := SetRoleDefaults(ctx, db, actor, exampleRoles(), "student", origStudent); err != nil {
 		t.Fatalf("SetRoleDefaults after the purge: %v", err)
+	}
+}
+
+// Review finding 5: `visibility` absent from an update means "unchanged", not
+// "public". It is the one field with an access-control effect, so an older
+// client or a script sending only {slug, label} must not un-restrict a category
+// and everything in it. And review finding 4's server half: a category
+// restricted to a group the config no longer defines stays editable — the stale
+// slug may be kept or cleared, but a *new* unconfigured one is still refused.
+// Needs DATABASE_URL.
+func TestCategoryVisibilityIsUnchangedWhenAbsent(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("DATABASE_URL not set; skipping visibility integration test")
+	}
+	ctx := context.Background()
+	db, err := store.Open(ctx, url)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	admin, err := db.UpsertUser(ctx, store.UpsertUserParams{OidcSub: "vis-absent-test", DisplayName: "Vis", PrimaryRole: "staff", IsAdmin: true})
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	actor := Actor{ID: admin.ID, Kind: ActorForm}
+	t.Cleanup(func() {
+		_, _ = db.Pool.Exec(ctx, "delete from categories where slug like 'vis-absent%'")
+		_, _ = db.Pool.Exec(ctx, "delete from audit_log where actor_id = $1", admin.ID)
+		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub = 'vis-absent-test'")
+		db.Close()
+	})
+
+	vis := visTestSet()
+	label := map[string]string{"de": "Absent", "en": "Absent"}
+	if _, err := CreateCategory(ctx, db, actor, vis, "vis-absent-cat", label, 9400, "it-infra"); err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+
+	// A label-only edit: visibility absent, so the restriction survives.
+	renamed := map[string]string{"de": "Absent neu", "en": "Absent renamed"}
+	got, err := UpdateCategory(ctx, db, actor, vis, "vis-absent-cat", "vis-absent-cat", renamed, nil)
+	if err != nil {
+		t.Fatalf("UpdateCategory(visibility absent): %v", err)
+	}
+	if textVal(got.Visibility) != "it-infra" {
+		t.Fatalf("visibility = %q after an update that omitted it, want it-infra — an omitted field must not un-restrict", textVal(got.Visibility))
+	}
+
+	// Explicitly public still works: absent and "" are different requests.
+	got, err = UpdateCategory(ctx, db, actor, vis, "vis-absent-cat", "vis-absent-cat", renamed, ptr(""))
+	if err != nil {
+		t.Fatalf("UpdateCategory(public): %v", err)
+	}
+	if textVal(got.Visibility) != "" {
+		t.Fatalf("visibility = %q, want public", textVal(got.Visibility))
+	}
+
+	// A slug the config never defined is refused...
+	var ve *ValidationError
+	if _, err := UpdateCategory(ctx, db, actor, vis, "vis-absent-cat", "vis-absent-cat", renamed, ptr("nope")); !errors.As(err, &ve) || ve.Field != "visibility" {
+		t.Fatalf("err = %v, want a visibility ValidationError", err)
+	}
+
+	// ...but a stale one already on the row may be kept (so the category is
+	// editable at all) and cleared.
+	if _, err := db.Pool.Exec(ctx,
+		"update categories set visibility = 'gone' where slug = 'vis-absent-cat'"); err != nil {
+		t.Fatalf("plant a stale slug: %v", err)
+	}
+	if _, err := UpdateCategory(ctx, db, actor, vis, "vis-absent-cat", "vis-absent-cat", label, ptr("gone")); err != nil {
+		t.Fatalf("keeping a stale slug must be allowed, got %v", err)
+	}
+	got, err = UpdateCategory(ctx, db, actor, vis, "vis-absent-cat", "vis-absent-cat", label, ptr(""))
+	if err != nil {
+		t.Fatalf("clearing a stale slug must be allowed, got %v", err)
+	}
+	if textVal(got.Visibility) != "" {
+		t.Fatalf("visibility = %q, want public", textVal(got.Visibility))
 	}
 }
 

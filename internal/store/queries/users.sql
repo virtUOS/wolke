@@ -1,10 +1,10 @@
 -- name: UpsertUser :one
 -- Called on every login: insert the OIDC subject or refresh the mutable fields.
 -- primary_role, is_admin and visibility_claims are re-derived from claims each
--- login (docs/02 §6, docs/specs/service-visibility.md §4), so losing the group
--- at the IdP loses the access at next login. User prefs (view_mode, theme) are
--- intentionally not touched here, and neither is visibility_optin: the claims
--- are recomputed, the user's own opt-ins are never overwritten by a login.
+-- login (docs/02 §6, docs/specs/service-visibility.md §2.2), so losing the group
+-- at the IdP loses the access at next login. The user's own settings are
+-- intentionally not touched here — view_mode, theme, and show_beta: what the
+-- IdP says is recomputed, what the user chose is never overwritten by a login.
 -- coalesce keeps a nil slice meaning "no claim-granted slugs" rather than
 -- violating the column's not-null constraint.
 insert into users (oidc_sub, display_name, email, primary_role, is_admin, visibility_claims)

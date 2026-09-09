@@ -89,9 +89,19 @@ func removeFavorite(db service.FavoritesStore) http.HandlerFunc {
 // write rather than a move-one-step call, so a client and the server can never
 // end up with two different notions of the order; sending the same list twice
 // is a no-op. Validation (permutation, no duplicates) lives in internal/service.
-func setFavoritesOrder(db service.FavoritesStore) http.HandlerFunc {
+//
+// The narrowed view goes with it, because the list this handler validates
+// against has to be the one the client was shown: /api/favorites drops the
+// favorites this reader cannot see, so the order they send back cannot contain
+// them (review finding 1).
+func setFavoritesOrder(c *catalog.Cache, db service.FavoritesStore, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
+		snap, err := visibleCatalog(r.Context(), c, vis)
+		if err != nil {
+			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			return
+		}
 		var body struct {
 			ServiceIDs []string `json:"service_ids"`
 		}
@@ -108,7 +118,11 @@ func setFavoritesOrder(db service.FavoritesStore) http.HandlerFunc {
 			}
 			ids = append(ids, id)
 		}
-		if err := service.SetFavoritesOrder(r.Context(), db, user.ID, ids); err != nil {
+		visible := func(id pgtype.UUID) bool {
+			_, ok := snap.ServiceByID(uuidString(id))
+			return ok
+		}
+		if err := service.SetFavoritesOrder(r.Context(), db, user.ID, ids, visible); err != nil {
 			writeServiceError(w, err)
 			return
 		}

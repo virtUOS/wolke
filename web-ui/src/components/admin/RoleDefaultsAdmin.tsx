@@ -37,7 +37,10 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
   // An id the admin catalog cannot resolve — a service deleted outright —
   // renders as an unavailable placeholder, not as a bare id.
   const name = (id: string) => byID.get(id)?.name ?? s.admin.unavailableService
-  // The category slugs that restrict a service to a group.
+  // The category slugs that restrict a service to a group. Until that query has
+  // actually answered, the set is unknown — offering the full list in that
+  // window lets an admin pick a restricted service and eat a 400 on Save, so
+  // the picker stays empty until it lands (review finding 6).
   const restricted = new Set(
     (categories.data?.categories ?? []).filter((c) => c.visibility).map((c) => c.slug),
   )
@@ -103,10 +106,12 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
   // default view is the same for every user of a role, so a service in a
   // restricted category can neither be offered here nor — the server enforces
   // it — saved.
-  const available = services.filter(
-    (svc: AdminService) =>
-      svc.is_active && !svc.categories.some((c) => restricted.has(c)) && !visible.includes(svc.id),
-  )
+  const available = !categories.isSuccess
+    ? []
+    : services.filter(
+        (svc: AdminService) =>
+          svc.is_active && !svc.categories.some((c) => restricted.has(c)) && !visible.includes(svc.id),
+      )
 
   return (
     <div className="space-y-4">

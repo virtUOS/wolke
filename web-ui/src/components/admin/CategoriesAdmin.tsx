@@ -68,6 +68,13 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
         .filter((c): c is Category => c !== undefined)
     : categories
 
+  // Public, the configured groups, and — if the draft carries one the config
+  // dropped — the stale slug, so it can be cleared (review finding 4).
+  const visibilityChoices = ['', ...groups.map((g) => g.slug)]
+  if (draft.visibility && !visibilityChoices.includes(draft.visibility)) {
+    visibilityChoices.push(draft.visibility)
+  }
+
   const label = (c: Category) => localized(c.label, locale)
   const isEditing = draft.editing !== ''
   const slugValid = SLUG_PATTERN.test(draft.slug.trim())
@@ -279,11 +286,17 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
             aria-required
           />
         </label>
-        {groups.length > 0 && (
+        {/* The choices are "public" plus every configured group — and, when the
+            row being edited carries a group the config no longer defines, that
+            slug too. Without it the stale value matches nothing, every save is
+            rejected, and the category cannot be un-restricted at all (review
+            finding 4). That is also why the whole fieldset renders for a stale
+            slug even when the deployment configures no groups. */}
+        {visibilityChoices.length > 1 && (
           <fieldset className="min-w-48 flex-1 text-sm">
             <legend className="mb-1 block font-medium">{s.admin.catVisibility}</legend>
             <div className="flex flex-wrap gap-2">
-              {['', ...groups.map((g) => g.slug)].map((value) => (
+              {visibilityChoices.map((value) => (
                 <ChoiceChip
                   key={value}
                   type="radio"
@@ -316,7 +329,7 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
           </Button>
         )}
       </form>
-      {groups.length > 0 && <p className="text-xs text-text-muted">{s.admin.catVisibilityHint}</p>}
+      {visibilityChoices.length > 1 && <p className="text-xs text-text-muted">{s.admin.catVisibilityHint}</p>}
       {draft.slug.trim() !== '' && !slugValid && <p className="text-sm text-danger">{s.admin.slugError}</p>}
       {error && (
         <p role="alert" className="text-sm text-danger">

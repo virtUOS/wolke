@@ -199,6 +199,47 @@ describe('Category editor visibility selector', () => {
     expect(create.mock.calls[0][3]).toBe('it-infra')
   })
 
+  // Review finding 4: a category restricted to a group the config no longer
+  // defines must stay editable — the stale slug is offered as its own choice so
+  // it can be cleared. v1's ServiceForm did exactly this; the handling has to
+  // move with the control, not be dropped with it.
+  it('keeps a stale group selectable, so the restriction can be cleared', async () => {
+    const user = userEvent.setup()
+    const update = vi.spyOn(api, 'updateCategory').mockResolvedValue(categories[0])
+    const stale: Category[] = [
+      { slug: 'infra', label: { de: 'Infrastruktur', en: 'Infrastructure' }, sort: 10, visibility: 'gone' },
+    ]
+    render(withClient(<CategoriesAdmin categories={stale} locale="de" />))
+
+    await user.click((await screen.findAllByRole('button', { name: 'Bearbeiten' }))[0])
+    const group = screen.getByRole('group', { name: 'Sichtbarkeit' })
+    // Named by its bare slug — there is no label for it any more — and checked,
+    // so the admin can see what the category is actually restricted to.
+    expect(within(group).getByLabelText('gone')).toBeChecked()
+    expect(within(group).getByLabelText('Öffentlich')).not.toBeChecked()
+
+    await user.click(within(group).getByLabelText('Öffentlich'))
+    await user.click(screen.getByRole('button', { name: 'Kategorie speichern' }))
+    await waitFor(() => expect(update).toHaveBeenCalled())
+    expect(update.mock.calls[0][1]).toMatchObject({ visibility: '' })
+  })
+
+  // ...and the selector renders for a stale slug even when the deployment
+  // configures no groups at all, which is the state that made it uneditable.
+  it('renders the selector for a stale group even with nothing configured', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(api, 'me').mockResolvedValue(me({ visibility: { held: [], entries: [] } }))
+    const stale: Category[] = [
+      { slug: 'infra', label: { de: 'Infrastruktur', en: 'Infrastructure' }, sort: 10, visibility: 'gone' },
+    ]
+    render(withClient(<CategoriesAdmin categories={stale} locale="de" />))
+
+    await user.click((await screen.findAllByRole('button', { name: 'Bearbeiten' }))[0])
+    const group = screen.getByRole('group', { name: 'Sichtbarkeit' })
+    expect(within(group).getByLabelText('gone')).toBeChecked()
+    expect(within(group).getByLabelText('Öffentlich')).toBeInTheDocument()
+  })
+
   it('shows a restricted category’s group in its row and prefills it for editing', async () => {
     const user = userEvent.setup()
     const update = vi.spyOn(api, 'updateCategory').mockResolvedValue(categories[1])
@@ -280,6 +321,39 @@ describe('Role-defaults picker', () => {
     // enforces it too).
     expect(options).not.toContain('Zettelkasten Labor')
     expect(options).not.toContain('Abgeschaltet')
+  })
+})
+
+// Review finding 6: while the category list is still in flight the restricted
+// set is unknown, so the picker must offer nothing rather than a service that
+// Save would reject with a 400.
+describe('Role-defaults picker while the categories are loading', () => {
+  it('offers nothing until the unnarrowed category list has answered', async () => {
+    const roles: Role[] = [{ slug: 'student', label: { de: 'Studierende', en: 'Students' } }]
+    vi.spyOn(api, 'roles').mockResolvedValue(roles)
+    vi.spyOn(api, 'adminServices').mockResolvedValue({
+      services: [adminService({}), adminService({ id: 'x1', name: 'Zettelkasten Labor', categories: ['infra'] })],
+    })
+    vi.spyOn(api, 'roleDefaults').mockResolvedValue({ service_ids: [] })
+    let land: (v: { categories: Category[] }) => void = () => {}
+    vi.spyOn(api, 'adminCategories').mockReturnValue(
+      new Promise((resolve) => {
+        land = resolve
+      }),
+    )
+    render(withClient(<RoleDefaultsAdmin locale="de" />))
+
+    // The services have landed, so without the gate the picker would already be
+    // offering them. Nothing is pickable while the category answer is out — and
+    // an empty picker renders as no picker at all.
+    await screen.findByRole('list')
+    expect(screen.queryByRole('combobox', { name: 'Hinzufügen' })).not.toBeInTheDocument()
+
+    land({ categories })
+    const select = await screen.findByRole('combobox', { name: 'Hinzufügen' })
+    const options = within(select).getAllByRole('option').map((o) => o.textContent)
+    expect(options).toContain('VPN')
+    expect(options).not.toContain('Zettelkasten Labor')
   })
 })
 

@@ -199,7 +199,7 @@ func adminCreateCategory(d AdminDeps) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
-		cat, err := service.CreateCategory(r.Context(), d.Store, actorFromContext(r.Context()), d.Visibility, b.Slug, b.Label, b.Sort, b.Visibility)
+		cat, err := service.CreateCategory(r.Context(), d.Store, actorFromContext(r.Context()), d.Visibility, b.Slug, b.Label, b.Sort, b.visibility())
 		if err != nil {
 			writeServiceError(w, err)
 			return
@@ -218,12 +218,26 @@ type categoryBody struct {
 	Sort  int               `json:"sort"`
 	// Visibility restricts the category and every service in it to holders of a
 	// configured slug; "" = public (docs/specs/service-visibility.md §2.2).
-	Visibility string `json:"visibility"`
+	//
+	// A pointer, so an omitted field means "leave it as it is" rather than
+	// "make it public": this is the one field with an access-control effect, and
+	// an older SPA build or a script sending only {slug, label} must not
+	// silently un-restrict a category and everything in it (review finding 5).
+	// On create, absent is simply public — there is nothing to preserve.
+	Visibility *string `json:"visibility"`
+}
+
+func (b categoryBody) visibility() string {
+	if b.Visibility == nil {
+		return ""
+	}
+	return *b.Visibility
 }
 
 // adminUpdateCategory handles PATCH /api/admin/categories/{slug}: both labels,
-// the visibility slug, and — deliberately — the slug itself; attachments join on
-// the category id, so a rename is safe (issue #130 §2.2).
+// the visibility group, and — deliberately — the slug itself; attachments join
+// on the category id, so a rename is safe (issue #130 §2.2). An omitted
+// `visibility` leaves the current one alone (see categoryBody).
 func adminUpdateCategory(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var b categoryBody

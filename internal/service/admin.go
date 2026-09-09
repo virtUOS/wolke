@@ -468,12 +468,21 @@ func CreateCategory(ctx context.Context, db AdminDB, actor Actor, vis config.Vis
 // UpdateCategory edits a category's slug, both labels and its visibility,
 // addressed by its current slug, and audits the before/after diff.
 //
+// visibility is a pointer because absent must mean "unchanged", not "public":
+// it is the one field with an access-control effect, and a caller that omits it
+// — an older client, a script fixing a typo in the label — must not un-restrict
+// the category and everything in it (review finding 5).
+//
 // Renaming is allowed: service_categories joins on the category id, so
 // attachments survive untouched, and the only slug consumer is the /?cat=<slug>
 // URL filter, which Dashboard.tsx already drops when the catalog no longer knows
 // it (issue #130 §2.2).
-func UpdateCategory(ctx context.Context, db AdminDB, actor Actor, vis config.VisibilitySet, slug, newSlug string, label map[string]string, visibility string) (store.Category, error) {
-	newSlug, err := validateCategoryInput(newSlug, label, visibility, vis)
+func UpdateCategory(ctx context.Context, db AdminDB, actor Actor, vis config.VisibilitySet, slug, newSlug string, label map[string]string, visibility *string) (store.Category, error) {
+	// The visibility is checked inside the transaction, where the current value
+	// is known: keeping a slug the config dropped must stay possible (a stale
+	// restriction has to be editable at all — review finding 4), while setting
+	// a new unconfigured one must not.
+	newSlug, err := validateCategoryInput(newSlug, label, "", vis)
 	if err != nil {
 		return store.Category{}, err
 	}
@@ -486,13 +495,24 @@ func UpdateCategory(ctx context.Context, db AdminDB, actor Actor, vis config.Vis
 		if err != nil {
 			return fmt.Errorf("get category: %w", err)
 		}
+		// Absent = keep what the row already has.
+		current := textVal(before.Visibility)
+		next := current
+		if visibility != nil {
+			next = *visibility
+		}
+		if next != current {
+			if _, err := validateCategoryInput(newSlug, label, next, vis); err != nil {
+				return err
+			}
+		}
 		if newSlug != before.Slug {
 			if err := requireFreeSlug(ctx, q, newSlug); err != nil {
 				return err
 			}
 		}
 		c, err := q.UpdateCategory(ctx, store.UpdateCategoryParams{
-			ID: before.ID, Slug: newSlug, Label: mustJSON(label), Visibility: pgText(visibility),
+			ID: before.ID, Slug: newSlug, Label: mustJSON(label), Visibility: pgText(next),
 		})
 		if err != nil {
 			return fmt.Errorf("update category: %w", err)
@@ -505,7 +525,7 @@ func UpdateCategory(ctx context.Context, db AdminDB, actor Actor, vis config.Vis
 		// Restricting a category takes its services out of every default view,
 		// for the same reason UpdateService does it: a default nobody may see
 		// wedges that role's editor.
-		if visibility != "" {
+		if next != "" {
 			purged, err := q.PurgeRoleDefaultsForCategory(ctx, before.ID)
 			if err != nil {
 				return fmt.Errorf("purge role defaults of restricted category: %w", err)
