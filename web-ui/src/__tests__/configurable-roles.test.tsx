@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AnnouncementsAdmin } from '@/components/admin/AnnouncementsAdmin'
 import { RoleDefaultsAdmin } from '@/components/admin/RoleDefaultsAdmin'
-import { api, type Announcement, type Role, type Service } from '@/lib/api'
+import { api, type AdminService, type Announcement, type Role } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { expectNoAxeViolations } from '@/test/axe'
 
@@ -31,9 +31,12 @@ function withClient(ui: ReactNode) {
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>
 }
 
+// The role-defaults editor reads the UNNARROWED admin endpoints
+// (docs/specs/service-visibility.md §5), not /api/catalog.
 function stubApi(roles: Role[]) {
   vi.spyOn(api, 'roles').mockResolvedValue(roles)
-  vi.spyOn(api, 'catalog').mockResolvedValue({ services: [], categories: [] })
+  vi.spyOn(api, 'adminServices').mockResolvedValue({ services: [] })
+  vi.spyOn(api, 'adminCategories').mockResolvedValue({ categories: [] })
   vi.spyOn(api, 'roleDefaults').mockResolvedValue({ service_ids: [] })
   vi.spyOn(api, 'adminAnnouncements').mockResolvedValue({ announcements: [] })
 }
@@ -113,12 +116,12 @@ describe('RoleDefaultsAdmin', () => {
   // every catalog refetch — so an add made in that window vanished when the
   // response landed. Local edits now sit on top of the server's list.
   it('keeps an add made while the defaults fetch is still in flight', async () => {
-    const services: Service[] = [
-      { id: 'svc-a', name: 'Stud.IP', description: {}, icon: 'graduation-cap', categories: [], doc_only: false },
-      { id: 'svc-b', name: 'MyShare', description: {}, icon: 'hard-drive', categories: [], doc_only: false },
+    const services: AdminService[] = [
+      { id: 'svc-a', name: 'Stud.IP', description: {}, icon: 'graduation-cap', categories: [], is_active: true, keywords: [] },
+      { id: 'svc-b', name: 'MyShare', description: {}, icon: 'hard-drive', categories: [], is_active: true, keywords: [] },
     ]
     stubApi(twoRoles)
-    vi.spyOn(api, 'catalog').mockResolvedValue({ services, categories: [] })
+    vi.spyOn(api, 'adminServices').mockResolvedValue({ services })
     let resolveDefaults: (r: { service_ids: string[] }) => void = () => {}
     vi.spyOn(api, 'roleDefaults').mockReturnValue(
       new Promise((resolve) => {
@@ -147,13 +150,13 @@ describe('RoleDefaultsAdmin', () => {
   // The same fetch was keyed on catalog.data, so a catalog that actually changed
   // (an admin adds a service; the catalog query invalidates) re-ran it and
   // replaced the list wholesale. It must leave a local edit alone.
-  it('survives a changed catalog without re-fetching or replacing the list', async () => {
-    const services: Service[] = [
-      { id: 'svc-a', name: 'Stud.IP', description: {}, icon: 'graduation-cap', categories: [], doc_only: false },
-      { id: 'svc-b', name: 'MyShare', description: {}, icon: 'hard-drive', categories: [], doc_only: false },
+  it('survives a changed service list without re-fetching or replacing the list', async () => {
+    const services: AdminService[] = [
+      { id: 'svc-a', name: 'Stud.IP', description: {}, icon: 'graduation-cap', categories: [], is_active: true, keywords: [] },
+      { id: 'svc-b', name: 'MyShare', description: {}, icon: 'hard-drive', categories: [], is_active: true, keywords: [] },
     ]
     stubApi(twoRoles)
-    vi.spyOn(api, 'catalog').mockResolvedValue({ services, categories: [] })
+    vi.spyOn(api, 'adminServices').mockResolvedValue({ services })
     const defaults = vi.spyOn(api, 'roleDefaults').mockResolvedValue({ service_ids: ['svc-a'] })
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const user = userEvent.setup()
@@ -170,11 +173,13 @@ describe('RoleDefaultsAdmin', () => {
     // A genuinely different catalog: identical data would be structurally
     // shared by TanStack Query and never change the reference the old effect
     // keyed on, so this is what the defect actually needed.
-    vi.spyOn(api, 'catalog').mockResolvedValue({
-      services: [...services, { id: 'svc-c', name: 'VPN', description: {}, icon: 'shield', categories: [], doc_only: false }],
-      categories: [],
+    vi.spyOn(api, 'adminServices').mockResolvedValue({
+      services: [
+        ...services,
+        { id: 'svc-c', name: 'VPN', description: {}, icon: 'shield', categories: [], is_active: true, keywords: [] },
+      ],
     })
-    await act(() => qc.refetchQueries({ queryKey: ['catalog'] }))
+    await act(() => qc.refetchQueries({ queryKey: ['admin', 'services'] }))
 
     // Wait for the new catalog to actually reach the component — it arrives a
     // render later, which is exactly when the old effect re-fired.

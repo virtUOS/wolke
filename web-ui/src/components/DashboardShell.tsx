@@ -44,9 +44,10 @@ interface DashboardShellProps {
   onSetLocale: (locale: Me['locale']) => void
   onAdmin: () => void
   isMobile: boolean
-  /** Persists the user's opt-in visibility slugs (issue #34); the entries and
-   *  current state come from `me.visibility`. */
-  onSetVisibilityOptIn: (optin: string[]) => void
+  /** Whether the user asked to see beta services, and the setter that persists
+   *  it through PATCH /api/me/prefs (docs/specs/service-visibility.md §2.1). */
+  showBeta: boolean
+  onSetShowBeta: (next: boolean) => void
   /** Identifies the current view; when it changes, focus moves to <main> so a
    *  view switch (e.g. opening/closing Admin) isn't lost to <body>. */
   focusKey: string
@@ -68,7 +69,8 @@ export function DashboardShell({
   onSetLocale,
   onAdmin,
   isMobile,
-  onSetVisibilityOptIn,
+  showBeta,
+  onSetShowBeta,
   focusKey,
   children,
 }: DashboardShellProps) {
@@ -127,9 +129,8 @@ export function DashboardShell({
         onAdmin={onAdmin}
         onLogout={logout}
         isMobile={isMobile}
-        visibilityEntries={me.visibility.entries}
-        visibilityOptIn={me.visibility.optin}
-        onSetVisibilityOptIn={onSetVisibilityOptIn}
+        showBeta={showBeta}
+        onSetShowBeta={onSetShowBeta}
       />
       <main
         id="main"

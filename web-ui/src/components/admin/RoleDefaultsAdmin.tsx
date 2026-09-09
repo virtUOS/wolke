@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
-import { api, localized, type Service } from '@/lib/api'
+import { api, localized, type AdminService } from '@/lib/api'
 import { t } from '@/lib/i18n'
-import { useAdminActions } from '@/lib/admin-hooks'
-import { useCatalog, useRoles } from '@/lib/hooks'
+import { useAdminActions, useAdminCategories, useAdminServices } from '@/lib/admin-hooks'
+import { useRoles } from '@/lib/hooks'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { PillButton } from '@/components/ui/pill-button'
@@ -15,7 +15,10 @@ import { Select } from '@/components/ui/select'
 // wraps rather than assuming a fixed number of them.
 export function RoleDefaultsAdmin({ locale }: { locale: string }) {
   const s = t(locale)
-  const catalog = useCatalog()
+  // Unnarrowed admin reads, not /api/catalog: an admin who holds no group must
+  // still see and manage everything (docs/specs/service-visibility.md §5).
+  const catalog = useAdminServices()
+  const categories = useAdminCategories()
   const roles = useRoles()
   const actions = useAdminActions()
   const roleList = roles.data ?? []
@@ -31,10 +34,16 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
 
   const services = catalog.data?.services ?? []
   const byID = new Map(services.map((s) => [s.id, s]))
-  // An id the catalog cannot resolve — a service that left the catalog, or a
-  // restricted default this admin does not hold (/api/catalog is narrowed for
-  // admins too) — renders as an unavailable placeholder, not as a bare id.
+  // An id the admin catalog cannot resolve — a service deleted outright —
+  // renders as an unavailable placeholder, not as a bare id.
   const name = (id: string) => byID.get(id)?.name ?? s.admin.unavailableService
+  // The category slugs that restrict a service to a group. Until that query has
+  // actually answered, the set is unknown — offering the full list in that
+  // window lets an admin pick a restricted service and eat a 400 on Save, so
+  // the picker stays empty until it lands (review finding 6).
+  const restricted = new Set(
+    (categories.data?.categories ?? []).filter((c) => c.visibility).map((c) => c.slug),
+  )
 
   // True once the admin has touched the list since the current fetch started.
   // The fetch is not instant, and the picker is usable while it is in flight, so
@@ -64,12 +73,12 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
     }
   }, [role])
 
-  // Every saved id stays in the list, resolvable or not. An id the narrowed
-  // catalog cannot name is still a real row on the server: dropping it from the
-  // view — and so from what Save writes — would delete a default nothing on
-  // screen ever mentioned (review of #131). It is shown as a placeholder the
-  // admin can remove deliberately, mirroring how a soft-deleted favorite
-  // degrades rather than vanishes.
+  // Every saved id stays in the list, resolvable or not. An id the catalog
+  // cannot name is still a real row on the server: dropping it from the view —
+  // and so from what Save writes — would delete a default nothing on screen
+  // ever mentioned (review of #131). It is shown as a placeholder the admin can
+  // remove deliberately, mirroring how a soft-deleted favorite degrades rather
+  // than vanishes.
   const visible = ordered
 
   // The row indices the buttons pass in are indices into `visible`, so a swap
@@ -93,10 +102,16 @@ export function RoleDefaultsAdmin({ locale }: { locale: string }) {
     setOrdered((o) => (o.includes(id) ? o : [...o, id]))
   }
 
-  // Public services only (docs/specs/service-visibility.md §7.1): a default
-  // view is the same for every user of a role, so a restricted service can
-  // neither be offered here nor — the server enforces it — saved.
-  const available = services.filter((s: Service) => !s.visibility && !visible.includes(s.id))
+  // Public, active services only (docs/specs/service-visibility.md §2.2): a
+  // default view is the same for every user of a role, so a service in a
+  // restricted category can neither be offered here nor — the server enforces
+  // it — saved.
+  const available = !categories.isSuccess
+    ? []
+    : services.filter(
+        (svc: AdminService) =>
+          svc.is_active && !svc.categories.some((c) => restricted.has(c)) && !visible.includes(svc.id),
+      )
 
   return (
     <div className="space-y-4">

@@ -20,8 +20,9 @@ func (f fakeStore) SearchServiceIDs(context.Context, string) ([]pgtype.UUID, err
 	return f.ids, nil
 }
 
-// The catalog MCP server has no identity, so it is a holder of nothing: a
-// restricted service is absent from every read, unconditionally (spec §5).
+// The catalog MCP server has no identity: it holds no group and cannot ask for
+// beta services, so both a restricted category's services and the beta ones are
+// absent from every read, unconditionally (docs/specs/service-visibility.md §3).
 func TestCatalogMCPNeverServesRestrictedServices(t *testing.T) {
 	const restricted = "22222222-2222-2222-2222-222222222222"
 	var rid pgtype.UUID
@@ -31,9 +32,10 @@ func TestCatalogMCPNeverServesRestrictedServices(t *testing.T) {
 	snap := catalog.NewSnapshot(
 		[]catalog.Service{
 			{ID: "1", Name: "Public", Categories: []string{"data"}, Tag: "wartung"},
-			{ID: restricted, Name: "Secret Lab", Categories: []string{"labs"}, Visibility: "experimental", Tag: "wartung"},
+			{ID: restricted, Name: "Secret Lab", Categories: []string{"labs"}, Tag: "wartung"},
+			{ID: "3", Name: "Beta Thing", Categories: []string{"data"}, Tag: catalog.TagBeta},
 		},
-		[]catalog.Category{{Slug: "data"}, {Slug: "labs"}},
+		[]catalog.Category{{Slug: "data"}, {Slug: "labs", Visibility: "it-infra"}},
 	)
 	cache := catalog.NewCache(time.Minute, func(context.Context) (*catalog.Snapshot, error) { return snap, nil })
 	mgr := New(cache, fakeStore{ids: []pgtype.UUID{rid}}, config.RoleSet{})
@@ -53,6 +55,15 @@ func TestCatalogMCPNeverServesRestrictedServices(t *testing.T) {
 	found, err := mgr.Search(ctx, "secret")
 	if err != nil || len(found) != 0 {
 		t.Fatalf("Search = %+v, %v; a restricted id must fail to resolve", found, err)
+	}
+	// Beta is "hidden unless the user asks for it", and this server has no user
+	// to ask (§2.1) — so it never lists one either.
+	if _, err := mgr.GetService(ctx, "3"); err == nil {
+		t.Fatal("GetService resolved a beta service without any identity")
+	}
+	beta, err := mgr.ListServices(ctx, "", catalog.TagBeta)
+	if err != nil || len(beta) != 0 {
+		t.Fatalf("ListServices(tag=beta) = %+v, %v; want nothing", beta, err)
 	}
 	cats, err := mgr.ListCategories(ctx)
 	if err != nil || len(cats) != 1 || cats[0].Slug != "data" {

@@ -63,7 +63,6 @@ type serviceBody struct {
 	Categories  []string          `json:"categories"`
 	Tag         string            `json:"tag"`
 	Keywords    []string          `json:"keywords"`
-	Visibility  string            `json:"visibility"` // "" = public
 }
 
 func (b serviceBody) draft() service.Draft {
@@ -76,7 +75,6 @@ func (b serviceBody) draft() service.Draft {
 		Categories:  b.Categories,
 		Tag:         b.Tag,
 		Keywords:    b.Keywords,
-		Visibility:  b.Visibility,
 	}
 }
 
@@ -84,7 +82,7 @@ func adminListServices(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		list, err := service.ListAdminServices(r.Context(), d.Store)
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"services": list})
@@ -98,9 +96,9 @@ func adminCreateService(d AdminDeps) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
-		svc, err := service.CreateService(r.Context(), d.Store, actorFromContext(r.Context()), d.Visibility, b.draft())
+		svc, err := service.CreateService(r.Context(), d.Store, actorFromContext(r.Context()), b.draft())
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		d.invalidate()
@@ -120,9 +118,9 @@ func adminUpdateService(d AdminDeps) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
-		svc, err := service.UpdateService(r.Context(), d.Store, actorFromContext(r.Context()), d.Visibility, id, b.draft())
+		svc, err := service.UpdateService(r.Context(), d.Store, actorFromContext(r.Context()), id, b.draft())
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		d.invalidate()
@@ -138,7 +136,7 @@ func adminDeleteService(d AdminDeps) http.HandlerFunc {
 			return
 		}
 		if err := service.SoftDeleteService(r.Context(), d.Store, actorFromContext(r.Context()), id); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		d.invalidate()
@@ -150,12 +148,12 @@ func adminGetRoleDefaults(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		role := chi.URLParam(r, "role")
 		if err := service.ValidateRole(d.Roles, role); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		ids, err := d.Store.GetRoleDefaults(r.Context(), role)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "internal", "Could not read role defaults.")
+			serverError(w, r, "internal", "Could not read role defaults.", err)
 			return
 		}
 		out := make([]string, 0, len(ids))
@@ -186,7 +184,7 @@ func adminSetRoleDefaults(d AdminDeps) http.HandlerFunc {
 			ids = append(ids, id)
 		}
 		if err := service.SetRoleDefaults(r.Context(), d.Store, actorFromContext(r.Context()), d.Roles, role, ids); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		d.invalidate()
@@ -201,9 +199,9 @@ func adminCreateCategory(d AdminDeps) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
-		cat, err := service.CreateCategory(r.Context(), d.Store, actorFromContext(r.Context()), b.Slug, b.Label, b.Sort)
+		cat, err := service.CreateCategory(r.Context(), d.Store, actorFromContext(r.Context()), d.Visibility, b.Slug, b.Label, b.Sort, b.visibility())
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		d.invalidate()
@@ -218,11 +216,28 @@ type categoryBody struct {
 	Slug  string            `json:"slug"`
 	Label map[string]string `json:"label"`
 	Sort  int               `json:"sort"`
+	// Visibility restricts the category and every service in it to holders of a
+	// configured slug; "" = public (docs/specs/service-visibility.md §2.2).
+	//
+	// A pointer, so an omitted field means "leave it as it is" rather than
+	// "make it public": this is the one field with an access-control effect, and
+	// an older SPA build or a script sending only {slug, label} must not
+	// silently un-restrict a category and everything in it (review finding 5).
+	// On create, absent is simply public — there is nothing to preserve.
+	Visibility *string `json:"visibility"`
 }
 
-// adminUpdateCategory handles PATCH /api/admin/categories/{slug}: both labels
-// and, deliberately, the slug itself — attachments join on the category id, so a
-// rename is safe (issue #130 §2.2).
+func (b categoryBody) visibility() string {
+	if b.Visibility == nil {
+		return ""
+	}
+	return *b.Visibility
+}
+
+// adminUpdateCategory handles PATCH /api/admin/categories/{slug}: both labels,
+// the visibility group, and — deliberately — the slug itself; attachments join
+// on the category id, so a rename is safe (issue #130 §2.2). An omitted
+// `visibility` leaves the current one alone (see categoryBody).
 func adminUpdateCategory(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var b categoryBody
@@ -230,10 +245,10 @@ func adminUpdateCategory(d AdminDeps) http.HandlerFunc {
 			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
 			return
 		}
-		cat, err := service.UpdateCategory(r.Context(), d.Store, actorFromContext(r.Context()),
-			chi.URLParam(r, "slug"), b.Slug, b.Label)
+		cat, err := service.UpdateCategory(r.Context(), d.Store, actorFromContext(r.Context()), d.Visibility,
+			chi.URLParam(r, "slug"), b.Slug, b.Label, b.Visibility)
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		d.invalidate()
@@ -247,7 +262,7 @@ func adminUpdateCategory(d AdminDeps) http.HandlerFunc {
 func adminDeleteCategory(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := service.DeleteCategory(r.Context(), d.Store, actorFromContext(r.Context()), chi.URLParam(r, "slug")); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		d.invalidate()
@@ -270,7 +285,7 @@ func adminSetCategoryOrder(d AdminDeps) http.HandlerFunc {
 			return
 		}
 		if err := service.SetCategoryOrder(r.Context(), d.Store, actorFromContext(r.Context()), b.Slugs); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		d.invalidate()
@@ -284,7 +299,26 @@ func adminSetCategoryOrder(d AdminDeps) http.HandlerFunc {
 func categoryJSON(c store.Category) map[string]any {
 	var label map[string]string
 	_ = json.Unmarshal(c.Label, &label)
-	return map[string]any{"slug": c.Slug, "label": label, "sort": c.Sort}
+	out := map[string]any{"slug": c.Slug, "label": label, "sort": c.Sort}
+	if c.Visibility.Valid && c.Visibility.String != "" {
+		out["visibility"] = c.Visibility.String
+	}
+	return out
+}
+
+// adminListCategories handles GET /api/admin/categories: every category with
+// its visibility, unnarrowed. The admin screens read this instead of
+// /api/catalog, which is narrowed for admins too — they are ordinary users in
+// their own dashboard (docs/specs/service-visibility.md §5).
+func adminListCategories(d AdminDeps) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		list, err := service.ListAdminCategories(r.Context(), d.Store)
+		if err != nil {
+			writeServiceError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"categories": list})
+	}
 }
 
 // auditEntry is the API shape of an audit row (diff embedded as raw JSON).
@@ -309,7 +343,7 @@ func adminSearchInsights(d AdminDeps) http.HandlerFunc {
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		entries, err := service.ListSearchInsights(r.Context(), d.Store, days, limit)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "insights_unavailable", "Could not load search insights.")
+			serverError(w, r, "insights_unavailable", "Could not load search insights.", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
@@ -326,7 +360,7 @@ func adminListAudit(d AdminDeps) http.HandlerFunc {
 		}
 		rows, err := d.Audit.ListAudit(r.Context(), limit)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "audit_unavailable", "Could not read the audit log.")
+			serverError(w, r, "audit_unavailable", "Could not read the audit log.", err)
 			return
 		}
 		out := make([]auditEntry, 0, len(rows))

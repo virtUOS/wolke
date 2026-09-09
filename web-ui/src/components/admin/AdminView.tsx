@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import type { Category } from '@/lib/api'
 import { t } from '@/lib/i18n'
-import { useCatalog } from '@/lib/hooks'
+import { useAdminCategories } from '@/lib/admin-hooks'
 import { IconButton } from '@/components/ui/icon-button'
 import { PillButton } from '@/components/ui/pill-button'
 import { ServicesAdmin } from './ServicesAdmin'
@@ -16,8 +16,10 @@ type Section = 'services' | 'categories' | 'roles' | 'announcements' | 'insights
 
 export function AdminView({ locale, onExit }: { locale: string; onExit: () => void }) {
   const s = t(locale)
-  const catalog = useCatalog()
-  const categories: Category[] = catalog.data?.categories ?? []
+  // Unnarrowed, not the dashboard's /api/catalog: an admin manages the
+  // categories they do not themselves hold (docs/specs/service-visibility.md §5).
+  const cats = useAdminCategories()
+  const categories: Category[] = cats.data?.categories ?? []
   const [section, setSection] = useState<Section>('services')
 
   const tabs: { key: Section; label: string }[] = [
@@ -65,7 +67,9 @@ export function AdminView({ locale, onExit }: { locale: string; onExit: () => vo
         </nav>
       </header>
 
-      {section === 'services' && <ServicesAdmin categories={categories} locale={locale} />}
+      {section === 'services' && (
+        <ServicesAdmin categories={categories} categoriesReady={cats.isSuccess} locale={locale} />
+      )}
       {section === 'categories' && <CategoriesAdmin categories={categories} locale={locale} />}
       {section === 'roles' && <RoleDefaultsAdmin locale={locale} />}
       {section === 'announcements' && <AnnouncementsAdmin locale={locale} />}

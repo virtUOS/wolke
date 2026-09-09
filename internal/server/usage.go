@@ -52,7 +52,7 @@ func recordClick(db usage.Store, cache *catalog.Cache, m *metrics.Metrics, vis c
 		}
 		snap, err := visibleCatalog(r.Context(), cache, vis)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			serverError(w, r, "catalog_unavailable", "Could not load the catalog.", err)
 			return
 		}
 		svc, ok := snap.ServiceByID(body.ServiceID)
@@ -62,7 +62,7 @@ func recordClick(db usage.Store, cache *catalog.Cache, m *metrics.Metrics, vis c
 			return
 		}
 		if err := usage.Record(r.Context(), db, user.ID, serviceID, user.PrimaryRole, target); err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "click_failed", "Could not record the event.")
+			serverError(w, r, "click_failed", "Could not record the event.", err)
 			return
 		}
 		if m != nil {
@@ -79,12 +79,12 @@ func frequent(c *catalog.Cache, db usage.Store, vis config.VisibilitySet) http.H
 		user, _ := userFromContext(r.Context())
 		ids, err := usage.Frequent(r.Context(), db, user.ID, time.Now().Add(-usage.FrequentWindow), usage.FrequentLimit)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "usage_unavailable", "Could not load frequently-used services.")
+			serverError(w, r, "usage_unavailable", "Could not load frequently-used services.", err)
 			return
 		}
 		snap, err := visibleCatalog(r.Context(), c, vis)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			serverError(w, r, "catalog_unavailable", "Could not load the catalog.", err)
 			return
 		}
 		services := make([]catalog.Service, 0, len(ids))

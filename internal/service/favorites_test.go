@@ -191,10 +191,14 @@ func TestListFavoritesUsageAndAlphaIgnoreStoredOrder(t *testing.T) {
 	}
 }
 
+// visibleAll is the "nothing is hidden from this reader" predicate the plain
+// order tests use.
+func visibleAll(pgtype.UUID) bool { return true }
+
 func TestSetFavoritesOrderWritesThePermutationInOrder(t *testing.T) {
 	f := &fakeFav{byUsage: []pgtype.UUID{uuidN(1), uuidN(2), uuidN(3)}}
 	want := []pgtype.UUID{uuidN(3), uuidN(1), uuidN(2)}
-	if err := SetFavoritesOrder(context.Background(), f, uuidVal(), want); err != nil {
+	if err := SetFavoritesOrder(context.Background(), f, uuidVal(), want, visibleAll); err != nil {
 		t.Fatalf("SetFavoritesOrder: %v", err)
 	}
 	if len(f.orderWrites) != 1 {
@@ -212,7 +216,7 @@ func TestSetFavoritesOrderIsIdempotent(t *testing.T) {
 	f := &fakeFav{byUsage: []pgtype.UUID{uuidN(1), uuidN(2)}}
 	ids := []pgtype.UUID{uuidN(2), uuidN(1)}
 	for i := 0; i < 2; i++ {
-		if err := SetFavoritesOrder(context.Background(), f, uuidVal(), ids); err != nil {
+		if err := SetFavoritesOrder(context.Background(), f, uuidVal(), ids, visibleAll); err != nil {
 			t.Fatalf("write %d: %v", i+1, err)
 		}
 	}
@@ -225,7 +229,7 @@ func TestSetFavoritesOrderIsIdempotent(t *testing.T) {
 // not an error (the UI does this when the last favorite is un-starred).
 func TestSetFavoritesOrderAcceptsEmptyList(t *testing.T) {
 	f := &fakeFav{byUsage: nil}
-	if err := SetFavoritesOrder(context.Background(), f, uuidVal(), nil); err != nil {
+	if err := SetFavoritesOrder(context.Background(), f, uuidVal(), nil, visibleAll); err != nil {
 		t.Fatalf("SetFavoritesOrder(empty): %v", err)
 	}
 }
@@ -244,7 +248,7 @@ func TestSetFavoritesOrderRejectsNonPermutations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := &fakeFav{byUsage: tt.current}
-			err := SetFavoritesOrder(context.Background(), f, uuidVal(), tt.sent)
+			err := SetFavoritesOrder(context.Background(), f, uuidVal(), tt.sent, visibleAll)
 			var ve *ValidationError
 			if !errors.As(err, &ve) {
 				t.Fatalf("err = %v, want ValidationError", err)
@@ -266,10 +270,46 @@ func TestSetFavoritesOrderIgnoresSoftDeletedFavorites(t *testing.T) {
 		byUsage: []pgtype.UUID{uuidN(1), uuidN(2), uuidN(3)}, // #3's service is gone
 		active:  []pgtype.UUID{uuidN(1), uuidN(2)},
 	}
-	if err := SetFavoritesOrder(context.Background(), f, uuidVal(), []pgtype.UUID{uuidN(2), uuidN(1)}); err != nil {
+	if err := SetFavoritesOrder(context.Background(), f, uuidVal(), []pgtype.UUID{uuidN(2), uuidN(1)}, visibleAll); err != nil {
 		t.Fatalf("SetFavoritesOrder: %v", err)
 	}
 	if len(f.orderWrites) != 1 {
 		t.Fatalf("orderWrites = %d, want 1", len(f.orderWrites))
+	}
+}
+
+// A favorite the *reader* can no longer see — a beta service after the pref
+// went off, or one in a category whose group the IdP stopped granting — is
+// exactly as absent from /api/favorites as a soft-deleted one, so the same two
+// rules apply: it must not be required in the list, and it must not be written
+// away. Without this the user is stuck — every reorder 400s, and they cannot
+// un-star a tile that no longer renders (review finding 1).
+func TestSetFavoritesOrderIgnoresInvisibleFavorites(t *testing.T) {
+	hidden := uuidN(3)
+	f := &fakeFav{byUsage: []pgtype.UUID{uuidN(1), uuidN(2), hidden}}
+	visible := func(id pgtype.UUID) bool { return id != hidden }
+
+	if err := SetFavoritesOrder(context.Background(), f, uuidVal(), []pgtype.UUID{uuidN(2), uuidN(1)}, visible); err != nil {
+		t.Fatalf("SetFavoritesOrder: %v", err)
+	}
+	if len(f.orderWrites) != 1 {
+		t.Fatalf("orderWrites = %d, want 1", len(f.orderWrites))
+	}
+	for _, id := range f.orderWrites[0] {
+		if id == hidden {
+			t.Fatalf("the invisible favorite was renumbered: %v", f.orderWrites[0])
+		}
+	}
+
+	// And sending it anyway is still a non-permutation: the client cannot
+	// smuggle an id it was never shown into the order.
+	f2 := &fakeFav{byUsage: []pgtype.UUID{uuidN(1), uuidN(2), hidden}}
+	err := SetFavoritesOrder(context.Background(), f2, uuidVal(), []pgtype.UUID{uuidN(2), uuidN(1), hidden}, visible)
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("err = %v, want ValidationError", err)
+	}
+	if len(f2.orderWrites) != 0 {
+		t.Errorf("nothing may be written on a rejected order, got %v", f2.orderWrites)
 	}
 }

@@ -49,15 +49,23 @@ interface StubOptions {
 }
 
 /**
- * Serves the catalog's categories client-side and applies the category writes
- * to the in-memory list, so the UI's own refetch sees them change. Services are
- * served empty: this spec is the categories section, and an empty catalog keeps
- * the fixture honest about which list the assertions are reading.
+ * Serves the categories client-side and applies the category writes to the
+ * in-memory list, so the UI's own refetch sees them change. Services are served
+ * empty: this spec is the categories section, and an empty catalog keeps the
+ * fixture honest about which list the assertions are reading.
+ *
+ * Both endpoints are stubbed: the admin screens read the unnarrowed
+ * GET /api/admin/categories (docs/specs/service-visibility.md §5), and
+ * /api/catalog still feeds the dashboard behind it.
  */
 async function stubCategories(page: Page, rows: SeedCategory[], opts: StubOptions): Promise<void> {
   await page.route('**/api/catalog', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
     await route.fulfill({ json: { services: [], categories: rows } })
+  })
+  await page.route('**/api/admin/categories', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await route.fulfill({ json: { categories: rows } })
   })
   await page.route('**/api/admin/categories/order', async (route) => {
     const req = route.request()
@@ -167,6 +175,9 @@ test.describe('issue #130 — the admin edits, deletes and reorders categories',
     expect(writes[0].body).toEqual({
       slug: 'identitaetsverwaltung',
       label: { de: 'Identitätsverwaltung', en: 'Identity management' },
+      // Public, and stays public: this deployment configures a group, and the
+      // row carried none (docs/specs/service-visibility.md §2.2).
+      visibility: '',
     })
   })
 

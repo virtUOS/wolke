@@ -46,20 +46,14 @@ func TestValidateDraft(t *testing.T) {
 		{"keyword too long", func(in *Draft) { in.Keywords = []string{strings.Repeat("x", maxKeywordLength+1)} }, "keywords"},
 		// Duplicates/blank/whitespace collapse before the count check, so this is valid.
 		{"duplicate keywords collapse", func(in *Draft) { in.Keywords = []string{"bbb", "BBB", " bbb ", ""} }, ""},
-		// Visibility: "" is public; otherwise it must be a configured slug.
-		{"public visibility is valid", func(in *Draft) { in.Visibility = "" }, ""},
-		{"a configured visibility slug is valid", func(in *Draft) { in.Visibility = "experimental" }, ""},
-		{"an unconfigured visibility slug is rejected", func(in *Draft) { in.Visibility = "it-infra" }, "visibility"},
+		// A service carries no visibility of its own any more: it is restricted
+		// by the categories it sits in (docs/specs/service-visibility.md §2.2).
 	}
-	vis := (&config.Config{VisibilityEntries: []config.VisibilityEntry{{
-		Slug: "experimental", Grant: config.GrantOptIn,
-		Warning: map[string]string{"de": "Kann verschwinden."},
-	}}}).Visibility()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			in := validInput()
 			tt.mutate(&in)
-			err := validateServiceInput(vis, in)
+			err := validateServiceInput(in)
 			if tt.field == "" {
 				if err != nil {
 					t.Fatalf("want valid, got %v", err)
@@ -113,15 +107,31 @@ func TestValidHTTPURL(t *testing.T) {
 	}
 }
 
-// With no visibility configured at all, any non-empty slug is refused: the
-// admin form and the MCP propose path cannot restrict a service to a group
-// that does not exist.
-func TestVisibilityRejectedWhenNoneConfigured(t *testing.T) {
-	in := validInput()
-	in.Visibility = "experimental"
+// A category may only be restricted to a configured group. With none
+// configured at all, any non-empty slug is refused — the category editor and
+// the MCP cannot restrict a category to a group that does not exist.
+func TestCategoryVisibilityMustBeConfigured(t *testing.T) {
+	label := map[string]string{"de": "IT-Infrastruktur", "en": "IT infrastructure"}
+	configured := (&config.Config{VisibilityEntries: []config.VisibilityEntry{{
+		Slug: "it-infra", Claim: "groups", Match: "it-service-admins",
+	}}}).Visibility()
+
+	if _, err := validateCategoryInput("infra", label, "it-infra", configured); err != nil {
+		t.Fatalf("a configured slug must be accepted, got %v", err)
+	}
+	if _, err := validateCategoryInput("infra", label, "", configured); err != nil {
+		t.Fatalf("public (empty) must be accepted, got %v", err)
+	}
+
 	var ve *ValidationError
-	if err := validateServiceInput(config.VisibilitySet{}, in); !errors.As(err, &ve) || ve.Field != "visibility" {
+	if _, err := validateCategoryInput("infra", label, "nope", configured); !errors.As(err, &ve) || ve.Field != "visibility" {
 		t.Fatalf("err = %v, want a visibility ValidationError", err)
+	}
+	if _, err := validateCategoryInput("infra", label, "it-infra", config.VisibilitySet{}); !errors.As(err, &ve) || ve.Field != "visibility" {
+		t.Fatalf("err = %v, want a visibility ValidationError when nothing is configured", err)
+	}
+	if !strings.Contains(ve.Msg, "no visibility groups") {
+		t.Errorf("message %q should say the deployment configures none", ve.Msg)
 	}
 }
 
@@ -153,7 +163,7 @@ func TestValidateCategoryInput(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			slug, err := validateCategoryInput(tt.slug, tt.label)
+			slug, err := validateCategoryInput(tt.slug, tt.label, "", config.VisibilitySet{})
 			if tt.field == "" {
 				if err != nil {
 					t.Fatalf("want valid, got %v", err)

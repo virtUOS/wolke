@@ -73,7 +73,7 @@ func TestAdminServiceLifecycleAudited(t *testing.T) {
 	}
 
 	// Create → audited, present in admin list.
-	svc, err := CreateService(ctx, db, actor, config.VisibilitySet{}, in)
+	svc, err := CreateService(ctx, db, actor, in)
 	if err != nil {
 		t.Fatalf("CreateService: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestAdminServiceLifecycleAudited(t *testing.T) {
 	// Update → audited; rejects an unknown category.
 	in.Name = "Admin Test Service v2"
 	in.Categories = []string{"data", "communication"}
-	if _, err := UpdateService(ctx, db, actor, config.VisibilitySet{}, id, in); err != nil {
+	if _, err := UpdateService(ctx, db, actor, id, in); err != nil {
 		t.Fatalf("UpdateService: %v", err)
 	}
 	if auditCount("service.update") != 1 {
@@ -97,7 +97,7 @@ func TestAdminServiceLifecycleAudited(t *testing.T) {
 	}
 	bad := in
 	bad.Categories = []string{"no-such-category"}
-	if _, err := UpdateService(ctx, db, actor, config.VisibilitySet{}, id, bad); err == nil {
+	if _, err := UpdateService(ctx, db, actor, id, bad); err == nil {
 		t.Error("UpdateService with unknown category should fail validation")
 	}
 
@@ -232,7 +232,7 @@ func TestCategoryWritesAudited(t *testing.T) {
 
 	// Create rejects a malformed slug at the *service* layer — the gap #130
 	// closes (the regex used to live only in CategoriesAdmin.tsx).
-	if _, err := CreateCategory(ctx, db, actor, "Foo Bar!!", label, 9000); err == nil {
+	if _, err := CreateCategory(ctx, db, actor, config.VisibilitySet{}, "Foo Bar!!", label, 9000, ""); err == nil {
 		t.Error("CreateCategory with a malformed slug should fail validation")
 	} else {
 		var ve *ValidationError
@@ -241,20 +241,20 @@ func TestCategoryWritesAudited(t *testing.T) {
 		}
 	}
 
-	cat, err := CreateCategory(ctx, db, actor, "cat-test", label, 9000)
+	cat, err := CreateCategory(ctx, db, actor, config.VisibilitySet{}, "cat-test", label, 9000, "")
 	if err != nil {
 		t.Fatalf("CreateCategory: %v", err)
 	}
 
 	// Update rejects a malformed slug and a missing label, and renames onto a
 	// free slug — attachments join on the id, so a rename is safe.
-	if _, err := UpdateCategory(ctx, db, actor, "cat-test", "Foo Bar!!", label); err == nil {
+	if _, err := UpdateCategory(ctx, db, actor, config.VisibilitySet{}, "cat-test", "Foo Bar!!", label, ptr("")); err == nil {
 		t.Error("UpdateCategory with a malformed slug should fail validation")
 	}
-	if _, err := UpdateCategory(ctx, db, actor, "cat-test", "cat-test", map[string]string{"de": "Nur DE"}); err == nil {
+	if _, err := UpdateCategory(ctx, db, actor, config.VisibilitySet{}, "cat-test", "cat-test", map[string]string{"de": "Nur DE"}, ptr("")); err == nil {
 		t.Error("UpdateCategory without an en label should fail validation")
 	}
-	if _, err := UpdateCategory(ctx, db, actor, "no-such-category", "x", label); err == nil {
+	if _, err := UpdateCategory(ctx, db, actor, config.VisibilitySet{}, "no-such-category", "x", label, ptr("")); err == nil {
 		t.Error("UpdateCategory on an unknown slug should be a not-found")
 	} else {
 		var nf *NotFoundError
@@ -264,7 +264,7 @@ func TestCategoryWritesAudited(t *testing.T) {
 	}
 	// Renaming onto a slug that exists is a field-level validation error, not a
 	// raw 23505 from the unique index.
-	if _, err := UpdateCategory(ctx, db, actor, "cat-test", origSorts[0].slug, label); err == nil {
+	if _, err := UpdateCategory(ctx, db, actor, config.VisibilitySet{}, "cat-test", origSorts[0].slug, label, ptr("")); err == nil {
 		t.Error("UpdateCategory onto an existing slug should fail validation")
 	} else {
 		var ve *ValidationError
@@ -273,7 +273,7 @@ func TestCategoryWritesAudited(t *testing.T) {
 		}
 	}
 	// Creating onto an existing slug is the same error, from the same check.
-	if _, err := CreateCategory(ctx, db, actor, "cat-test", label, 9000); err == nil {
+	if _, err := CreateCategory(ctx, db, actor, config.VisibilitySet{}, "cat-test", label, 9000, ""); err == nil {
 		t.Error("CreateCategory onto an existing slug should fail validation")
 	} else {
 		var ve *ValidationError
@@ -283,7 +283,7 @@ func TestCategoryWritesAudited(t *testing.T) {
 	}
 
 	renamedLabel := map[string]string{"de": "Kat-Test v2", "en": "Cat test v2"}
-	updated, err := UpdateCategory(ctx, db, actor, "cat-test", "cat-test-renamed", renamedLabel)
+	updated, err := UpdateCategory(ctx, db, actor, config.VisibilitySet{}, "cat-test", "cat-test-renamed", renamedLabel, ptr(""))
 	if err != nil {
 		t.Fatalf("UpdateCategory: %v", err)
 	}
@@ -303,7 +303,7 @@ func TestCategoryWritesAudited(t *testing.T) {
 
 	// Delete is guarded: a category a service still uses is refused with the
 	// blocking count, not a raw constraint violation.
-	used, err := CreateCategory(ctx, db, actor, "cat-test-used", label, 9010)
+	used, err := CreateCategory(ctx, db, actor, config.VisibilitySet{}, "cat-test-used", label, 9010, "")
 	if err != nil {
 		t.Fatalf("CreateCategory (used): %v", err)
 	}
@@ -314,7 +314,7 @@ func TestCategoryWritesAudited(t *testing.T) {
 		Icon:        "server",
 		Categories:  []string{"cat-test-used"},
 	}
-	if _, err := CreateService(ctx, db, actor, config.VisibilitySet{}, svcIn); err != nil {
+	if _, err := CreateService(ctx, db, actor, svcIn); err != nil {
 		t.Fatalf("CreateService: %v", err)
 	}
 	err = DeleteCategory(ctx, db, actor, "cat-test-used")

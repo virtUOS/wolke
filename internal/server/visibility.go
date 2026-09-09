@@ -2,19 +2,16 @@ package server
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
 
 	"github.com/virtuos/wolke/internal/catalog"
 	"github.com/virtuos/wolke/internal/config"
-	"github.com/virtuos/wolke/internal/httpx"
-	"github.com/virtuos/wolke/internal/service"
 	"github.com/virtuos/wolke/internal/store"
 )
 
-// heldBy is the current user's effective visibility held set (spec §4):
-// claims ∪ opt-in, each filtered to configured slugs of the matching grant
-// type. Nothing held when there is no user in the context.
+// heldBy is the current user's held visibility slugs: what the IdP granted at
+// login, filtered to the slugs config still defines
+// (docs/specs/service-visibility.md §2.2). Nothing held when there is no user
+// in the context.
 func heldBy(ctx context.Context, vis config.VisibilitySet) []string {
 	user, ok := userFromContext(ctx)
 	if !ok {
@@ -24,7 +21,14 @@ func heldBy(ctx context.Context, vis config.VisibilitySet) []string {
 }
 
 func heldByUser(u store.User, vis config.VisibilitySet) []string {
-	return vis.Held(u.VisibilityClaims, u.VisibilityOptin)
+	return vis.Held(u.VisibilityClaims)
+}
+
+// showBetaFor reports whether the current user asked to see beta services
+// (§2.1). No user — no beta, the same answer the catalog MCP gets.
+func showBetaFor(ctx context.Context) bool {
+	user, ok := userFromContext(ctx)
+	return ok && user.ShowBeta
 }
 
 // visibleCatalog is the ONE way a handler gets a readable catalog: the cached
@@ -36,32 +40,5 @@ func visibleCatalog(ctx context.Context, c *catalog.Cache, vis config.Visibility
 	if err != nil {
 		return nil, err
 	}
-	return snap.VisibleTo(heldBy(ctx, vis)), nil
-}
-
-// setVisibilityOptIn handles PUT /api/me/visibility: the whole list of opt-in
-// slugs the user has enabled (issue #34). Validation and the write live in
-// internal/service; the response is the refreshed /api/me shape so the SPA can
-// replace its cached user in one step.
-func setVisibilityOptIn(db service.VisibilityStore, vis config.VisibilitySet) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := userFromContext(r.Context())
-		if !ok {
-			httpx.WriteProblem(w, http.StatusUnauthorized, "unauthenticated", "Login required.")
-			return
-		}
-		var body struct {
-			OptIn []string `json:"optin"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			httpx.WriteProblem(w, http.StatusBadRequest, "invalid_body", "Request body must be JSON.")
-			return
-		}
-		updated, err := service.SetVisibilityOptIn(r.Context(), db, vis, user.ID, body.OptIn)
-		if err != nil {
-			writeServiceError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, toMeResponse(updated, vis))
-	}
+	return snap.VisibleTo(heldBy(ctx, vis), showBetaFor(ctx)), nil
 }

@@ -108,6 +108,12 @@ func RemoveFavorite(ctx context.Context, db FavoritesStore, userID, serviceID pg
 	return nil
 }
 
+// VisibleFunc reports whether a service id resolves in the caller's narrowed
+// catalog view. The handler builds it from the same view it renders
+// /api/favorites with, so the write is validated against exactly what the
+// client was shown (docs/specs/service-visibility.md §3).
+type VisibleFunc func(serviceID pgtype.UUID) bool
+
 // SetFavoritesOrder replaces the user's manual favorites order with the given
 // whole list. It is idempotent, and validated here — not in the handler — so
 // the rule holds for any caller (CLAUDE.md rule 3): the list must be a
@@ -115,11 +121,21 @@ func RemoveFavorite(ctx context.Context, db FavoritesStore, userID, serviceID pg
 // duplicates. Anything else is a client that is out of sync, and renumbering a
 // partial list would silently collapse the order it didn't send.
 //
-// The reference set is the user's *active* favorites: /api/favorites resolves
-// ids through the catalog snapshot, so a favorite whose service was
-// soft-deleted is not in the list the UI has to send back. Such a row keeps its
-// stored sort and slots back in where it was if the service returns.
-func SetFavoritesOrder(ctx context.Context, db FavoritesStore, userID pgtype.UUID, serviceIDs []pgtype.UUID) error {
+// The reference set is the user's active favorites **as this reader sees
+// them** — active, and resolvable in their narrowed view. Three things can take
+// a favorite out of that set: its service was soft-deleted, it is tagged beta
+// and the reader has not turned beta services on, or it sits in a category
+// whose group the IdP no longer grants them. All three degrade identically,
+// and the invariant is the same for all three: an invisible favorite is neither
+// required in the list nor written by it.
+//
+// That is the whole mechanism — the write below touches only the submitted ids,
+// so an invisible favorite keeps its stored manual_sort untouched and slots
+// back in where it was the moment it becomes visible again. Validating against
+// the unnarrowed set instead would 400 every reorder for a user holding one,
+// with no way out: they cannot un-star a tile that does not render (review
+// finding 1).
+func SetFavoritesOrder(ctx context.Context, db FavoritesStore, userID pgtype.UUID, serviceIDs []pgtype.UUID, visible VisibleFunc) error {
 	seen := make(map[pgtype.UUID]bool, len(serviceIDs))
 	for _, id := range serviceIDs {
 		if seen[id] {
@@ -128,9 +144,15 @@ func SetFavoritesOrder(ctx context.Context, db FavoritesStore, userID pgtype.UUI
 		seen[id] = true
 	}
 
-	current, err := db.ListActiveFavoriteIDs(ctx, userID)
+	active, err := db.ListActiveFavoriteIDs(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("list favorite ids: %w", err)
+	}
+	current := make([]pgtype.UUID, 0, len(active))
+	for _, id := range active {
+		if visible == nil || visible(id) {
+			current = append(current, id)
+		}
 	}
 	if len(current) != len(seen) {
 		return &ValidationError{Field: "service_ids", Msg: "must list exactly your current favorites"}

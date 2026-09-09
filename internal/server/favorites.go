@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -23,12 +22,12 @@ func listFavorites(c *catalog.Cache, db service.FavoritesStore, vis config.Visib
 		user, _ := userFromContext(r.Context())
 		ids, err := service.ListFavorites(r.Context(), db, user)
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		snap, err := visibleCatalog(r.Context(), c, vis)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			serverError(w, r, "catalog_unavailable", "Could not load the catalog.", err)
 			return
 		}
 		services := make([]catalog.Service, 0, len(ids))
@@ -54,7 +53,7 @@ func addFavorite(db service.FavoritesStore, c *catalog.Cache, vis config.Visibil
 		}
 		snap, err := visibleCatalog(r.Context(), c, vis)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			serverError(w, r, "catalog_unavailable", "Could not load the catalog.", err)
 			return
 		}
 		if _, ok := snap.ServiceByID(uuidString(serviceID)); !ok {
@@ -62,7 +61,7 @@ func addFavorite(db service.FavoritesStore, c *catalog.Cache, vis config.Visibil
 			return
 		}
 		if err := service.AddFavorite(r.Context(), db, user.ID, serviceID); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -77,7 +76,7 @@ func removeFavorite(db service.FavoritesStore) http.HandlerFunc {
 			return
 		}
 		if err := service.RemoveFavorite(r.Context(), db, user.ID, serviceID); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -89,9 +88,19 @@ func removeFavorite(db service.FavoritesStore) http.HandlerFunc {
 // write rather than a move-one-step call, so a client and the server can never
 // end up with two different notions of the order; sending the same list twice
 // is a no-op. Validation (permutation, no duplicates) lives in internal/service.
-func setFavoritesOrder(db service.FavoritesStore) http.HandlerFunc {
+//
+// The narrowed view goes with it, because the list this handler validates
+// against has to be the one the client was shown: /api/favorites drops the
+// favorites this reader cannot see, so the order they send back cannot contain
+// them (review finding 1).
+func setFavoritesOrder(c *catalog.Cache, db service.FavoritesStore, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
+		snap, err := visibleCatalog(r.Context(), c, vis)
+		if err != nil {
+			serverError(w, r, "catalog_unavailable", "Could not load the catalog.", err)
+			return
+		}
 		var body struct {
 			ServiceIDs []string `json:"service_ids"`
 		}
@@ -108,8 +117,12 @@ func setFavoritesOrder(db service.FavoritesStore) http.HandlerFunc {
 			}
 			ids = append(ids, id)
 		}
-		if err := service.SetFavoritesOrder(r.Context(), db, user.ID, ids); err != nil {
-			writeServiceError(w, err)
+		visible := func(id pgtype.UUID) bool {
+			_, ok := snap.ServiceByID(uuidString(id))
+			return ok
+		}
+		if err := service.SetFavoritesOrder(r.Context(), db, user.ID, ids, visible); err != nil {
+			writeServiceError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -135,25 +148,6 @@ func decodeServiceID(w http.ResponseWriter, r *http.Request) (pgtype.UUID, bool)
 }
 
 // writeServiceError maps use-case errors to HTTP problem responses.
-func writeServiceError(w http.ResponseWriter, err error) {
-	var ve *service.ValidationError
-	var nf *service.NotFoundError
-	var ce *service.ConflictError
-	switch {
-	case errors.As(err, &ve):
-		httpx.WriteProblem(w, http.StatusBadRequest, "invalid", ve.Error())
-	case errors.As(err, &nf):
-		httpx.WriteProblem(w, http.StatusNotFound, "not_found", nf.Error())
-	// A well-formed write the current state refuses (e.g. deleting a category
-	// services still use). The detail says what blocks it, so it is written to
-	// be shown to the admin verbatim.
-	case errors.As(err, &ce):
-		httpx.WriteProblem(w, http.StatusConflict, "conflict", ce.Error())
-	default:
-		httpx.WriteProblem(w, http.StatusInternalServerError, "internal", "Unexpected error.")
-	}
-}
-
 func parseUUID(s string) (pgtype.UUID, bool) {
 	var u pgtype.UUID
 	if err := u.Scan(s); err != nil {

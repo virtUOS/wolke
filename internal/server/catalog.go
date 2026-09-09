@@ -24,7 +24,7 @@ func catalogList(c *catalog.Cache, vis config.VisibilitySet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		snap, err := visibleCatalog(r.Context(), c, vis)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			serverError(w, r, "catalog_unavailable", "Could not load the catalog.", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, snap)
@@ -42,12 +42,12 @@ func catalogDefaults(c *catalog.Cache, defaults RoleDefaultsStore, vis config.Vi
 		}
 		snap, err := visibleCatalog(r.Context(), c, vis)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			serverError(w, r, "catalog_unavailable", "Could not load the catalog.", err)
 			return
 		}
 		ids, err := defaults.GetRoleDefaults(r.Context(), user.PrimaryRole)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "defaults_unavailable", "Could not load your default view.")
+			serverError(w, r, "defaults_unavailable", "Could not load your default view.", err)
 			return
 		}
 		services := make([]catalog.Service, 0, len(ids))

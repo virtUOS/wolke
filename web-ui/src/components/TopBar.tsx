@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { ArrowRight, Bot, Eye, Languages, MessageCircleQuestionMark, Shield, SunMoon, LogOut } from 'lucide-react'
 import { assistantEnabled, contactHref, type Branding } from '@/lib/branding'
 import { t, type Lang } from '@/lib/i18n'
-import { localized, type Me, type VisibilityEntry } from '@/lib/api'
+import { type Me } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { iconButtonVariants } from '@/components/ui/icon-button'
@@ -39,13 +39,12 @@ interface TopBarProps {
    *  the bar is two rows and the quick links move into the account menu — see
    *  the layout note below. */
   isMobile: boolean
-  /** Configured visibility entries; only `opt-in` ones render a toggle
-   *  (docs/specs/service-visibility.md §5). Empty = no visibility UI. */
-  visibilityEntries?: VisibilityEntry[]
+  /** Whether the user asked to see beta services
+   *  (docs/specs/service-visibility.md §2.1). */
+  showBeta?: boolean
   /** The opt-in slugs the user currently has enabled. */
-  visibilityOptIn?: string[]
   /** Persists the whole opt-in list. */
-  onSetVisibilityOptIn?: (optin: string[]) => void
+  onSetShowBeta?: (next: boolean) => void
 }
 
 // Editorial sticky top bar: translucent blur, hairline bottom, logo + tabs +
@@ -66,9 +65,8 @@ export function TopBar({
   onAdmin,
   onLogout,
   isMobile,
-  visibilityEntries = [],
-  visibilityOptIn = [],
-  onSetVisibilityOptIn = () => {},
+  showBeta = false,
+  onSetShowBeta = () => {},
 }: TopBarProps) {
   const s = t(locale)
   const help = contactHref(branding.help_url)
@@ -177,9 +175,8 @@ export function TopBar({
             onLogout={onLogout}
             botUrl={isMobile ? bot : ''}
             help={isMobile ? help ?? undefined : undefined}
-            visibilityEntries={visibilityEntries}
-            visibilityOptIn={visibilityOptIn}
-            onSetVisibilityOptIn={onSetVisibilityOptIn}
+            showBeta={showBeta}
+            onSetShowBeta={onSetShowBeta}
           />
         </div>
       </div>
@@ -206,12 +203,11 @@ interface AccountMenuProps {
   isAdmin: boolean
   onAdmin: () => void
   onLogout: () => void
-  visibilityEntries: VisibilityEntry[]
-  visibilityOptIn: string[]
-  onSetVisibilityOptIn: (optin: string[]) => void
+  showBeta: boolean
+  onSetShowBeta: (next: boolean) => void
 }
 
-function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, theme, onSetTheme, initials, name, email, isAdmin, onAdmin, onLogout, visibilityEntries, visibilityOptIn, onSetVisibilityOptIn }: AccountMenuProps) {
+function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, theme, onSetTheme, initials, name, email, isAdmin, onAdmin, onLogout, showBeta, onSetShowBeta }: AccountMenuProps) {
   const s = t(locale)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -219,27 +215,26 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, the
   const panelRef = useRef<HTMLDivElement>(null)
   const panelId = useId()
 
-  // Opt-in visibility (issue #34). Enabling a group is gated behind a confirm
-  // dialog carrying the configured warning; disabling is immediate — nothing
-  // is lost, the services just hide again. The menu closes when the dialog
-  // opens so the two overlays never fight over focus and Escape; focus lands
-  // back on the avatar trigger when the dialog closes.
-  const optInEntries = visibilityEntries.filter((e) => e.grant === 'opt-in')
-  const [pending, setPending] = useState<VisibilityEntry | null>(null)
-  const toggleVisibility = (entry: VisibilityEntry) => {
-    if (visibilityOptIn.includes(entry.slug)) {
-      onSetVisibilityOptIn(visibilityOptIn.filter((slug) => slug !== entry.slug))
+  // Beta services (issue #34). Turning them on is gated behind a confirm
+  // dialog carrying the built-in warning; turning them off is immediate —
+  // nothing is lost, the services just hide again. The menu closes when the
+  // dialog opens so the two overlays never fight over focus and Escape; focus
+  // lands back on the avatar trigger when the dialog closes.
+  const [confirming, setConfirming] = useState(false)
+  const toggleBeta = () => {
+    if (showBeta) {
+      onSetShowBeta(false)
       return
     }
     setOpen(false)
-    setPending(entry)
+    setConfirming(true)
   }
   const closeDialog = () => {
-    setPending(null)
+    setConfirming(false)
     triggerRef.current?.focus()
   }
-  const confirmVisibility = () => {
-    if (pending) onSetVisibilityOptIn([...visibilityOptIn, pending.slug])
+  const confirmBeta = () => {
+    onSetShowBeta(true)
     closeDialog()
   }
 
@@ -389,54 +384,44 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, the
             />
           </div>
 
-          {/* Opt-in visibility groups (issue #34): one switch per configured
-              opt-in slug. Rendered only when the deployment configures any, so
-              an unconfigured deployment's menu is byte-identical to before. */}
-          {optInEntries.length > 0 && (
-            <div style={{ ...itemStyle, cursor: 'default', alignItems: 'flex-start', flexDirection: 'column', gap: 2 }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: 'var(--text-muted)', fontSize: 12 }}>
-                <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
-                {s.topbar.visibility}
+          {/* Beta services (issue #34): one built-in switch, no configuration.
+              The services are hidden until it is on. */}
+          <div style={{ ...itemStyle, cursor: 'default', alignItems: 'flex-start', flexDirection: 'column', gap: 2 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: 'var(--text-muted)', fontSize: 12 }}>
+              <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {s.topbar.betaHeading}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showBeta}
+              aria-label={s.topbar.betaToggle}
+              onClick={toggleBeta}
+              style={{ ...itemStyle, margin: 0, padding: '6px 0', justifyContent: 'space-between' }}
+              className="min-h-11 rounded-sm hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0"
+            >
+              <span style={{ flex: 1, minWidth: 0 }} className="hyphenate-compound">{s.topbar.betaToggle}</span>
+              {/* The track: a 34×20 pill whose knob slides; state is carried by
+                  aria-checked, colour is only the echo. */}
+              <span
+                aria-hidden="true"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', flexShrink: 0,
+                  width: 34, height: 20, padding: 2, borderRadius: 999,
+                  background: showBeta ? 'var(--primary)' : 'var(--border)',
+                  transition: 'background-color .15s ease',
+                }}
+              >
+                <span
+                  style={{
+                    width: 16, height: 16, borderRadius: '50%', background: 'var(--bg)',
+                    transform: showBeta ? 'translateX(14px)' : 'none',
+                    transition: 'transform .15s ease',
+                  }}
+                />
               </span>
-              {optInEntries.map((entry) => {
-                const on = visibilityOptIn.includes(entry.slug)
-                const label = localized(entry.label, locale)
-                return (
-                  <button
-                    key={entry.slug}
-                    type="button"
-                    role="switch"
-                    aria-checked={on}
-                    aria-label={s.topbar.visibilityToggle(label)}
-                    onClick={() => toggleVisibility(entry)}
-                    style={{ ...itemStyle, margin: 0, padding: '6px 0', justifyContent: 'space-between' }}
-                    className="min-h-11 rounded-sm hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0"
-                  >
-                    <span style={{ flex: 1, minWidth: 0 }} className="hyphenate-compound">{label}</span>
-                    {/* The track: a 34×20 pill whose knob slides; state is
-                        carried by aria-checked, colour is only the echo. */}
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', flexShrink: 0,
-                        width: 34, height: 20, padding: 2, borderRadius: 999,
-                        background: on ? 'var(--primary)' : 'var(--border)',
-                        transition: 'background-color .15s ease',
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 16, height: 16, borderRadius: '50%', background: 'var(--bg)',
-                          transform: on ? 'translateX(14px)' : 'none',
-                          transition: 'transform .15s ease',
-                        }}
-                      />
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          )}
+            </button>
+          </div>
 
           {/* Chatbot + help: top-bar icons on a desktop, menu items on a phone. */}
           {(botUrl || help) && (
@@ -495,20 +480,20 @@ function AccountMenu({ botUrl, help, locale, currentLocalePref, onSetLocale, the
         </div>
       )}
 
-      {/* The opt-in warning (issue #34): the configured text, verbatim, before
-          the group is enabled — services may vanish, data is not migrated. */}
+      {/* The warning (issue #34), built in rather than configured: beta
+          services may vanish, and their data is not migrated. */}
       <Dialog
-        open={pending !== null}
+        open={confirming}
         onOpenChange={(o) => !o && closeDialog()}
-        title={s.topbar.visibilityEnableTitle(pending ? localized(pending.label, locale) : '')}
-        description={pending ? localized(pending.warning, locale) : ''}
+        title={s.topbar.betaEnableTitle}
+        description={s.topbar.betaWarning}
         closeLabel={s.common.close}
         footer={
           <>
             <Button variant="outline" onClick={closeDialog}>
               {s.common.cancel}
             </Button>
-            <Button onClick={confirmVisibility}>{s.topbar.visibilityEnable}</Button>
+            <Button onClick={confirmBeta}>{s.topbar.betaEnable}</Button>
           </>
         }
       />

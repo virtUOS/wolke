@@ -11,7 +11,6 @@ import (
 
 	"github.com/virtuos/wolke/internal/catalog"
 	"github.com/virtuos/wolke/internal/config"
-	"github.com/virtuos/wolke/internal/httpx"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -60,12 +59,12 @@ func search(c *catalog.Cache, s SearchStore, vis config.VisibilitySet) http.Hand
 			if errors.Is(err, context.Canceled) {
 				return
 			}
-			httpx.WriteProblem(w, http.StatusInternalServerError, "search_failed", "Search is temporarily unavailable.")
+			serverError(w, r, "search_failed", "Search is temporarily unavailable.", err)
 			return
 		}
 		snap, err := visibleCatalog(r.Context(), c, vis)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "catalog_unavailable", "Could not load the catalog.")
+			serverError(w, r, "catalog_unavailable", "Could not load the catalog.", err)
 			return
 		}
 		services := make([]catalog.Service, 0, len(ids))

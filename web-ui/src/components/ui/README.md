@@ -7,9 +7,12 @@ This convention exists so the set stays coherent as it grows and so every primit
 Claude Design later. An enforcement test (`src/__tests__/ui-primitives.test.ts`) keeps the hard rules
 honest.
 
-The set: `button`, `icon-button`, `pill-button`, `card`, `badge`, `input`, `label`, `field`,
-`checkbox`, `choice-chip`, `select`, `textarea`, `alert`, `list` (List/ListItem), `dialog`,
-`popover`. The interactive overlays
+The set: `button`, `icon-button`, `pill-button`, `card`, `badge`, `restricted-marker`, `input`,
+`label`, `field`, `checkbox`, `choice-chip`, `select`, `textarea`, `alert`, `list` (List/ListItem),
+`dialog`, `popover`. `restricted-marker` is the one way the app says "restricted to a visibility
+group" (docs/specs/service-visibility.md §2.2) — a lock plus the group's name in the admin lists, the
+bare lock where the thing is already named (a filter pill, a section heading), and in both shapes an
+accessible name that is the meaning rather than the glyph. The interactive overlays
 (`dialog`, `popover`) are hand-rolled but implement the Radix behaviour set (focus trap/return,
 Escape + outside-click dismiss, ARIA) behind Radix-shaped APIs, so Radix can be swapped in later
 without touching callers. `dialog` also does the phone-width bottom sheet (`variant="sheet"`),

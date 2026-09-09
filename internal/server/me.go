@@ -25,17 +25,18 @@ type meResponse struct {
 	Locale               string `json:"locale"`
 	FavoritesOrder       string `json:"favorites_order"`
 	FavoritesSeparateTab bool   `json:"favorites_separate_tab"`
-	// Visibility is the service-visibility state the SPA needs
-	// (docs/specs/service-visibility.md §5): what the user holds, what they
-	// opted into themselves, and the configured entries (labels for the tile
-	// badge, warnings for the opt-in dialog). Empty lists when nothing is
-	// configured — the account menu then renders no visibility UI at all.
+	// ShowBeta is the user's own choice to see the services tagged beta, which
+	// are hidden by default (docs/specs/service-visibility.md §2.1). A pref like
+	// any other — it is written through PATCH /api/me/prefs.
+	ShowBeta bool `json:"show_beta"`
+	// Visibility is the group state the SPA needs (§2.2): the slugs this user
+	// holds, and the configured entries whose labels name them. Empty when the
+	// deployment configures no groups.
 	Visibility meVisibility `json:"visibility"`
 }
 
 type meVisibility struct {
 	Held    []string            `json:"held"`
-	OptIn   []string            `json:"optin"`
 	Entries []config.Visibility `json:"entries"`
 }
 
@@ -52,9 +53,6 @@ func me(vis config.VisibilitySet) http.HandlerFunc {
 }
 
 func toMeResponse(u store.User, vis config.VisibilitySet) meResponse {
-	// The stored opt-in list is reported filtered the same way it is granted:
-	// a slug that no longer exists or changed grant type is not "on".
-	optin := vis.Held(nil, u.VisibilityOptin)
 	held := heldByUser(u, vis)
 	return meResponse{
 		ID:                   uuidString(u.ID),
@@ -67,20 +65,19 @@ func toMeResponse(u store.User, vis config.VisibilitySet) meResponse {
 		Locale:               u.Locale,
 		FavoritesOrder:       u.FavoritesOrder,
 		FavoritesSeparateTab: u.FavoritesSeparateTab,
+		ShowBeta:             u.ShowBeta,
 		Visibility: meVisibility{
 			Held:    held,
-			OptIn:   optin,
 			Entries: visibleEntries(u, vis, held),
 		},
 	}
 }
 
-// visibleEntries is what one user may learn about the configured groups: the
-// opt-in ones (they render as the user's own switches) plus the labels of
-// whatever else they hold (for the tile badge). A claim-granted group the user
-// does not hold is never named here — categories are narrowed precisely so a
-// group's name cannot leak, and /api/me must not undo that. Admins get the
-// whole list: the service form is the one consumer that needs it.
+// visibleEntries is what one user may learn about the configured groups: only
+// the ones they hold. A group the user does not hold is never named here —
+// categories are narrowed precisely so a group's name cannot leak, and /api/me
+// must not undo that. Admins get the whole list: the category editor is the one
+// consumer that needs it.
 func visibleEntries(u store.User, vis config.VisibilitySet, held []string) []config.Visibility {
 	all := vis.List()
 	if u.IsAdmin {
@@ -88,7 +85,7 @@ func visibleEntries(u store.User, vis config.VisibilitySet, held []string) []con
 	}
 	out := make([]config.Visibility, 0, len(all))
 	for _, v := range all {
-		if v.Grant == config.GrantOptIn || slices.Contains(held, v.Slug) {
+		if slices.Contains(held, v.Slug) {
 			out = append(out, v)
 		}
 	}

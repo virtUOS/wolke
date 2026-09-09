@@ -20,14 +20,16 @@ import (
 )
 
 // One "a non-holder cannot obtain this service" test per read surface in the
-// spec's §3 table (docs/specs/service-visibility.md §10): catalog, defaults,
-// search, favourites, frequent, click. No database: every surface resolves ids
-// through the catalog snapshot, so fakes hand out the restricted id and the
-// narrowed view is what must refuse to resolve it.
+// spec's §3 table (docs/specs/service-visibility.md §6): catalog, defaults,
+// search, favourites, frequent, click — and the same again for a beta service
+// and a reader who has not asked for beta. No database: every surface resolves
+// ids through the catalog snapshot, so the fakes hand out every id and the
+// narrowed view is what must refuse to resolve them.
 
 const (
 	publicID     = "11111111-1111-1111-1111-111111111111"
 	restrictedID = "22222222-2222-2222-2222-222222222222"
+	betaID       = "44444444-4444-4444-4444-444444444444"
 )
 
 func visibilityFixture(t *testing.T) (*catalog.Cache, config.VisibilitySet) {
@@ -35,15 +37,18 @@ func visibilityFixture(t *testing.T) (*catalog.Cache, config.VisibilitySet) {
 	snap := catalog.NewSnapshot(
 		[]catalog.Service{
 			{ID: publicID, Name: "Public", Categories: []string{"data"}},
-			{ID: restrictedID, Name: "Secret Lab", Categories: []string{"labs"}, Visibility: "experimental"},
+			{ID: restrictedID, Name: "Secret Lab", Categories: []string{"labs"}},
+			{ID: betaID, Name: "Beta Thing", Categories: []string{"data"}, Tag: catalog.TagBeta},
 		},
-		[]catalog.Category{{Slug: "data", Sort: 10}, {Slug: "labs", Sort: 20}},
+		[]catalog.Category{
+			{Slug: "data", Sort: 10},
+			{Slug: "labs", Sort: 20, Visibility: "it-infra"},
+		},
 	)
 	cache := catalog.NewCache(time.Minute, func(context.Context) (*catalog.Snapshot, error) { return snap, nil })
 	vis := (&config.Config{VisibilityEntries: []config.VisibilityEntry{{
-		Slug: "experimental", Grant: config.GrantOptIn,
-		Label:   map[string]string{"de": "Experimentell", "en": "Experimental"},
-		Warning: map[string]string{"de": "Kann verschwinden.", "en": "May vanish."},
+		Slug: "it-infra", Claim: "groups", Match: "it-service-admins",
+		Label: map[string]string{"de": "IT-Infrastruktur", "en": "IT infrastructure"},
 	}}}).Visibility()
 	return cache, vis
 }
@@ -57,14 +62,21 @@ func mustParseUUID(t *testing.T, s string) pgtype.UUID {
 	return u
 }
 
-// nonHolder and holder are the same student; only the stored opt-in differs.
+// nonHolder, holder and betaReader are the same student; only what the IdP
+// granted, or what they asked for, differs.
 func nonHolder() store.User {
 	return store.User{ID: pgtype.UUID{Valid: true}, PrimaryRole: "student", FavoritesSeeded: true, FavoritesOrder: "usage"}
 }
 
 func holder() store.User {
 	u := nonHolder()
-	u.VisibilityOptin = []string{"experimental"}
+	u.VisibilityClaims = []string{"it-infra"}
+	return u
+}
+
+func betaReader() store.User {
+	u := nonHolder()
+	u.ShowBeta = true
 	return u
 }
 
@@ -93,27 +105,27 @@ func names(list []catalog.Service) []string {
 	return out
 }
 
+// assertOnlyPublic: the reader got the public service and nothing else —
+// neither the restricted one nor the beta one, whichever the fake handed out.
 func assertOnlyPublic(t *testing.T, surface string, list []catalog.Service) {
 	t.Helper()
 	for _, s := range list {
-		if s.ID == restrictedID || s.Visibility != "" {
+		if s.ID == restrictedID {
 			t.Fatalf("%s leaked the restricted service to a non-holder: %v", surface, names(list))
+		}
+		if s.ID == betaID {
+			t.Fatalf("%s leaked a beta service to a reader who did not ask for beta: %v", surface, names(list))
 		}
 	}
 	if len(list) != 1 || list[0].ID != publicID {
-		t.Fatalf("%s for a non-holder = %v, want just the public service", surface, names(list))
+		t.Fatalf("%s for a plain reader = %v, want just the public service", surface, names(list))
 	}
 }
 
 func assertBoth(t *testing.T, surface string, list []catalog.Service) {
 	t.Helper()
 	if len(list) != 2 {
-		t.Fatalf("%s for a holder = %v, want both services", surface, names(list))
-	}
-	for _, s := range list {
-		if s.ID == restrictedID && s.Visibility != "experimental" {
-			t.Fatalf("%s: the restricted service must carry its slug for the badge, got %+v", surface, s)
-		}
+		t.Fatalf("%s = %v, want both services", surface, names(list))
 	}
 }
 
@@ -142,6 +154,7 @@ type fakeFavorites struct {
 	service.FavoritesStore // nil: only the methods below are reached
 	ids                    []pgtype.UUID
 	added                  *int
+	ordered                *[][]pgtype.UUID
 }
 
 func (f fakeFavorites) ListFavoritesByUsage(context.Context, pgtype.UUID) ([]pgtype.UUID, error) {
@@ -151,6 +164,13 @@ func (f fakeFavorites) NextFavoriteSort(context.Context, pgtype.UUID) (int32, er
 func (f fakeFavorites) AddFavorite(context.Context, store.AddFavoriteParams) error {
 	*f.added++
 	return nil
+}
+func (f fakeFavorites) ListActiveFavoriteIDs(context.Context, pgtype.UUID) ([]pgtype.UUID, error) {
+	return f.ids, nil
+}
+func (f fakeFavorites) SetFavoritesOrder(_ context.Context, arg store.SetFavoritesOrderParams) (int64, error) {
+	*f.ordered = append(*f.ordered, arg.ServiceIds)
+	return int64(len(arg.ServiceIds)), nil
 }
 
 type fakeUsage struct {
@@ -186,8 +206,8 @@ func TestNonHolderCannotObtainRestrictedService(t *testing.T) {
 		if len(body.Categories) != 1 || body.Categories[0].Slug != "data" {
 			t.Fatalf("categories = %+v: the emptied 'labs' category must vanish for a non-holder", body.Categories)
 		}
-		// And the raw response must not even mention the slug.
-		if strings.Contains(rec.Body.String(), "experimental") || strings.Contains(rec.Body.String(), "labs") {
+		// And the raw response must not even mention the group or its category.
+		if strings.Contains(rec.Body.String(), "it-infra") || strings.Contains(rec.Body.String(), "labs") {
 			t.Fatalf("response leaks the restricted group: %s", rec.Body.String())
 		}
 
@@ -199,6 +219,19 @@ func TestNonHolderCannotObtainRestrictedService(t *testing.T) {
 		assertBoth(t, "/api/catalog", body.Services)
 		if len(body.Categories) != 2 {
 			t.Fatalf("holder categories = %+v, want both", body.Categories)
+		}
+		// A holder is told which of their categories is restricted, so the SPA
+		// can mark it. That is not a leak: they hold the group, and /api/me
+		// names it too — a non-holder never receives the category at all, which
+		// the assertion above already pins.
+		var marked bool
+		for _, c := range body.Categories {
+			if c.Slug == "labs" && c.Visibility == "it-infra" {
+				marked = true
+			}
+		}
+		if !marked {
+			t.Fatalf("holder categories = %+v, want the restricted one to carry its group", body.Categories)
 		}
 	})
 
@@ -293,17 +326,189 @@ func TestNonHolderCannotObtainRestrictedService(t *testing.T) {
 	})
 }
 
-// /api/me exposes the held set, the user's own opt-in list, and the entries a
-// user may learn about: opt-in ones plus the labels of held slugs — never a
-// claim group they do not hold (that name is what category narrowing protects).
-// Admins get every entry; the service form needs them. Nothing when nothing is
-// configured.
+// The same sweep for the beta half of the predicate: a beta service is absent
+// from every surface until the user asks for beta services, then present on all
+// of them — inline, in its own category, badged by the tag it already had
+// (docs/specs/service-visibility.md §2.1).
+func TestBetaServiceHiddenUntilTheUserAsksForIt(t *testing.T) {
+	cache, vis := visibilityFixture(t)
+	both := []pgtype.UUID{mustParseUUID(t, publicID), mustParseUUID(t, betaID)}
+
+	t.Run("catalog", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		catalogList(cache, vis)(rec, reqWithUser(http.MethodGet, "/api/catalog", "", nonHolder()))
+		var body struct {
+			Services   []catalog.Service  `json:"services"`
+			Categories []catalog.Category `json:"categories"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		assertOnlyPublic(t, "/api/catalog", body.Services)
+
+		rec = httptest.NewRecorder()
+		catalogList(cache, vis)(rec, reqWithUser(http.MethodGet, "/api/catalog", "", betaReader()))
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		assertBoth(t, "/api/catalog", body.Services)
+		// It stays in its own category, and keeps the badge the admin set.
+		for _, s := range body.Services {
+			if s.ID == betaID {
+				if len(s.Categories) != 1 || s.Categories[0] != "data" {
+					t.Errorf("a revealed beta service must stay in its own category, got %v", s.Categories)
+				}
+				if s.Tag != catalog.TagBeta {
+					t.Errorf("tag = %q, want beta — the badge is the tag, there is no second one", s.Tag)
+				}
+			}
+		}
+	})
+
+	t.Run("defaults", func(t *testing.T) {
+		h := catalogDefaults(cache, fakeDefaults{both}, vis)
+		assertOnlyPublic(t, "/api/catalog/defaults", serveServices(t, h, http.MethodGet, "/api/catalog/defaults", "", nonHolder()))
+		assertBoth(t, "/api/catalog/defaults", serveServices(t, h, http.MethodGet, "/api/catalog/defaults", "", betaReader()))
+	})
+
+	t.Run("search", func(t *testing.T) {
+		h := search(cache, &fakeSearch{ids: both}, vis)
+		assertOnlyPublic(t, "/api/search", serveServices(t, h, http.MethodGet, "/api/search?q=beta", "", nonHolder()))
+		assertBoth(t, "/api/search", serveServices(t, h, http.MethodGet, "/api/search?q=beta", "", betaReader()))
+	})
+
+	t.Run("favorites", func(t *testing.T) {
+		h := listFavorites(cache, fakeFavorites{ids: both}, vis)
+		assertOnlyPublic(t, "/api/favorites", serveServices(t, h, http.MethodGet, "/api/favorites", "", nonHolder()))
+		assertBoth(t, "/api/favorites", serveServices(t, h, http.MethodGet, "/api/favorites", "", betaReader()))
+	})
+
+	t.Run("frequent", func(t *testing.T) {
+		h := frequent(cache, fakeUsage{ids: both}, vis)
+		assertOnlyPublic(t, "/api/usage/frequent", serveServices(t, h, http.MethodGet, "/api/usage/frequent", "", nonHolder()))
+		assertBoth(t, "/api/usage/frequent", serveServices(t, h, http.MethodGet, "/api/usage/frequent", "", betaReader()))
+	})
+
+	t.Run("click", func(t *testing.T) {
+		recorded := 0
+		h := recordClick(fakeUsage{recorded: &recorded}, cache, metrics.New(), vis)
+		body := `{"service_id":"` + betaID + `"}`
+
+		rec := httptest.NewRecorder()
+		h(rec, reqWithUser(http.MethodPost, "/api/events/click", body, nonHolder()))
+		if rec.Code != http.StatusNoContent || recorded != 0 {
+			t.Fatalf("hidden beta click: status = %d, recorded = %d; want 204 and nothing recorded", rec.Code, recorded)
+		}
+		rec = httptest.NewRecorder()
+		h(rec, reqWithUser(http.MethodPost, "/api/events/click", body, betaReader()))
+		if rec.Code != http.StatusNoContent || recorded != 1 {
+			t.Fatalf("revealed beta click: status = %d, recorded = %d; want 204 and one row", rec.Code, recorded)
+		}
+	})
+
+	t.Run("add favorite", func(t *testing.T) {
+		added := 0
+		h := addFavorite(fakeFavorites{added: &added}, cache, vis)
+		body := `{"service_id":"` + betaID + `"}`
+
+		rec := httptest.NewRecorder()
+		h(rec, reqWithUser(http.MethodPost, "/api/favorites/items", body, nonHolder()))
+		if rec.Code != http.StatusNotFound || added != 0 {
+			t.Fatalf("hidden beta: status = %d, added = %d; want 404 and nothing stored", rec.Code, added)
+		}
+		rec = httptest.NewRecorder()
+		h(rec, reqWithUser(http.MethodPost, "/api/favorites/items", body, betaReader()))
+		if rec.Code != http.StatusNoContent || added != 1 {
+			t.Fatalf("revealed beta: status = %d, added = %d; want 204 and one row", rec.Code, added)
+		}
+	})
+}
+
+// Review finding 1: a favorite that became invisible must neither block a
+// reorder nor be written away. /api/favorites drops it, so the list the client
+// sends back cannot contain it — and validating the write against the
+// unnarrowed set would 400 every reorder, with no way out: the user cannot
+// un-star a tile that does not render.
+//
+// Both causes are covered, because they are different states with one
+// behaviour: the beta service the reader stopped asking for, and the service in
+// a category whose group the IdP stopped granting.
+func TestReorderIgnoresFavoritesTheReaderCannotSee(t *testing.T) {
+	cache, vis := visibilityFixture(t)
+	pub, restricted, beta := mustParseUUID(t, publicID), mustParseUUID(t, restrictedID), mustParseUUID(t, betaID)
+
+	cases := []struct {
+		name   string
+		user   store.User
+		hidden pgtype.UUID
+	}{
+		{"a beta favorite after the pref went off", nonHolder(), beta},
+		{"a favorite in a category whose group was revoked", betaReader(), restricted},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// The user favorited both; only the public one still resolves.
+			stored := []pgtype.UUID{pub, tc.hidden}
+			var writes [][]pgtype.UUID
+			db := fakeFavorites{ids: stored, ordered: &writes}
+
+			// What the client was shown, and so what it sends back.
+			shown := serveServices(t, listFavorites(cache, db, vis), http.MethodGet, "/api/favorites", "", tc.user)
+			if len(shown) != 1 || shown[0].ID != publicID {
+				t.Fatalf("/api/favorites = %v, want just the public service", names(shown))
+			}
+
+			rec := httptest.NewRecorder()
+			body := `{"service_ids":["` + publicID + `"]}`
+			setFavoritesOrder(cache, db, vis)(rec, reqWithUser(http.MethodPut, "/api/favorites/order", body, tc.user))
+			if rec.Code != http.StatusNoContent {
+				t.Fatalf("status = %d (%s); an invisible favorite must not block the reorder", rec.Code, rec.Body.String())
+			}
+			if len(writes) != 1 {
+				t.Fatalf("order writes = %d, want 1", len(writes))
+			}
+			for _, id := range writes[0] {
+				if id == tc.hidden {
+					t.Fatal("the invisible favorite was renumbered; its stored order must stay untouched")
+				}
+			}
+
+			// It is still stored: nothing about the reorder drops it, so it
+			// comes back where it was once it is visible again.
+			back := serveServices(t, listFavorites(cache, db, vis), http.MethodGet, "/api/favorites", "",
+				func() store.User {
+					u := tc.user
+					u.ShowBeta = true
+					u.VisibilityClaims = []string{"it-infra"}
+					return u
+				}())
+			if len(back) != 2 {
+				t.Fatalf("after the reorder the favorite is gone: %v", names(back))
+			}
+		})
+	}
+}
+
+// /api/me exposes the held group slugs, the show_beta pref, and the entries a
+// user may learn about: only the groups they hold — never one they do not (that
+// name is what category narrowing protects). Admins get every entry; the
+// category editor needs them. Nothing when nothing is configured.
 func TestMeExposesVisibility(t *testing.T) {
 	vis := (&config.Config{VisibilityEntries: []config.VisibilityEntry{
-		{Slug: "experimental", Grant: config.GrantOptIn, Label: map[string]string{"de": "Experimentell"}, Warning: map[string]string{"de": "Kann verschwinden."}},
-		{Slug: "it-infra", Grant: config.GrantClaim, Claim: "groups", Match: "x", Label: map[string]string{"de": "IT-Infrastruktur"}},
+		{Slug: "it-infra", Claim: "groups", Match: "x", Label: map[string]string{"de": "IT-Infrastruktur"}},
+		{Slug: "net-ops", Claim: "groups", Match: "y", Label: map[string]string{"de": "Netzbetrieb"}},
 	}}).Visibility()
 
+	get := func(t *testing.T, u store.User, set config.VisibilitySet) (meResponse, string) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		me(set)(rec, reqWithUser(http.MethodGet, "/api/me", "", u))
+		var body meResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body, rec.Body.String()
+	}
 	entrySlugs := func(b meResponse) []string {
 		out := []string{}
 		for _, e := range b.Visibility.Entries {
@@ -312,116 +517,93 @@ func TestMeExposesVisibility(t *testing.T) {
 		return out
 	}
 
-	// A non-admin non-holder learns about the opt-in group only.
-	rec := httptest.NewRecorder()
-	me(vis)(rec, reqWithUser(http.MethodGet, "/api/me", "", nonHolder()))
-	var body meResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
+	// A non-admin holding nothing learns about no group at all.
+	body, raw := get(t, nonHolder(), vis)
+	if got := entrySlugs(body); len(got) != 0 {
+		t.Errorf("non-holder entries = %v, want none", got)
 	}
-	if got := entrySlugs(body); len(got) != 1 || got[0] != "experimental" {
-		t.Errorf("non-holder entries = %v, want [experimental] only", got)
-	}
-	if strings.Contains(rec.Body.String(), "IT-Infrastruktur") || strings.Contains(rec.Body.String(), "it-infra") {
-		t.Errorf("/api/me leaks a claim group the user does not hold: %s", rec.Body.String())
+	if strings.Contains(raw, "IT-Infrastruktur") || strings.Contains(raw, "it-infra") {
+		t.Errorf("/api/me leaks a group the user does not hold: %s", raw)
 	}
 
-	// Holding the claim slug reveals its label (for the badge).
-	claimHolder := nonHolder()
-	claimHolder.VisibilityClaims = []string{"it-infra"}
-	rec = httptest.NewRecorder()
-	me(vis)(rec, reqWithUser(http.MethodGet, "/api/me", "", claimHolder))
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
+	// Holding one reveals that one — and only that one.
+	body, raw = get(t, holder(), vis)
+	if got := entrySlugs(body); len(got) != 1 || got[0] != "it-infra" {
+		t.Errorf("holder entries = %v, want [it-infra]", got)
 	}
-	if got := entrySlugs(body); len(got) != 2 {
-		t.Errorf("claim holder entries = %v, want both", got)
+	if len(body.Visibility.Held) != 1 || body.Visibility.Held[0] != "it-infra" {
+		t.Errorf("held = %v, want [it-infra]", body.Visibility.Held)
+	}
+	if strings.Contains(raw, "net-ops") {
+		t.Errorf("/api/me leaks the group the user does not hold: %s", raw)
 	}
 
-	// An admin sees the whole list: the service form offers every group.
+	// An admin sees the whole list: the category editor offers every group.
 	adminUser := nonHolder()
 	adminUser.IsAdmin = true
-	rec = httptest.NewRecorder()
-	me(vis)(rec, reqWithUser(http.MethodGet, "/api/me", "", adminUser))
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
+	body, _ = get(t, adminUser, vis)
 	if got := entrySlugs(body); len(got) != 2 {
 		t.Errorf("admin entries = %v, want both", got)
 	}
 
-	rec = httptest.NewRecorder()
-	me(vis)(rec, reqWithUser(http.MethodGet, "/api/me", "", holder()))
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
+	// show_beta is reported as the plain pref it is.
+	if body, _ := get(t, nonHolder(), vis); body.ShowBeta {
+		t.Error("show_beta must default to false")
 	}
-	if len(body.Visibility.Held) != 1 || body.Visibility.Held[0] != "experimental" {
-		t.Errorf("held = %v, want [experimental]", body.Visibility.Held)
-	}
-	if len(body.Visibility.OptIn) != 1 || body.Visibility.OptIn[0] != "experimental" {
-		t.Errorf("optin = %v, want [experimental]", body.Visibility.OptIn)
-	}
-	if len(body.Visibility.Entries) != 1 || body.Visibility.Entries[0].Warning["de"] != "Kann verschwinden." {
-		t.Errorf("entries = %+v, want the configured entry with its warning", body.Visibility.Entries)
+	if body, _ := get(t, betaReader(), vis); !body.ShowBeta {
+		t.Error("show_beta must be reported once the user turned it on")
 	}
 
-	// A stored opt-in for a slug the deployment no longer configures is not "on".
-	rec = httptest.NewRecorder()
-	me(config.VisibilitySet{})(rec, reqWithUser(http.MethodGet, "/api/me", "", holder()))
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatal(err)
-	}
-	if len(body.Visibility.Held) != 0 || len(body.Visibility.OptIn) != 0 || len(body.Visibility.Entries) != 0 {
+	// A stored claim for a slug the deployment no longer configures is not held.
+	body, raw = get(t, holder(), config.VisibilitySet{})
+	if len(body.Visibility.Held) != 0 || len(body.Visibility.Entries) != 0 {
 		t.Errorf("unconfigured: visibility = %+v, want all empty", body.Visibility)
 	}
 	// Empty lists, not null — the SPA iterates them.
-	if !strings.Contains(rec.Body.String(), `"held":[]`) || !strings.Contains(rec.Body.String(), `"entries":[]`) {
-		t.Errorf("empty lists must serialize as [] not null: %s", rec.Body.String())
+	if !strings.Contains(raw, `"held":[]`) || !strings.Contains(raw, `"entries":[]`) {
+		t.Errorf("empty lists must serialize as [] not null: %s", raw)
 	}
 }
 
-type fakeVisibilityStore struct {
-	got   []string
-	calls int
-}
-
-func (f *fakeVisibilityStore) UpdateUserVisibilityOptIn(_ context.Context, arg store.UpdateUserVisibilityOptInParams) (store.User, error) {
-	f.calls++
-	f.got = arg.Optin
-	u := nonHolder()
-	u.VisibilityOptin = arg.Optin
-	return u, nil
-}
-
-// PUT /api/me/visibility writes the opt-in list through the service layer and
-// answers with the refreshed /api/me shape; a claim slug cannot be self-granted.
-func TestSetVisibilityOptInHandler(t *testing.T) {
+// show_beta rides on PATCH /api/me/prefs like any other pref: the reveal is a
+// preference, not a grant, so it needs no endpoint of its own (spec §4).
+func TestShowBetaIsAnOrdinaryPref(t *testing.T) {
 	_, vis := visibilityFixture(t)
-	db := &fakeVisibilityStore{}
-	h := setVisibilityOptIn(db, vis)
+	db := &fakePrefsStore{}
+	h := updatePrefs(db, vis)
+	user := nonHolder()
+	user.Theme, user.ViewMode, user.Locale = "system", "auto", "auto"
 
 	rec := httptest.NewRecorder()
-	h(rec, reqWithUser(http.MethodPut, "/api/me/visibility", `{"optin":["experimental"]}`, nonHolder()))
+	h(rec, reqWithUser(http.MethodPatch, "/api/me/prefs", `{"show_beta":true}`, user))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if !db.got.ShowBeta {
+		t.Error("the write did not carry show_beta")
 	}
 	var body meResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if len(body.Visibility.Held) != 1 || body.Visibility.Held[0] != "experimental" {
-		t.Errorf("held after opt-in = %v", body.Visibility.Held)
+	if !body.ShowBeta {
+		t.Error("the response must be the refreshed /api/me shape, with show_beta on")
 	}
 
+	// Unspecified fields keep their current value — turning beta on must not
+	// reset the theme, and a later prefs write must not silently turn it off.
+	on := user
+	on.ShowBeta = true
 	rec = httptest.NewRecorder()
-	h(rec, reqWithUser(http.MethodPut, "/api/me/visibility", `{"optin":["it-infra"]}`, nonHolder()))
-	if rec.Code != http.StatusBadRequest || db.calls != 1 {
-		t.Fatalf("unknown slug: status = %d, writes = %d; want 400 and no write", rec.Code, db.calls)
+	h(rec, reqWithUser(http.MethodPatch, "/api/me/prefs", `{"theme":"dark"}`, on))
+	if !db.got.ShowBeta || db.got.Theme != "dark" {
+		t.Errorf("params = %+v, want show_beta kept and theme changed", db.got)
 	}
 
+	// And it can be turned back off.
 	rec = httptest.NewRecorder()
-	h(rec, reqWithUser(http.MethodPut, "/api/me/visibility", `{"optin":[]}`, holder()))
-	if rec.Code != http.StatusOK || len(db.got) != 0 {
-		t.Fatalf("opt-out: status = %d, stored = %v; want 200 and an empty list", rec.Code, db.got)
+	h(rec, reqWithUser(http.MethodPatch, "/api/me/prefs", `{"show_beta":false}`, on))
+	if rec.Code != http.StatusOK || db.got.ShowBeta {
+		t.Errorf("status = %d, show_beta = %v; want 200 and false", rec.Code, db.got.ShowBeta)
 	}
 }

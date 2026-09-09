@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Wrench, X } from 'lucide-react'
+import { FlaskConical, Wrench, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { assistantEnabled, type Branding } from '@/lib/branding'
 import { DESKTOP_MEDIA_QUERY } from '@/lib/breakpoints'
@@ -18,7 +18,6 @@ import {
   usePrefsMutation,
   useResultAnnouncement,
   useSearch,
-  useVisibilityOptInMutation,
 } from '@/lib/hooks'
 import { useAnnouncements } from '@/lib/admin-hooks'
 import { AdminView } from './admin/AdminView'
@@ -32,6 +31,7 @@ import { Greeting } from './Greeting'
 import { type TileActions } from './Tile'
 import { type Tab } from './TopBar'
 import { PillButton } from '@/components/ui/pill-button'
+import { RestrictedMarker } from '@/components/ui/restricted-marker'
 
 // SearchBox is the service search field with a one-click clear (✕) button that
 // shows while there's a query. Shared by the mobile and desktop layouts.
@@ -118,14 +118,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
 
   useApplyTheme(me.theme)
   const prefs = usePrefsMutation()
-  const visibilityOptIn = useVisibilityOptInMutation()
-  // Badge labels for the visibility groups this user holds, by slug — the
-  // tile renders the group's name in its status slot (spec §5).
-  const visibilityLabels = useMemo(() => {
-    const out: Record<string, string> = {}
-    for (const e of me.visibility.entries) out[e.slug] = localized(e.label, locale)
-    return out
-  }, [me.visibility.entries, locale])
   const announcements = useAnnouncements()
   const catalog = useCatalog()
   const favorites = useFavorites()
@@ -154,6 +146,12 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     !catalog.data.categories.some((c) => c.slug === filter.slug)
   ) {
     // Unknown category slug in a deep link — validated once the catalog loads.
+    replace({ ...view, filter: { kind: 'all' } })
+  } else if (filter.kind === 'beta' && !me.show_beta) {
+    // The Beta facet outlived its pill: the user switched beta services off (or
+    // deep-linked ?filter=beta without them). Leaving it would head the page
+    // "Beta" with no tiles and no active pill — same correction, same reason as
+    // the stale category above (review finding 3).
     replace({ ...view, filter: { kind: 'all' } })
   }
 
@@ -229,11 +227,29 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     [allServices],
   )
 
+  // The visibility group restricting a category, by slug, and its label — the
+  // marker names the group, not the category. Only ever populated for a
+  // category this user holds: /api/catalog drops the ones they don't
+  // (docs/specs/service-visibility.md §2.2).
+  const groupLabels = useMemo(() => {
+    const out: Record<string, string> = {}
+    for (const e of me.visibility.entries) out[e.slug] = localized(e.label, locale)
+    return out
+  }, [me.visibility.entries, locale])
+  const restrictedBy = (slug: string): string | undefined => {
+    const group = allCategories.find((c) => c.slug === slug)?.visibility
+    return group ? groupLabels[group] ?? group : undefined
+  }
+
+  // The group restricting the section currently on screen, if any.
+  const activeGroup = filter.kind === 'category' ? restrictedBy(filter.slug) : undefined
+
   // Section heading for the current view.
   const heading = useMemo(() => {
     if (searching) return tr.dash.searchResults
     if (tab === 'favoriten') return tr.dash.favorites
     if (filter.kind === 'maintenance') return tr.dash.inMaintenance
+    if (filter.kind === 'beta') return tr.dash.betaServices
     if (filter.kind === 'category') {
       const c = allCategories.find((x) => x.slug === filter.slug)
       return c ? localized(c.label, locale) : filter.slug
@@ -303,7 +319,8 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     onSetLocale: (next: Me['locale']) => prefs.mutate({ locale: next }),
     onAdmin: () => navigate({ ...view, admin: true }),
     isMobile,
-    onSetVisibilityOptIn: (optin: string[]) => visibilityOptIn.mutate(optin),
+    showBeta: me.show_beta,
+    onSetShowBeta: (next: boolean) => prefs.mutate({ show_beta: next }),
     focusKey: adminOpen ? 'admin' : 'dashboard',
   }
 
@@ -398,8 +415,14 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
               <h2
                 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em', flexShrink: 0 }}
+                className="inline-flex items-center gap-1.5"
               >
                 {heading}
+                {/* Same marker as the pill and the admin lists: this section is
+                    one only its group can see. Desktop only, because a
+                    category filter cannot be active on a phone — the layout
+                    has no pills and resets the filter to "all". */}
+                {activeGroup && <RestrictedMarker srLabel={tr.common.restrictedTo(activeGroup)} />}
               </h2>
               {sortMenu}
             </div>
@@ -439,16 +462,41 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             <Wrench className="h-[13px] w-[13px]" aria-hidden="true" />
             {tr.dash.inMaintenance}
           </PillButton>
-          {allCategories.map((c) => (
+          {/* Beta: the parallel of the maintenance facet, and only while the
+              user asked for beta services — with the pref off the catalog
+              carries none, so the pill would filter to nothing. */}
+          {me.show_beta && (
             <PillButton
-              key={c.slug}
-              active={filter.kind === 'category' && filter.slug === c.slug}
-              aria-pressed={filter.kind === 'category' && filter.slug === c.slug}
-              onClick={() => selectFilter({ kind: 'category', slug: c.slug })}
+              active={filter.kind === 'beta'}
+              aria-pressed={filter.kind === 'beta'}
+              onClick={() => selectFilter({ kind: 'beta' })}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              {localized(c.label, locale)}
+              <FlaskConical className="h-[13px] w-[13px]" aria-hidden="true" />
+              {tr.dash.betaServices}
             </PillButton>
-          ))}
+          )}
+          {allCategories.map((c) => {
+            // A lock, not a second label: the pill keeps the name and the width
+            // the touch target and the 324px strip were tuned for, and the
+            // meaning rides in the button's accessible name.
+            const group = restrictedBy(c.slug)
+            return (
+              <PillButton
+                key={c.slug}
+                active={filter.kind === 'category' && filter.slug === c.slug}
+                aria-pressed={filter.kind === 'category' && filter.slug === c.slug}
+                onClick={() => selectFilter({ kind: 'category', slug: c.slug })}
+              >
+                {localized(c.label, locale)}
+                {/* A margin rather than a flex gap: the pill stays the block
+                    button every other pill is, so a restricted one lines up
+                    with its neighbours to the pixel and the 44px box is
+                    untouched. */}
+                {group && <RestrictedMarker className="ml-1.5 align-middle" srLabel={tr.common.restrictedTo(group)} />}
+              </PillButton>
+            )
+          })}
         </div>
       )}
 
@@ -479,7 +527,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             layout={layout}
             actions={actions}
             emptyMessage={tr.dash.favEmpty}
-            visibilityLabels={visibilityLabels}
           />
         )
       ) : searchFailed ? (
@@ -496,7 +543,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           layout={layout}
           actions={actions}
           emptyMessage={searching ? tr.dash.searchEmpty(query) : undefined}
-          visibilityLabels={visibilityLabels}
         />
       )}
     </DashboardShell>

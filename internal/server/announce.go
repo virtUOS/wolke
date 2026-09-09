@@ -20,7 +20,7 @@ func userAnnouncements(db announce.Store, roles config.RoleSet) http.HandlerFunc
 		user, _ := userFromContext(r.Context())
 		list, err := announce.ListActive(r.Context(), db, roles, user.PrimaryRole, user.ID)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcements.")
+			serverError(w, r, "announcements_unavailable", "Could not load announcements.", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"announcements": list})
@@ -35,7 +35,7 @@ func userAnnouncementHistory(db announce.Store, roles config.RoleSet) http.Handl
 		user, _ := userFromContext(r.Context())
 		list, err := announce.ListHistory(r.Context(), db, roles, user.PrimaryRole, user.ID)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcement history.")
+			serverError(w, r, "announcements_unavailable", "Could not load announcement history.", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"announcements": list})
@@ -53,7 +53,7 @@ func dismissAnnouncement(db service.DismissStore) http.HandlerFunc {
 			return
 		}
 		if err := service.DismissAnnouncement(r.Context(), db, user.ID, id); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -110,7 +110,7 @@ func adminListAnnouncements(d AdminDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		list, err := announce.AdminList(r.Context(), d.Store, d.Roles, 100)
 		if err != nil {
-			httpx.WriteProblem(w, http.StatusInternalServerError, "announcements_unavailable", "Could not load announcements.")
+			serverError(w, r, "announcements_unavailable", "Could not load announcements.", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"announcements": list})
@@ -131,7 +131,7 @@ func adminCreateAnnouncement(d AdminDeps) http.HandlerFunc {
 		}
 		a, err := service.CreateAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), d.Roles, in)
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusCreated, announce.View(a, d.Roles))
@@ -157,7 +157,7 @@ func adminUpdateAnnouncement(d AdminDeps) http.HandlerFunc {
 		}
 		a, err := service.UpdateAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), d.Roles, id, in)
 		if err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, announce.View(a, d.Roles))
@@ -172,7 +172,7 @@ func adminDeleteAnnouncement(d AdminDeps) http.HandlerFunc {
 			return
 		}
 		if err := service.DeleteAnnouncement(r.Context(), d.Store, actorFromContext(r.Context()), id); err != nil {
-			writeServiceError(w, err)
+			writeServiceError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)

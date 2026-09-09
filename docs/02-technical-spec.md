@@ -112,8 +112,8 @@ create table users (
   email         text,
   primary_role  text not null,          -- a configured role slug (§6); no check constraint: the role set is deployment config
   is_admin      boolean not null default false,   -- derived from group claim at login
-  visibility_claims text[] not null default '{}', -- visibility slugs granted by claims (re-derived at login; spec Stage 2)
-  visibility_optin  text[] not null default '{}', -- visibility slugs the user enabled themselves (grant: opt-in)
+  visibility_claims text[] not null default '{}', -- visibility groups granted by claims (re-derived at login, like is_admin)
+  show_beta     boolean not null default false,   -- the user asked to see the services tagged beta
   view_mode     text not null default 'auto' check (view_mode in ('list','table','auto')),
   theme         text not null default 'system'   check (theme in ('light','dark','system')),
   locale        text not null default 'auto'     check (locale in ('auto','de','en')),  -- 'auto' = detect from browser, else pinned
@@ -126,7 +126,10 @@ create table categories (
   id     uuid primary key default gen_random_uuid(),
   slug   text unique not null,           -- 'teaching', 'ai-tools', ...
   label  jsonb not null,                 -- {"de":"Lehre","en":"Teaching"}
-  sort   int not null default 0
+  sort   int not null default 0,
+  visibility text                        -- NULL = public; else a configured group slug: the category
+                                         -- AND every service in it is restricted to its holders
+                                         -- (docs/specs/service-visibility.md §2.2)
 );
 
 create table services (
@@ -136,8 +139,8 @@ create table services (
   service_url   text,                    -- NULL => documentation-only entry
   doc_url       text,
   icon          text not null,           -- a lucide icon name, validated against an allowlist
-  tag           text,                    -- NULL | 'beta' | 'wartung' (status label)
-  visibility    text,                    -- NULL = public; else a configured visibility slug (docs/specs/service-visibility.md)
+  tag           text,                    -- NULL | 'beta' | 'wartung' (status label). 'beta' also HIDES the
+                                         -- service unless the reader set show_beta (service-visibility §2.1)
   keywords      text[] not null default '{}',  -- search aliases; flat, language-agnostic
   is_active     boolean not null default true,   -- soft delete = false
   created_at    timestamptz not null default now(),
@@ -291,7 +294,8 @@ requirement for open-source reuse: nothing in the code may assume Keycloak speci
 1. Unauthenticated request → server redirects to the configured IdP (authorization code + PKCE).
 2. IdP returns to `/auth/callback`; server exchanges the code, validates the ID token against the
    discovered JWKS.
-3. Server maps claims → `primary_role` and `is_admin` using the **configurable claim mapping** below.
+3. Server maps claims → `primary_role`, `is_admin` and the claim-granted **visibility slugs** using
+   the **configurable claim mapping** below.
 4. Server upserts the `users` row and creates a **server-side session**; sets a `Secure`,
    `HttpOnly`, `SameSite=Lax` cookie. The SPA only ever sees the cookie.
 5. API calls are authorized from the session. Logout clears the session and uses the discovered
@@ -367,6 +371,22 @@ Rules:
 - The set is served to the SPA at `GET /api/roles` in precedence order, and it is what every
   role-shaped write is validated against (§4).
 
+**Claim-derived visibility** resolves beside role and admin, from the same claims and with the same
+extraction (nested dot-paths included). A `visibility:` entry names a claim and the value that
+grants its group; `ResolveVisibilityClaims` (`internal/auth/resolve.go`) returns the granted slugs
+in config order and the login upsert writes them to `users.visibility_claims`. A held group is what
+opens a restricted **category** — and everything in it (docs/specs/service-visibility.md §2.2).
+Three properties matter:
+
+- **Re-derived on every login**, exactly like `is_admin` — removing the group at the IdP removes the
+  access at the next login (for instant lockout, end the session too: `docs/runbooks/revoke-admin.md`
+  Part 2 applies unchanged).
+- **The IdP is the only source.** There is no self-service flavour: "show me the experimental stuff"
+  is the `beta` tag plus the `users.show_beta` pref, which needs no configuration at all (§2.1 of
+  the spec) and which a login never touches.
+- **No group configured, nothing granted.** An unconfigured deployment writes an empty array and
+  behaves exactly as before.
+
 The resolver reads these at startup; swapping IdP, claim names, or the number of roles is a config
 change. Ship sensible defaults plus this documented example so a new adopter is productive quickly.
 
@@ -379,6 +399,8 @@ stateless). Move to Redis only when you run multiple instances (see §9).
 - `is_admin` is re-derived from the configured admin claim **on every login**, so revoking the
   group/role at the IdP revokes admin access at next login. (For instant revocation, also re-check
   on a short session refresh.)
+- Claim-granted visibility groups are re-derived the same way and on the same login, so revoking the
+  IdP group hides the restricted categories, and the services in them, again at next login.
 
 > **UOS deployment:** the IdM can only distinguish students from employees, so the launch
 > configuration is the two-role mapping shown above (`student`, `employee → staff`). The exact
@@ -415,13 +437,13 @@ so validation, soft-delete, and audit logging are identical.
 | Tool | Effect |
 |------|--------|
 | `service.list` / `service.get` | Read the catalog. |
-| `category.list` | Read categories. |
+| `category.list` | Read categories, including the `visibility` group restricting each. |
 | `service.propose_create` | Validate input, return a **preview** (rendered tile + diff) and a `change_token`. **No write.** |
 | `service.propose_update` | Same, for edits. |
 | `service.propose_delete` | Same, for soft delete. |
 | `change.confirm` | Takes a `change_token`, performs the staged write, writes audit. |
 | `change.discard` | Drops a staged change. |
-| `visibility.list` | The configured visibility slugs a service may be restricted to (`visibility` on `propose_create`/`propose_update`; empty = public). |
+| `visibility.list` | The configured visibility groups (empty = nothing is restricted). A group restricts a **category** and everything in it — services carry no visibility of their own. |
 | `announcement.propose_*` / `change.confirm` | Same pattern for announcements. |
 
 **The confirmation contract (the safety requirement):**
@@ -459,10 +481,11 @@ The workload is **read-heavy and the catalog is near-static between admin edits.
   the bulk of traffic — never touch the DB. A single Go instance serves thousands of concurrent
   cached reads comfortably.
 - **Visibility is filtered at the cache, not in SQL.** The cached `Snapshot` is deliberately
-  unreadable; `Snapshot.VisibleTo(held)` yields the narrowed `View` every read surface consumes
-  (catalog, defaults, search, favorites, frequent, the click metric, the catalog MCP). A handler
-  that forgets to narrow does not compile. With no restricted service the view is the shared,
-  uncopied whole catalog, so an unconfigured deployment pays nothing
+  unreadable; `Snapshot.VisibleTo(held, showBeta)` yields the narrowed `View` every read surface
+  consumes (catalog, defaults, search, favorites, frequent, the click metric, the catalog MCP).
+  A handler that forgets to narrow does not compile. One predicate: every restricted category of a
+  service must be held, and a beta service needs `showBeta`. With no restricted category and no
+  beta service the view is the shared, uncopied whole catalog, so a plain deployment pays nothing
   (docs/specs/service-visibility.md §3).
 - **Per-user data** (favorites, prefs, frequently-used) is small and read via indexed queries;
   cache per-request if needed.
@@ -482,7 +505,13 @@ balancer only when an HA requirement (not raw load) forces it.
   (URL format, icon allowlist, at least one category, keyword limits — trimmed, de-duped
   case-insensitively, ≤32 per service and ≤50 chars each, etc.).
 - **Errors:** API returns problem+json with a stable code + human message; the SPA renders
-  empty/error/loading states explicitly (no silent failures).
+  empty/error/loading states explicitly (no silent failures). A **5xx is logged before it is
+  written** and never carries its cause in the body: `serverError` (`internal/server/errors.go`)
+  is the one way a handler answers 500 — it emits an ERROR record with the request id, method,
+  chi route pattern, the problem code and the whole wrapped error, then writes the generic
+  detail. An untyped error out of `/internal/service` reaches `writeServiceError`'s default
+  branch and goes the same way; the typed ones (validation/not-found/conflict) are the caller's
+  and are answered from the body they carry, unlogged.
 - **Security headers:** strict CSP (the SPA is same-origin, so this is straightforward),
   HSTS, `SameSite` cookies, CSRF protection on state-changing requests (double-submit token
   or `SameSite=Strict` + custom header check). The one sanctioned CSP exception: when the
@@ -548,12 +577,13 @@ Because the SPA reads tokens from `/api/branding` at runtime (rather than hardco
 time), a fork re-skins by editing one file and swapping logo assets — no recompile. The doc 03
 palette ships as the bundled default. Keep the variable **names** stable; only values change.
 
-**Service visibility (`visibility:`).** A list of non-public service groups, validated at startup
-like the role mapping: slug `[a-z0-9-]{1,32}`, unique, not `all`, not a role slug; `grant` is
-`claim` (requires `claim` + `match`) or `opt-in` (requires a `warning {de,en}`); `label {de,en}`
-optional (falls back to the capitalized slug). Env cannot set it. No entries → every service is
-public and no visibility UI renders. See `config.example.yaml` and
-`docs/specs/service-visibility.md`.
+**Service visibility (`visibility:`).** A list of visibility groups a **category** may be
+restricted to, validated at startup like the role mapping: slug `[a-z0-9-]{1,32}`, unique, not
+`all`, not a role slug; `claim` + `match` required (the IdP claim path and the value granting the
+group — nested dot-paths work, like `oidc.admin`); `label {de,en}` optional (falls back to the
+capitalized slug). Env cannot set it. No entries → every category is public and no category can be
+restricted at all. Beta services need no configuration: the tag is schema and the reveal is the
+`show_beta` pref. See `config.example.yaml` and `docs/specs/service-visibility.md`.
 
 ### 11.1 PWA (installable web app)
 
@@ -616,22 +646,23 @@ POST   /auth/logout                → clear session + IdP end-session (if disco
 
 # the dashboard read model
 GET    /api/branding               → product name, logo URLs, theme tokens (public; no session)
-GET    /api/me                     → user, primary_role, is_admin, prefs, visibility {held, optin, entries}
+GET    /api/me                     → user, primary_role, is_admin, prefs (incl. show_beta), visibility {held, entries}
 GET    /api/roles                  → the configured roles [{slug, label{de,en}}], precedence order
 GET    /api/catalog                → active services + categories (cache-served)
 GET    /api/catalog/defaults       → role-ordered default view for the current user
 GET    /api/search?q=              → grouped search results
 
 # personalization
-PATCH  /api/me/prefs               → theme, view_mode, locale, favorites_order (usage|alpha|manual)
-PUT    /api/me/visibility          → the user's opt-in visibility slugs, whole list {optin: [...]}
-                                     only grant: opt-in slugs (400 otherwise); answers with /api/me
+PATCH  /api/me/prefs               → theme, view_mode, locale, favorites_order (usage|alpha|manual),
+                                     show_beta (reveals the services tagged beta); answers with /api/me
 GET    /api/favorites              → the user's favorited services, in favorites_order
 POST   /api/favorites/items        → add a service to favorites {service_id}
 DELETE /api/favorites/items        → remove a service from favorites {service_id}
 PUT    /api/favorites/order        → the manual order, whole list {service_ids: [...]}
-                                     idempotent; must be a permutation of exactly
-                                     the caller's favorites (400 otherwise)
+                                     idempotent; must be a permutation of exactly the
+                                     favorites this reader can see — soft-deleted, beta-
+                                     hidden and restricted ones are neither required nor
+                                     renumbered, and keep their stored order (400 otherwise)
 GET    /api/usage/frequent         → the user's frequently-used services
 
 # events
@@ -646,8 +677,14 @@ GET    /api/admin/services         → full catalog incl. inactive
 POST   /api/admin/services         🔒 create
 PATCH  /api/admin/services/:id     🔒 edit
 DELETE /api/admin/services/:id     🔒 soft delete
-PUT    /api/admin/role-defaults/:role 🔒 set the ordered default view (public services only; 400 names a restricted one)
-POST   /api/admin/categories       🔒 manage categories
+PUT    /api/admin/role-defaults/:role 🔒 set the ordered default view (public services only; 400 names
+                                     a service in a restricted category)
+GET    /api/admin/categories       🔒 every category with its visibility group — UNNARROWED, which is
+                                     what the admin screens read (service-visibility §5)
+POST   /api/admin/categories       🔒 manage categories (incl. the visibility group restricting one)
+PATCH  /api/admin/categories/:slug 🔒 rename/relabel/restrict; an omitted `visibility` leaves the
+                                     current group alone (absent ≠ public — it is the one field
+                                     with an access-control effect)
 POST   /api/admin/announcements    🔒 create (rejected if one already exists — singleton)
 PATCH  /api/admin/announcements/:id 🔒 edit/expire
 DELETE /api/admin/announcements/:id 🔒 remove (hard delete; dismissals cascade)

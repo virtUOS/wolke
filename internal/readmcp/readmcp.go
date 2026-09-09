@@ -55,14 +55,16 @@ type Category struct {
 	Sort  int               `json:"sort"`
 }
 
-// publicView is the catalog as an anonymous reader sees it: public services
-// only. There is deliberately no way to pass a held set here.
+// publicView is the catalog as an anonymous reader sees it: public categories
+// only, and no beta services — this server has no user to hold a group or to
+// ask for beta (docs/specs/service-visibility.md §2). There is deliberately no
+// way to pass either in here.
 func (m *Manager) publicView(ctx context.Context) (*catalog.View, error) {
 	snap, err := m.cache.Get(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("load catalog: %w", err)
 	}
-	return snap.VisibleTo(nil), nil
+	return snap.VisibleTo(nil, false), nil
 }
 
 // ListServices returns active public services, optionally narrowed by category

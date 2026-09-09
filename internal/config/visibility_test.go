@@ -6,22 +6,14 @@ import (
 	"testing"
 )
 
-func optIn(slug string) VisibilityEntry {
+func group(slug string) VisibilityEntry {
 	return VisibilityEntry{
-		Slug: slug, Grant: GrantOptIn,
-		Label:   map[string]string{"de": "Experimentell", "en": "Experimental"},
-		Warning: map[string]string{"de": "Kann verschwinden.", "en": "May vanish."},
-	}
-}
-
-func claim(slug string) VisibilityEntry {
-	return VisibilityEntry{
-		Slug: slug, Grant: GrantClaim, Claim: "groups", Match: "it-service-admins",
+		Slug: slug, Claim: "groups", Match: slug + "-admins",
 		Label: map[string]string{"de": "IT-Infrastruktur", "en": "IT infrastructure"},
 	}
 }
 
-// Validation runs at startup like oidc.role (docs/specs/service-visibility.md §2).
+// Validation runs at startup like oidc.role (docs/specs/service-visibility.md §2.2).
 func TestValidateVisibility(t *testing.T) {
 	cfg := Defaults()
 	roles := cfg.Roles() // teacher, staff, student
@@ -31,18 +23,15 @@ func TestValidateVisibility(t *testing.T) {
 		wantErr string // "" = valid
 	}{
 		{"no entries is valid", nil, ""},
-		{"one opt-in and one claim", []VisibilityEntry{optIn("experimental"), claim("it-infra")}, ""},
-		{"bad slug", []VisibilityEntry{optIn("Experimental!")}, "invalid"},
-		{"too long", []VisibilityEntry{optIn(strings.Repeat("a", 33))}, "invalid"},
-		{"reserved all", []VisibilityEntry{optIn("all")}, "reserved"},
-		{"collides with a role", []VisibilityEntry{optIn("staff")}, "collides with a role"},
-		{"duplicate", []VisibilityEntry{optIn("x"), claim("x")}, "listed twice"},
-		{"unknown grant", []VisibilityEntry{{Slug: "x", Grant: "magic"}}, "grant must be"},
-		{"empty grant", []VisibilityEntry{{Slug: "x"}}, "grant must be"},
-		{"opt-in without warning", []VisibilityEntry{{Slug: "x", Grant: GrantOptIn}}, "requires a warning"},
-		{"opt-in with blank warning", []VisibilityEntry{{Slug: "x", Grant: GrantOptIn, Warning: map[string]string{"de": "  "}}}, "requires a warning"},
-		{"claim without claim path", []VisibilityEntry{{Slug: "x", Grant: GrantClaim, Match: "g"}}, "requires claim and match"},
-		{"claim without match", []VisibilityEntry{{Slug: "x", Grant: GrantClaim, Claim: "groups"}}, "requires claim and match"},
+		{"two groups", []VisibilityEntry{group("it-infra"), group("net-ops")}, ""},
+		{"bad slug", []VisibilityEntry{group("IT-Infra!")}, "invalid"},
+		{"too long", []VisibilityEntry{group(strings.Repeat("a", 33))}, "invalid"},
+		{"reserved all", []VisibilityEntry{group("all")}, "reserved"},
+		{"collides with a role", []VisibilityEntry{group("staff")}, "collides with a role"},
+		{"duplicate", []VisibilityEntry{group("x"), group("x")}, "listed twice"},
+		{"without claim path", []VisibilityEntry{{Slug: "x", Match: "g"}}, "requires claim and match"},
+		{"without match", []VisibilityEntry{{Slug: "x", Claim: "groups"}}, "requires claim and match"},
+		{"blank claim", []VisibilityEntry{{Slug: "x", Claim: "  ", Match: "g"}}, "requires claim and match"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -67,48 +56,40 @@ func TestVisibilityLoadsFromFileAndFailsStartupWhenInvalid(t *testing.T) {
 visibility:
   - slug: it-infra
     label: { de: "IT-Infrastruktur", en: "IT infrastructure" }
-    grant: claim
     claim: groups
     match: it-service-admins
-  - slug: experimental
-    label: { de: "Experimentell" }
-    grant: opt-in
-    warning: { de: "Kann jederzeit verschwinden." }
+  - slug: net-ops
+    label: { de: "Netzbetrieb" }
+    claim: realm_access.roles
+    match: network
 `)
 	cfg, err := load(good, envMap(nil))
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
 	vis := cfg.Visibility()
-	if got := vis.Slugs(); !reflect.DeepEqual(got, []string{"it-infra", "experimental"}) {
+	if got := vis.Slugs(); !reflect.DeepEqual(got, []string{"it-infra", "net-ops"}) {
 		t.Fatalf("slugs = %v, want config order", got)
 	}
 	list := vis.List()
-	if list[1].Label["en"] != "Experimentell" {
+	if list[1].Label["en"] != "Netzbetrieb" {
 		t.Errorf("missing en label should fall back to de, got %q", list[1].Label["en"])
 	}
-	if list[1].Warning["en"] != "Kann jederzeit verschwinden." {
-		t.Errorf("missing en warning should fall back to de, got %q", list[1].Warning["en"])
-	}
-	if list[0].Warning != nil {
-		t.Errorf("claim entry must carry no warning, got %v", list[0].Warning)
-	}
-	if vis.Grant("it-infra") != GrantClaim || vis.Grant("experimental") != GrantOptIn || vis.Grant("nope") != "" {
-		t.Error("Grant() does not report the configured grant types")
+	if list[1].Claim != "realm_access.roles" || list[1].Match != "network" {
+		t.Errorf("claim mapping not carried through: %+v", list[1])
 	}
 
 	bad := writeTemp(t, `
 visibility:
-  - slug: experimental
-    grant: opt-in
+  - slug: it-infra
+    label: { de: "IT-Infrastruktur" }
 `)
 	if _, err := load(bad, envMap(nil)); err == nil {
-		t.Fatal("load: want startup error for an opt-in entry without a warning, got nil")
+		t.Fatal("load: want startup error for an entry without claim/match, got nil")
 	}
 	collides := writeTemp(t, `
 visibility:
   - slug: student
-    grant: claim
     claim: groups
     match: x
 `)
@@ -117,13 +98,22 @@ visibility:
 	}
 }
 
+// A slug with no label renders as the capitalized slug in both languages —
+// the label is optional and plays no part in the claim mapping.
+func TestVisibilityLabelDefaultsToTheSlug(t *testing.T) {
+	set := newVisibilitySet([]VisibilityEntry{{Slug: "infra", Claim: "groups", Match: "g"}})
+	if got := set.List()[0].Label; got["de"] != "Infra" || got["en"] != "Infra" {
+		t.Errorf("label = %v, want the capitalized slug in both languages", got)
+	}
+}
+
 // The zero value / an unconfigured deployment: nothing is held, nothing exists.
 func TestEmptyVisibilitySet(t *testing.T) {
 	var s VisibilitySet
-	if s.Has("experimental") || s.Len() != 0 || len(s.List()) != 0 {
+	if s.Has("it-infra") || s.Len() != 0 || len(s.List()) != 0 {
 		t.Error("zero VisibilitySet must be empty")
 	}
-	if held := s.Held([]string{"experimental"}, []string{"experimental"}); len(held) != 0 {
+	if held := s.Held([]string{"it-infra"}); len(held) != 0 {
 		t.Errorf("held = %v, want nothing: unconfigured slugs grant nothing", held)
 	}
 	cfg := Defaults()
@@ -132,53 +122,37 @@ func TestEmptyVisibilitySet(t *testing.T) {
 	}
 }
 
-// The effective held set is claims ∪ opt-in, each filtered to configured slugs
-// whose grant type matches the source (spec §4). Flipping a slug from opt-in to
-// claim in config must not leave self-granted access behind.
-func TestHeldFiltersBySourceAndGrantType(t *testing.T) {
-	set := newVisibilitySet([]VisibilityEntry{claim("it-infra"), optIn("experimental"), optIn("beta-tools")})
+// Held filters the stored claim-granted slugs to what config still defines, in
+// config order (spec §2.2).
+func TestHeldFiltersToConfiguredSlugs(t *testing.T) {
+	set := newVisibilitySet([]VisibilityEntry{group("it-infra"), group("net-ops")})
 
 	tests := []struct {
 		name   string
 		claims []string
-		optin  []string
 		want   []string
 	}{
-		{"nothing held", nil, nil, []string{}},
-		{"opt-in grants an opt-in slug", nil, []string{"experimental"}, []string{"experimental"}},
-		{"claim grants a claim slug", []string{"it-infra"}, nil, []string{"it-infra"}},
-		{"union, in config order", []string{"it-infra"}, []string{"beta-tools", "experimental"}, []string{"it-infra", "experimental", "beta-tools"}},
-		// The mismatch cases: a source can only grant slugs of its own type.
-		{"opt-in cannot grant a claim slug", nil, []string{"it-infra"}, []string{}},
-		{"a claim cannot grant an opt-in slug", []string{"experimental"}, nil, []string{}},
-		{"unconfigured slugs are dropped", []string{"gone"}, []string{"gone", "experimental"}, []string{"experimental"}},
-		{"duplicates collapse", nil, []string{"experimental", "experimental"}, []string{"experimental"}},
+		{"nothing held", nil, []string{}},
+		{"one slug", []string{"it-infra"}, []string{"it-infra"}},
+		{"config order, not claim order", []string{"net-ops", "it-infra"}, []string{"it-infra", "net-ops"}},
+		{"a slug removed from config grants nothing", []string{"gone"}, []string{}},
+		{"duplicates collapse", []string{"it-infra", "it-infra"}, []string{"it-infra"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := set.Held(tt.claims, tt.optin)
+			got := set.Held(tt.claims)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Held(%v, %v) = %v, want %v", tt.claims, tt.optin, got, tt.want)
+				t.Errorf("Held(%v) = %v, want %v", tt.claims, got, tt.want)
 			}
 		})
-	}
-
-	// Flipping experimental to a claim grant: the user's stored opt-in no longer counts.
-	flipped := newVisibilitySet([]VisibilityEntry{claim("experimental")})
-	if got := flipped.Held(nil, []string{"experimental"}); len(got) != 0 {
-		t.Errorf("after flipping to claim, stored opt-in still grants %v", got)
-	}
-	if got := set.OptInSlugs(); !reflect.DeepEqual(got, []string{"experimental", "beta-tools"}) {
-		t.Errorf("OptInSlugs = %v", got)
 	}
 }
 
 // List() hands out copies: a handler mutating a label must not reach the config.
 func TestVisibilityListIsACopy(t *testing.T) {
-	set := newVisibilitySet([]VisibilityEntry{optIn("experimental")})
+	set := newVisibilitySet([]VisibilityEntry{group("it-infra")})
 	set.List()[0].Label["de"] = "mutated"
-	set.List()[0].Warning["de"] = "mutated"
-	if set.List()[0].Label["de"] == "mutated" || set.List()[0].Warning["de"] == "mutated" {
-		t.Error("List() must deep-copy labels and warnings")
+	if set.List()[0].Label["de"] == "mutated" {
+		t.Error("List() must deep-copy labels")
 	}
 }
