@@ -1,8 +1,9 @@
 # Spec — Service visibility, v2: the beta tag and restricted categories
 
-Status: **REWORK, ready to implement.** Supersedes the v1 design, whose Stage 1 shipped in
-PR #131 (2026-09-08) and was judged unshippable on UX grounds before any deployment configured
-it. Owner: supervisor session · Rewritten 2026-09-08
+Status: **IMPLEMENTED** (PR #134, 2026-09-08) — awaiting review and human testing against a real
+IdP. Supersedes the v1 design, whose Stage 1 shipped in PR #131 (2026-09-08) and was judged
+unshippable on UX grounds before any deployment configured it.
+Owner: supervisor session · Rewritten 2026-09-08, implemented 2026-09-08
 Issues: **#34** (experimental mode, reopened), **#121** (restricted groups), **#36** (subsumed).
 
 ## 1. What was wrong with v1
@@ -108,6 +109,21 @@ admin who does not hold a group cannot manage its category or services. Admin su
 stays narrowed for everyone — an admin is still an ordinary user in their own dashboard.
 
 ## 6. Definition of done
+
+Review round 1 (2026-09-09) found eight issues, all fixed on the branch. The one that mattered:
+`/api/favorites` is narrowed but the order write validated against the unnarrowed set, so a
+favorite that went invisible — a beta service after the pref went off, or one in a category whose
+group was revoked — 400'd every reorder with no way out. The write now validates against the same
+view the client is rendered from, and an invisible favorite keeps its stored `manual_sort`
+untouched: neither required in the list nor written by it, so it slots back in where it was.
+
+All met by PR #134 except one deliberate omission: **the MCP has no category write path** to move
+the `visibility` field onto. `category.list` reports each category's group and `visibility.list`
+lists the configured ones, and the field is gone from `service.propose_*` — but category
+create/update/delete/reorder have been form-only since #130, so there is nothing there to extend.
+Adding staged category writes to the MCP is a separate change (it needs a second `Preview` shape
+in `internal/adminmcp`) and is not in the §4 list.
+
 
 - No restricted category and no beta service → behaviour identical to today (regression test).
 - A beta service is invisible until the pref is on; then it appears in its own categories, badged,
