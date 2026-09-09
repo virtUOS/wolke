@@ -33,17 +33,19 @@ func TestAdminAPIFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("upsert admin: %v", err)
 	}
+	// This test adds and drops a category, which changes the set a concurrent
+	// whole-list reorder validates against. Cleanups run LIFO, so the three
+	// registrations below run in reverse: fixtures are torn down while the lock
+	// is still held, then the lock is released, then the pool closes last
+	// (issue #142; see storetest.LockCategorySet).
+	t.Cleanup(db.Close)
+	storetest.LockCategorySet(ctx, t, db.Pool)
 	t.Cleanup(func() {
 		_, _ = db.Pool.Exec(ctx, "delete from services where name like 'API Test%'")
 		_, _ = db.Pool.Exec(ctx, "delete from categories where slug = 'api-test-cat'")
 		_, _ = db.Pool.Exec(ctx, "delete from audit_log where actor_id = $1", admin.ID)
 		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub = 'admin-api-test'")
-		db.Close()
 	})
-	// This test adds and drops a category, which changes the set a concurrent
-	// whole-list reorder validates against. Registered after the cleanup above
-	// so the lock is released before the pool closes.
-	storetest.LockCategorySet(ctx, t, db.Pool)
 
 	d := AdminDeps{Store: db, Invalidate: func() {}, Audit: db}
 	call := func(h http.HandlerFunc, method, target, body, idParam, roleParam string) *httptest.ResponseRecorder {
@@ -140,16 +142,20 @@ func TestAdminCategoryRoutes(t *testing.T) {
 		_, _ = db.Pool.Exec(ctx, "delete from categories where slug in ('route-test-cat','route-test-renamed','route-test-used')")
 		_, _ = db.Pool.Exec(ctx, "delete from audit_log where actor_id = $1", admin.ID)
 	}
+	// Cleanups run LIFO, so these three registrations run in reverse: the
+	// category fixtures are deleted and the seeded sorts restored while the lock
+	// is still held, then the lock is released, then the pool closes last. The
+	// old order released the lock first, leaving the next lock holder free to
+	// read rows this test was about to delete (issue #142).
+	t.Cleanup(db.Close)
+	storetest.LockCategorySet(ctx, t, db.Pool)
 	t.Cleanup(func() {
 		cleanup()
 		for _, r := range origSorts {
 			_, _ = db.Pool.Exec(ctx, "update categories set sort = $1 where slug = $2", r.sort, r.slug)
 		}
 		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub = 'cat-route-test'")
-		db.Close()
 	})
-	// After the cleanup above, so the lock is released before the pool closes.
-	storetest.LockCategorySet(ctx, t, db.Pool)
 	cleanup()
 
 	rows, err := db.Pool.Query(ctx, "select slug, sort from categories order by sort, slug")
@@ -189,6 +195,19 @@ func TestAdminCategoryRoutes(t *testing.T) {
 	if rec := call(adminCreateCategory(d), http.MethodPost, "/api/admin/categories", `{"slug":"route-test-cat","label":`+label+`,"sort":9100}`, ""); rec.Code != http.StatusCreated {
 		t.Fatalf("create category = %d, want 201 (%s)", rec.Code, rec.Body.String())
 	}
+	// The collision target for the rename below is a category this test owns, not
+	// whichever category happened to sort first (`origSorts[0]`). That borrowed a
+	// row from ambient database state — in the observed failure, `cat-test-used`,
+	// a fixture belonging to internal/service's tests, which its owner deleted
+	// mid-test so the rename that should 400 succeeded (issue #142). Same repair
+	// the #130 session applied to usage.TestRollupAndPurge, which borrowed
+	// `ListActiveServices()[0]`: a test owns every row it asserts on.
+	// It doubles as the still-used category for the guarded-delete case further
+	// down, so it is created once, here.
+	if rec := call(adminCreateCategory(d), http.MethodPost, "/api/admin/categories", `{"slug":"route-test-used","label":`+label+`,"sort":9110}`, ""); rec.Code != http.StatusCreated {
+		t.Fatalf("create used category = %d, want 201 (%s)", rec.Code, rec.Body.String())
+	}
+
 	before := invalidated
 
 	// ...and on update.
@@ -200,14 +219,10 @@ func TestAdminCategoryRoutes(t *testing.T) {
 	}
 
 	// A rename onto an existing slug is a 400 with a readable detail, never a 500.
-	if len(origSorts) > 0 {
-		rec := call(adminUpdateCategory(d), http.MethodPatch, "/api/admin/categories/route-test-cat", `{"slug":"`+origSorts[0].slug+`","label":`+label+`}`, "route-test-cat")
-		if rec.Code != http.StatusBadRequest {
-			t.Errorf("rename onto an existing slug = %d, want 400 (%s)", rec.Code, rec.Body.String())
-		}
-		if !strings.Contains(rec.Body.String(), "slug") {
-			t.Errorf("duplicate-slug detail = %s, want it to name the slug field", rec.Body.String())
-		}
+	if rec := call(adminUpdateCategory(d), http.MethodPatch, "/api/admin/categories/route-test-cat", `{"slug":"route-test-used","label":`+label+`}`, "route-test-cat"); rec.Code != http.StatusBadRequest {
+		t.Errorf("rename onto an existing slug = %d, want 400 (%s)", rec.Code, rec.Body.String())
+	} else if !strings.Contains(rec.Body.String(), "slug") {
+		t.Errorf("duplicate-slug detail = %s, want it to name the slug field", rec.Body.String())
 	}
 
 	// A successful rename + relabel: 200, and the cache is invalidated.
@@ -232,10 +247,7 @@ func TestAdminCategoryRoutes(t *testing.T) {
 	}
 
 	// A category a service still uses → 409 with the blocking count in the
-	// detail, not a raw constraint error.
-	if rec := call(adminCreateCategory(d), http.MethodPost, "/api/admin/categories", `{"slug":"route-test-used","label":`+label+`,"sort":9110}`, ""); rec.Code != http.StatusCreated {
-		t.Fatalf("create used category = %d, want 201", rec.Code)
-	}
+	// detail, not a raw constraint error. route-test-used was created above.
 	svcBody := `{"name":"Route Test Service","description":{"de":"Test.","en":"Test."},"service_url":"https://rt.example.edu","icon":"server","categories":["route-test-used"]}`
 	if rec := call(adminCreateService(d), http.MethodPost, "/api/admin/services", svcBody, ""); rec.Code != http.StatusCreated {
 		t.Fatalf("create service = %d, want 201 (%s)", rec.Code, rec.Body.String())
