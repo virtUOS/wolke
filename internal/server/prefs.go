@@ -66,7 +66,7 @@ func updatePrefs(db service.PrefsStore, vis config.VisibilitySet) http.HandlerFu
 				httpx.WriteProblem(w, http.StatusBadRequest, "invalid_prefs", ve.Error())
 				return
 			}
-			httpx.WriteProblem(w, http.StatusInternalServerError, "prefs_update_failed", "Could not save your preferences.")
+			serverError(w, r, "prefs_update_failed", "Could not save your preferences.", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, toMeResponse(updated, vis))

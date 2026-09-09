@@ -505,7 +505,13 @@ balancer only when an HA requirement (not raw load) forces it.
   (URL format, icon allowlist, at least one category, keyword limits — trimmed, de-duped
   case-insensitively, ≤32 per service and ≤50 chars each, etc.).
 - **Errors:** API returns problem+json with a stable code + human message; the SPA renders
-  empty/error/loading states explicitly (no silent failures).
+  empty/error/loading states explicitly (no silent failures). A **5xx is logged before it is
+  written** and never carries its cause in the body: `serverError` (`internal/server/errors.go`)
+  is the one way a handler answers 500 — it emits an ERROR record with the request id, method,
+  chi route pattern, the problem code and the whole wrapped error, then writes the generic
+  detail. An untyped error out of `/internal/service` reaches `writeServiceError`'s default
+  branch and goes the same way; the typed ones (validation/not-found/conflict) are the caller's
+  and are answered from the body they carry, unlogged.
 - **Security headers:** strict CSP (the SPA is same-origin, so this is straightforward),
   HSTS, `SameSite` cookies, CSRF protection on state-changing requests (double-submit token
   or `SameSite=Strict` + custom header check). The one sanctioned CSP exception: when the
