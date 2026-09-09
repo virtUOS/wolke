@@ -35,16 +35,27 @@ const backchannelLogoutPath = "/auth/backchannel-logout"
 // are applied via an injected <style> element. The single sanctioned exception
 // is a configured assistant widget (branding.assistant_widget_url): its origin
 // is appended to script-src (loads widget.js) and connect-src (the SSE chat
-// stream) — no other directive is widened.
-func buildCSP(assistantOrigin string) string {
-	scriptSrc, connectSrc := "'self'", "'self'"
+// stream). The other is the OIDC issuer's origin on form-action: logout is a
+// form POST that /auth/logout answers with a 302 to the IdP's end-session
+// endpoint, and Chrome (unlike Firefox) enforces form-action against redirect
+// targets — without the issuer there, single sign-out silently stops at wolke
+// and the IdP session survives (issue #144). Only the origin is allowed, never
+// the issuer path; login is a top-level GET navigation, which form-action does
+// not govern, and the post-logout hop back lands on 'self'. No other directive
+// is widened. Both origins arrive pre-reduced by originOf, so an empty string
+// means "not configured / unparseable" and the directive stays at 'self'.
+func buildCSP(assistantOrigin, issuerOrigin string) string {
+	scriptSrc, connectSrc, formAction := "'self'", "'self'", "'self'"
 	if assistantOrigin != "" {
 		scriptSrc += " " + assistantOrigin
 		connectSrc += " " + assistantOrigin
 	}
+	if issuerOrigin != "" {
+		formAction += " " + issuerOrigin
+	}
 	return "default-src 'self'; base-uri 'self'; object-src 'none'; " +
 		"frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
-		"script-src " + scriptSrc + "; connect-src " + connectSrc + "; form-action 'self'; " +
+		"script-src " + scriptSrc + "; connect-src " + connectSrc + "; form-action " + formAction + "; " +
 		// PWA: the service worker and web app manifest are same-origin. Both already
 		// fall back to 'self' via default-src, but state them so a future default-src
 		// tightening can't silently break install/offline.
@@ -102,9 +113,10 @@ func csrfGuard(publicOrigin string) func(http.Handler) http.Handler {
 	}
 }
 
-// originOf reduces a URL (e.g. PUBLIC_URL) to its scheme://host origin, dropping
-// any path/query. Returns "" if rawURL is empty or unparseable, which makes
-// csrfGuard fall back to the forwarded-derived origin only.
+// originOf reduces a URL (e.g. PUBLIC_URL or the OIDC issuer) to its
+// scheme://host origin, dropping any path/query. Returns "" if rawURL is empty
+// or unparseable, which makes csrfGuard fall back to the forwarded-derived
+// origin only and keeps buildCSP's directives at 'self'.
 func originOf(rawURL string) string {
 	if rawURL == "" {
 		return ""
