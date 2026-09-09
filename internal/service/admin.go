@@ -164,6 +164,35 @@ func GetAdminService(ctx context.Context, db store.Querier, id pgtype.UUID) (Adm
 	return toAdminService(s, slugs), nil
 }
 
+// nameTakenError is the field error for a name another service already holds.
+// The soft-deleted case gets its own wording: services.name is unique over
+// inactive rows too, so a removed service keeps its name reserved, and an
+// admin told only "already exists" about a name nothing in the catalog shows
+// goes hunting. The admin services list does list inactive entries, so it is
+// somewhere to send them (issue #138).
+func nameTakenError(name string, active bool) error {
+	if !active {
+		return &ValidationError{Field: "name", Msg: fmt.Sprintf("exists but is currently removed (%q) — restore or rename it in the services list", name)}
+	}
+	return &ValidationError{Field: "name", Msg: fmt.Sprintf("already exists (%q)", name)}
+}
+
+// requireFreeName rejects a name another service already holds, on create and
+// on rename. services.name is unique not null, so without this check the raw
+// 23505 would surface as a 500 "Unexpected error." with nothing pointing at the
+// name (issue #138) — the same hole requireFreeSlug closes for categories.
+func requireFreeName(ctx context.Context, q *store.Queries, name string) error {
+	svc, err := q.GetServiceByName(ctx, name)
+	switch {
+	case err == nil:
+		return nameTakenError(name, svc.IsActive)
+	case errors.Is(err, pgx.ErrNoRows):
+		return nil
+	default:
+		return fmt.Errorf("check service name: %w", err)
+	}
+}
+
 // CreateService validates, inserts the service + its categories, and audit-logs
 // the write — all in one transaction.
 func CreateService(ctx context.Context, db AdminDB, actor Actor, in Draft) (AdminService, error) {
@@ -172,6 +201,9 @@ func CreateService(ctx context.Context, db AdminDB, actor Actor, in Draft) (Admi
 	}
 	var out AdminService
 	err := inTx(ctx, db, func(q *store.Queries) error {
+		if err := requireFreeName(ctx, q, in.Name); err != nil {
+			return err
+		}
 		catIDs, err := resolveCategories(ctx, q, in.Categories)
 		if err != nil {
 			return err
@@ -221,6 +253,11 @@ func UpdateService(ctx context.Context, db AdminDB, actor Actor, id pgtype.UUID,
 		}
 		if err != nil {
 			return err
+		}
+		if in.Name != before.Name {
+			if err := requireFreeName(ctx, q, in.Name); err != nil {
+				return err
+			}
 		}
 		beforeSlugs, _ := q.ListServiceCategorySlugs(ctx, id)
 		catIDs, err := resolveCategories(ctx, q, in.Categories)

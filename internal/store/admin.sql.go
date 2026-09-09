@@ -242,6 +242,32 @@ func (q *Queries) GetServiceByID(ctx context.Context, id pgtype.UUID) (Service, 
 	return i, err
 }
 
+const getServiceByName = `-- name: GetServiceByName :one
+select id, name, description, service_url, doc_url, icon, is_active, created_at, updated_at, tag, keywords from services where name = $1
+`
+
+// Whether the unique services.name is already taken, including by a
+// soft-deleted row: the unique index covers inactive services too, so the name
+// of a removed service stays reserved.
+func (q *Queries) GetServiceByName(ctx context.Context, name string) (Service, error) {
+	row := q.db.QueryRow(ctx, getServiceByName, name)
+	var i Service
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.ServiceUrl,
+		&i.DocUrl,
+		&i.Icon,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Tag,
+		&i.Keywords,
+	)
+	return i, err
+}
+
 const insertAudit = `-- name: InsertAudit :exec
 insert into audit_log (actor_id, actor_kind, action, target_id, diff)
 values ($1, $2, $3, $4, $5)

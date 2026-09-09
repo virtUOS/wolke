@@ -503,7 +503,13 @@ balancer only when an HA requirement (not raw load) forces it.
 
 - **Validation:** central, in `/internal/service`, so form and MCP enforce the same rules
   (URL format, icon allowlist, at least one category, keyword limits — trimmed, de-duped
-  case-insensitively, ≤32 per service and ≤50 chars each, etc.).
+  case-insensitively, ≤32 per service and ≤50 chars each, etc.). Uniqueness is checked in the
+  same layer, inside the write's transaction, so a `23505` never reaches the client as a 500:
+  `categories.slug` and `services.name` are both `unique not null`, and create and rename take
+  the same check, returning `ValidationError{Field: …}` → 400. A service name is reserved by a
+  *soft-deleted* row too (the unique index covers inactive services), so that case says
+  "exists but is currently removed" and points at the admin services list, which shows inactive
+  entries — "already exists" about a name the catalog does not show is a dead end (issue #138).
 - **Errors:** API returns problem+json with a stable code + human message; the SPA renders
   empty/error/loading states explicitly (no silent failures). A **5xx is logged before it is
   written** and never carries its cause in the body: `serverError` (`internal/server/errors.go`)
