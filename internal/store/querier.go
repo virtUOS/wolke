@@ -73,6 +73,10 @@ type Querier interface {
 	// Active services in the admin-curated order for a role (docs/01 §3).
 	GetRoleDefaults(ctx context.Context, role string) ([]pgtype.UUID, error)
 	GetServiceByID(ctx context.Context, id pgtype.UUID) (Service, error)
+	// Whether the unique services.name is already taken, including by a
+	// soft-deleted row: the unique index covers inactive services too, so the name
+	// of a removed service stays reserved.
+	GetServiceByName(ctx context.Context, name string) (Service, error)
 	GetSession(ctx context.Context, id string) (Session, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserBySub(ctx context.Context, oidcSub string) (User, error)

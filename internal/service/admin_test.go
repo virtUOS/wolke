@@ -249,3 +249,32 @@ func TestCategoryInUseMessage(t *testing.T) {
 		})
 	}
 }
+
+// A reserved name the admin cannot see in the catalog is the confusing case:
+// the unique index covers soft-deleted rows, so the removed state has to be
+// named, with somewhere to go and look (issue #138).
+func TestNameTakenMessage(t *testing.T) {
+	tests := []struct {
+		name   string
+		active bool
+		want   string
+	}{
+		{"active", true, `already exists ("Webmail")`},
+		{"soft-deleted", false, `exists but is currently removed ("Webmail") — restore or rename it in the services list`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := nameTakenError("Webmail", tt.active)
+			var ve *ValidationError
+			if !errors.As(err, &ve) {
+				t.Fatalf("err = %v, want ValidationError", err)
+			}
+			if ve.Field != "name" {
+				t.Errorf("field = %q, want %q", ve.Field, "name")
+			}
+			if ve.Msg != tt.want {
+				t.Errorf("msg = %q, want %q", ve.Msg, tt.want)
+			}
+		})
+	}
+}

@@ -12,6 +12,12 @@ join categories c on c.id = sc.category_id
 where sc.service_id = @service_id
 order by c.slug;
 
+-- name: GetServiceByName :one
+-- Whether the unique services.name is already taken, including by a
+-- soft-deleted row: the unique index covers inactive services too, so the name
+-- of a removed service stays reserved.
+select * from services where name = @name;
+
 -- name: CreateService :one
 insert into services (name, description, service_url, doc_url, icon, tag, keywords)
 values (@name, @description, @service_url, @doc_url, @icon, @tag, @keywords)

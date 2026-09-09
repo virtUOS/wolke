@@ -399,3 +399,107 @@ func TestCategoryWritesAudited(t *testing.T) {
 		t.Errorf("order after a repeated write = %q, want %q", again, reversed)
 	}
 }
+
+// Integration: services.name is unique not null, so a collision has to come
+// back as a field-level validation error on `name` — not the raw 23505 that
+// reached the admin as a 500 "Unexpected error." (issue #138). A soft-deleted
+// service keeps its name reserved (the unique index covers inactive rows), and
+// that case says so, because "already exists" about a name the admin cannot
+// find in the catalog sends them hunting.
+// Needs DATABASE_URL (make db && make migrate && make seed).
+func TestServiceNameCollisionIsValidationError(t *testing.T) {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		t.Skip("DATABASE_URL not set; skipping admin integration test")
+	}
+	ctx := context.Background()
+	db, err := store.Open(ctx, url)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	admin, err := db.UpsertUser(ctx, store.UpsertUserParams{
+		OidcSub: "name-collision-test", DisplayName: "Admin", PrimaryRole: "staff", IsAdmin: true,
+	})
+	if err != nil {
+		t.Fatalf("upsert admin: %v", err)
+	}
+	actor := Actor{ID: admin.ID, Kind: ActorForm}
+
+	clean := func() {
+		_, _ = db.Pool.Exec(ctx, "delete from services where name like 'Name Collision%'")
+		_, _ = db.Pool.Exec(ctx, "delete from audit_log where actor_id = $1", admin.ID)
+	}
+	clean()
+	t.Cleanup(func() {
+		clean()
+		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub = 'name-collision-test'")
+		db.Close()
+	})
+
+	draft := func(name string) Draft {
+		return Draft{
+			Name:        name,
+			Description: map[string]string{"de": "Testdienst.", "en": "Test service."},
+			ServiceURL:  "https://test.example.edu",
+			Icon:        "server",
+			Categories:  []string{"data"},
+		}
+	}
+	// wantNameError asserts a ValidationError on `name` whose message carries
+	// `substr` — the wording is what makes the 400 actionable.
+	wantNameError := func(t *testing.T, err error, substr string) {
+		t.Helper()
+		var ve *ValidationError
+		if !errors.As(err, &ve) {
+			t.Fatalf("err = %v, want ValidationError on name", err)
+		}
+		if ve.Field != "name" {
+			t.Errorf("field = %q, want %q", ve.Field, "name")
+		}
+		if !strings.Contains(ve.Msg, substr) {
+			t.Errorf("message = %q, want it to contain %q", ve.Msg, substr)
+		}
+	}
+
+	first, err := CreateService(ctx, db, actor, draft("Name Collision A"))
+	if err != nil {
+		t.Fatalf("CreateService: %v", err)
+	}
+	second, err := CreateService(ctx, db, actor, draft("Name Collision B"))
+	if err != nil {
+		t.Fatalf("CreateService (second): %v", err)
+	}
+
+	// Create onto a name an active service holds.
+	_, err = CreateService(ctx, db, actor, draft("Name Collision A"))
+	wantNameError(t, err, `already exists`)
+
+	// Rename onto a name another active service holds.
+	_, err = UpdateService(ctx, db, actor, mustUUID(t, second.ID), draft("Name Collision A"))
+	wantNameError(t, err, `already exists`)
+
+	// Saving a service under its own unchanged name is not a collision.
+	if _, err := UpdateService(ctx, db, actor, mustUUID(t, second.ID), draft("Name Collision B")); err != nil {
+		t.Fatalf("UpdateService keeping its own name: %v", err)
+	}
+
+	// A soft-deleted service still holds its name — say that, and point at the
+	// admin list, which does show inactive entries.
+	if err := SoftDeleteService(ctx, db, actor, mustUUID(t, first.ID)); err != nil {
+		t.Fatalf("SoftDeleteService: %v", err)
+	}
+	_, err = CreateService(ctx, db, actor, draft("Name Collision A"))
+	wantNameError(t, err, "currently removed")
+	_, err = UpdateService(ctx, db, actor, mustUUID(t, second.ID), draft("Name Collision A"))
+	wantNameError(t, err, "currently removed")
+
+	// Nothing was written by any of the rejected calls.
+	var n int
+	if err := db.Pool.QueryRow(ctx,
+		"select count(*) from services where name like 'Name Collision%'").Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("services after the rejected writes = %d, want 2", n)
+	}
+}
