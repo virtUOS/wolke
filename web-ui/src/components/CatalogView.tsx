@@ -10,7 +10,6 @@ interface CatalogViewProps {
   actions?: TileActions
   /** Shown when there are no services (e.g. the favorites tab's own copy). */
   emptyMessage?: string
-  /** Localized visibility labels by slug, for the tile badge (see Tile). */
 }
 
 // Flat service grid (Editorial direction). Category grouping was removed —

@@ -5,11 +5,13 @@
 # restricted-category flow (issue #121) can be exercised end to end against the
 # seeded "IT-Infrastruktur" category (dev/seed.sql).
 #
-# The group deliberately matches a claim value the mock IdP does NOT emit (it
-# sends groups: ["dashboard-admins"]), so the e2e user holds nothing: the
-# non-holder half of the contract — the category and its services are absent
-# from every read surface — is what the suite asserts. The holder half is
-# covered by the Go tests, which can mint any claim set.
+# Two groups, one for each side of the contract. `it-infra` deliberately matches
+# a claim value the mock IdP does NOT emit, so the e2e user holds nothing there:
+# the category and its services must be absent from every read surface.
+# `dash-team` matches `dashboard-admins`, which the mock IdP does send, so the
+# same user holds that one — which is what the holder-side UI needs: their
+# restricted category renders, marked with a lock so they can tell it apart
+# before sending its link to a colleague.
 #
 # Beta services need no configuration at all: the tag is schema, the reveal is
 # a user pref (docs/specs/service-visibility.md §2.1).
@@ -20,3 +22,7 @@ visibility:
     label: { de: "IT-Infrastruktur", en: "IT infrastructure" }
     claim: groups
     match: it-service-admins
+  - slug: dash-team
+    label: { de: "Dashboard-Team", en: "Dashboard team" }
+    claim: groups
+    match: dashboard-admins

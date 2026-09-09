@@ -5,11 +5,13 @@
 //     inline in its own category, badged Beta, with a Beta filter beside the
 //     maintenance one → switch off → gone again. The fixture is the seeded
 //     "Zettelkasten Labor" (dev/seed.sql), tagged beta — no configuration.
-//  2. Restricted categories (§2.2): the seeded "IT-Infrastruktur" category is
-//     restricted to the `it-infra` group, which dev/config.e2e.yaml maps to a
-//     claim value the mock IdP does not emit. So the e2e user holds nothing:
-//     neither the category nor "Serververwaltung" may appear anywhere — while
-//     the admin screens, which read unnarrowed (§5), must still manage both.
+//  2. Restricted categories (§2.2), from both sides. The seeded
+//     "IT-Infrastruktur" category is restricted to a group the mock IdP does not
+//     grant: neither it nor "Serververwaltung" may appear anywhere — while the
+//     admin screens, which read unnarrowed (§5), must still manage both. The
+//     seeded "Team-Werkzeuge" category is restricted to one it does grant, so
+//     the holder sees it — marked with the shared lock on its filter pill and
+//     its section heading, so they can tell before sending someone the link.
 //
 // The beta switch is a real server write on the one shared test user, so that
 // flow runs under a cross-worker lock (helpers/lock.ts) and always leaves the
@@ -25,6 +27,9 @@ const BETA_SERVICE = /Zettelkasten Labor/
 const BETA_CATEGORY = 'KI-Werkzeuge'
 const RESTRICTED_SERVICE = /Serververwaltung/
 const RESTRICTED_CATEGORY = 'IT-Infrastruktur'
+// The group the mock IdP does grant, so the holder side is reachable too.
+const HELD_CATEGORY = 'Team-Werkzeuge'
+const HELD_MARKER = /Nur für Dashboard-Team sichtbar|Visible only to Dashboard team/
 
 // Six workers may queue behind the lock; each flow takes a few seconds.
 test.setTimeout(120_000)
@@ -136,21 +141,59 @@ test('a restricted category is invisible to a non-holder, in the UI and in the A
   }
 
   const me = await (await page.request.get('/api/me')).json()
-  expect(me.visibility.held, 'the mock IdP grants no group').toEqual([])
-  expect(me.show_beta).toBe(false)
+  // The IdP grants dash-team (it sends groups: ["dashboard-admins"]) and not
+  // it-infra — the two sides this suite covers. Nothing here asserts anything
+  // about beta: the beta flow mutates that pref on this same shared user under
+  // its own lock, and this test deliberately runs outside it.
+  expect(me.visibility.held).toEqual(['dash-team'])
 
   const catalog = await names('/api/catalog')
   expect(catalog.services).not.toContain('Serververwaltung')
   expect(catalog.categories).not.toContain('it-infra')
-  // Beta is hidden by the same call, through the other half of the predicate.
-  expect(catalog.services).not.toContain('Zettelkasten Labor')
-  expect(catalog.categories).not.toContain('ai-tools')
 
   expect((await names('/api/search?q=Serververwaltung')).services).toEqual([])
-  expect((await names('/api/search?q=Zettelkasten')).services).toEqual([])
   expect((await names('/api/catalog/defaults')).services).not.toContain('Serververwaltung')
   expect((await names('/api/favorites')).services).not.toContain('Serververwaltung')
   expect((await names('/api/usage/frequent')).services).not.toContain('Serververwaltung')
+})
+
+// The holder's side: a restricted category they do hold renders like any other
+// — with one difference, the marker, on the pill and on the section heading.
+// Icon only, so the pill keeps the width the 44px target and the 324px strip
+// were tuned for; the meaning rides in the accessible name.
+test('a restricted category the user holds is marked as restricted', async ({ page }, testInfo) => {
+  const isMobile = testInfo.project.use.isMobile === true
+  await gotoApp(page, '/?tab=dienste')
+  const main = page.getByRole('main')
+
+  // The service is there, like any other.
+  await expect(main.getByRole('link', { name: /Team-Notizen/ })).toHaveCount(1)
+
+  if (isMobile) {
+    // No pills and no category filter on a phone — nothing to mark.
+    return
+  }
+
+  const pill = page.getByRole('button', { name: new RegExp('^' + HELD_CATEGORY) })
+  await expect(pill).toHaveCount(1)
+  // The lock says what it means; the visible label is unchanged.
+  await expect(pill).toHaveAccessibleName(
+    new RegExp('^' + HELD_CATEGORY + '\\s+(Nur für Dashboard-Team sichtbar|Visible only to Dashboard team)$'),
+  )
+  await expectViewportHealthy(page, { isMobile, label: 'filter strip with a restricted category' })
+
+  // …and the section heading carries it too, once the facet is active.
+  await pill.click()
+  const heading = page.getByRole('heading', { level: 2, name: new RegExp(HELD_CATEGORY) })
+  await expect(heading).toBeVisible()
+  await expect(heading.getByText(HELD_MARKER)).toBeAttached()
+  await expectViewportHealthy(page, { isMobile, label: 'restricted category section' })
+
+  // A public category's pill and heading stay bare.
+  const publicPill = page.getByRole('button', { name: /^Netz & Daten$/ })
+  await expect(publicPill).toHaveCount(1)
+  await publicPill.click()
+  await expect(page.getByRole('heading', { level: 2, name: /Netz & Daten/ }).getByText(/Nur für|Visible only/)).toHaveCount(0)
 })
 
 // The admin-narrowing fix (spec §5): the admin screens read unnarrowed data, so
@@ -173,7 +216,7 @@ test('an admin holding no group still manages the restricted category and its se
   await page.goto('/?admin=1')
   await expect(page.getByRole('heading', { level: 1, name: /Administration/i })).toBeVisible()
 
-  // Categories tab: the restricted category is listed, named with its group.
+  // Categories tab: the restricted category is listed, marked with its group.
   await page
     .getByRole('navigation', { name: /Admin-Bereiche|Admin sections/i })
     .getByRole('button', { name: 'Kategorien', exact: true })
@@ -181,7 +224,24 @@ test('an admin holding no group still manages the restricted category and its se
   const row = page.getByRole('listitem').filter({ hasText: RESTRICTED_CATEGORY })
   await expect(row).toHaveCount(1)
   await expect(row).toContainText(RESTRICTED_CATEGORY)
+  // The marker, and what it means — a bare lock would be worse than none.
+  await expect(row.getByText(/Nur für IT-Infrastruktur sichtbar|Visible only to IT infrastructure/)).toBeAttached()
   await expectViewportHealthy(page, { isMobile, label: 'admin category list with a restricted category' })
+
+  // The same marker on the service row, in the services section.
+  await page
+    .getByRole('navigation', { name: /Admin-Bereiche|Admin sections/i })
+    .getByRole('button', { name: 'Dienste', exact: true })
+    .click()
+  const svcRow = page.getByRole('listitem').filter({ hasText: RESTRICTED_SERVICE })
+  await expect(svcRow).toHaveCount(1)
+  await expect(svcRow.getByText(/Nur für IT-Infrastruktur sichtbar|Visible only to IT infrastructure/)).toBeAttached()
+  await expectViewportHealthy(page, { isMobile, label: 'admin service list with a restricted service' })
+
+  await page
+    .getByRole('navigation', { name: /Admin-Bereiche|Admin sections/i })
+    .getByRole('button', { name: 'Kategorien', exact: true })
+    .click()
 
   // Editing it prefills the visibility selector with the group.
   await row.getByRole('button', { name: /^Bearbeiten$|^Edit$/ }).click()

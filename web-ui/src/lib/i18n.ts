@@ -48,6 +48,10 @@ const de = {
     delete: 'Löschen',
     close: 'Schließen',
     skipToContent: 'Zum Inhalt springen',
+    // Die zugängliche Bedeutung des Schloss-Markers — dieselbe in der
+    // Kategorien- und Dienste-Verwaltung wie auf dem Dashboard
+    // (docs/specs/service-visibility.md §2.2).
+    restrictedTo: (group: string) => `Nur für ${group} sichtbar`,
   },
   shell: {
     signingIn: 'Anmeldung…',
@@ -309,6 +313,7 @@ const en: Strings = {
     delete: 'Delete',
     close: 'Close',
     skipToContent: 'Skip to content',
+    restrictedTo: (group: string) => `Visible only to ${group}`,
   },
   shell: {
     signingIn: 'Signing in…',

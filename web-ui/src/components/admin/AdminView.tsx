@@ -18,7 +18,8 @@ export function AdminView({ locale, onExit }: { locale: string; onExit: () => vo
   const s = t(locale)
   // Unnarrowed, not the dashboard's /api/catalog: an admin manages the
   // categories they do not themselves hold (docs/specs/service-visibility.md §5).
-  const categories: Category[] = useAdminCategories().data?.categories ?? []
+  const cats = useAdminCategories()
+  const categories: Category[] = cats.data?.categories ?? []
   const [section, setSection] = useState<Section>('services')
 
   const tabs: { key: Section; label: string }[] = [
@@ -66,7 +67,9 @@ export function AdminView({ locale, onExit }: { locale: string; onExit: () => vo
         </nav>
       </header>
 
-      {section === 'services' && <ServicesAdmin categories={categories} locale={locale} />}
+      {section === 'services' && (
+        <ServicesAdmin categories={categories} categoriesReady={cats.isSuccess} locale={locale} />
+      )}
       {section === 'categories' && <CategoriesAdmin categories={categories} locale={locale} />}
       {section === 'roles' && <RoleDefaultsAdmin locale={locale} />}
       {section === 'announcements' && <AnnouncementsAdmin locale={locale} />}

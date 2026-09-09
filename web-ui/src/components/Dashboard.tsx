@@ -31,6 +31,7 @@ import { Greeting } from './Greeting'
 import { type TileActions } from './Tile'
 import { type Tab } from './TopBar'
 import { PillButton } from '@/components/ui/pill-button'
+import { RestrictedMarker } from '@/components/ui/restricted-marker'
 
 // SearchBox is the service search field with a one-click clear (✕) button that
 // shows while there's a query. Shared by the mobile and desktop layouts.
@@ -226,6 +227,23 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     [allServices],
   )
 
+  // The visibility group restricting a category, by slug, and its label — the
+  // marker names the group, not the category. Only ever populated for a
+  // category this user holds: /api/catalog drops the ones they don't
+  // (docs/specs/service-visibility.md §2.2).
+  const groupLabels = useMemo(() => {
+    const out: Record<string, string> = {}
+    for (const e of me.visibility.entries) out[e.slug] = localized(e.label, locale)
+    return out
+  }, [me.visibility.entries, locale])
+  const restrictedBy = (slug: string): string | undefined => {
+    const group = allCategories.find((c) => c.slug === slug)?.visibility
+    return group ? groupLabels[group] ?? group : undefined
+  }
+
+  // The group restricting the section currently on screen, if any.
+  const activeGroup = filter.kind === 'category' ? restrictedBy(filter.slug) : undefined
+
   // Section heading for the current view.
   const heading = useMemo(() => {
     if (searching) return tr.dash.searchResults
@@ -397,8 +415,14 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
               <h2
                 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em', flexShrink: 0 }}
+                className="inline-flex items-center gap-1.5"
               >
                 {heading}
+                {/* Same marker as the pill and the admin lists: this section is
+                    one only its group can see. Desktop only, because a
+                    category filter cannot be active on a phone — the layout
+                    has no pills and resets the filter to "all". */}
+                {activeGroup && <RestrictedMarker srLabel={tr.common.restrictedTo(activeGroup)} />}
               </h2>
               {sortMenu}
             </div>
@@ -452,16 +476,27 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
               {tr.dash.betaServices}
             </PillButton>
           )}
-          {allCategories.map((c) => (
-            <PillButton
-              key={c.slug}
-              active={filter.kind === 'category' && filter.slug === c.slug}
-              aria-pressed={filter.kind === 'category' && filter.slug === c.slug}
-              onClick={() => selectFilter({ kind: 'category', slug: c.slug })}
-            >
-              {localized(c.label, locale)}
-            </PillButton>
-          ))}
+          {allCategories.map((c) => {
+            // A lock, not a second label: the pill keeps the name and the width
+            // the touch target and the 324px strip were tuned for, and the
+            // meaning rides in the button's accessible name.
+            const group = restrictedBy(c.slug)
+            return (
+              <PillButton
+                key={c.slug}
+                active={filter.kind === 'category' && filter.slug === c.slug}
+                aria-pressed={filter.kind === 'category' && filter.slug === c.slug}
+                onClick={() => selectFilter({ kind: 'category', slug: c.slug })}
+              >
+                {localized(c.label, locale)}
+                {/* A margin rather than a flex gap: the pill stays the block
+                    button every other pill is, so a restricted one lines up
+                    with its neighbours to the pixel and the 44px box is
+                    untouched. */}
+                {group && <RestrictedMarker className="ml-1.5 align-middle" srLabel={tr.common.restrictedTo(group)} />}
+              </PillButton>
+            )
+          })}
         </div>
       )}
 

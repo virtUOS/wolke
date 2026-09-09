@@ -35,14 +35,18 @@ type Service struct {
 // Category is the read model of a managed category. Visibility is the
 // configured slug that restricts it, or "" for a public category
 // (docs/specs/service-visibility.md §2.2): only holders of that slug see the
-// category and everything in it. It is not serialized — a View never carries a
-// category the reader may not see, and the admin screens read the unnarrowed
-// GET /api/admin/categories instead.
+// category and everything in it.
+//
+// It IS serialized, and that leaks nothing: a View never carries a category the
+// reader may not see, so the only slugs that reach a client are ones that
+// client already holds — /api/me names them too. The SPA needs it to mark a
+// restricted category as restricted for its holders, which is what answers
+// "can I send this link to a colleague?".
 type Category struct {
 	Slug       string            `json:"slug"`
 	Label      map[string]string `json:"label"`
 	Sort       int               `json:"sort"`
-	Visibility string            `json:"-"`
+	Visibility string            `json:"visibility,omitempty"`
 }
 
 // Snapshot is an immutable, fully-assembled view of the active catalog — the

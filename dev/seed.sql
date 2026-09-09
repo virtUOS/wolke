@@ -22,8 +22,13 @@ on conflict (slug) do update set label = excluded.label, sort = excluded.sort;
 -- config maps that group to a claim value the mock IdP does not emit, so the
 -- suite exercises the non-holder side — the category and its service are absent
 -- from every read surface, and the category pill never renders.
+-- Two of them, one per side of the contract: the e2e config maps `it-infra` to
+-- a claim value the mock IdP does not emit (nobody holds it) and `dash-team` to
+-- one it does (the test user holds it), so both the "invisible to a non-holder"
+-- and the "marked as restricted for its holder" states are reachable.
 insert into categories (slug, label, sort, visibility) values
-  ('it-infra', '{"de":"IT-Infrastruktur","en":"IT infrastructure"}', 100, 'it-infra')
+  ('it-infra',  '{"de":"IT-Infrastruktur","en":"IT infrastructure"}', 100, 'it-infra'),
+  ('dash-team', '{"de":"Team-Werkzeuge","en":"Team tools"}',          110, 'dash-team')
 on conflict (slug) do update set label = excluded.label, sort = excluded.sort, visibility = excluded.visibility;
 
 -- Services. service_url NULL => documentation-only entry (tile launches docs).
@@ -43,7 +48,8 @@ insert into services (name, description, service_url, doc_url, icon, keywords, t
   ('Identitätsmanagement', '{"de":"Passwort ändern und Konto verwalten.","en":"Change your password and manage your account."}', 'https://idm.example.edu', 'https://docs.example.edu/account', 'key-round', '{}', NULL),
   ('WLAN an der UOS', '{"de":"So verbindest du dich mit eduroam.","en":"How to connect to eduroam."}', NULL, 'https://docs.example.edu/wifi', 'wifi', '{wifi,internet}', NULL),
   ('Zettelkasten Labor', '{"de":"Experimentelles KI-Notizbuch für Forschungsnotizen.","en":"Experimental AI notebook for research notes."}', 'https://zettelkasten-lab.example.edu', 'https://docs.example.edu/zettelkasten', 'flask-conical', '{"notizen","notebook","ki"}', 'beta'),
-  ('Serververwaltung', '{"de":"Verwaltung der Server im Rechenzentrum.","en":"Data-centre server management."}', 'https://srv.example.edu', NULL, 'server', '{"server","rechenzentrum"}', NULL)
+  ('Serververwaltung', '{"de":"Verwaltung der Server im Rechenzentrum.","en":"Data-centre server management."}', 'https://srv.example.edu', NULL, 'server', '{"server","rechenzentrum"}', NULL),
+  ('Team-Notizen', '{"de":"Interne Notizen des Dashboard-Teams.","en":"Internal notes of the dashboard team."}', 'https://notes.example.edu', NULL, 'notebook-pen', '{"notizen","notes"}', NULL)
 on conflict (name) do update set keywords = excluded.keywords, tag = excluded.tag;
 
 -- Category attachments (by name/slug, so this stays readable).
@@ -57,7 +63,8 @@ select s.id, c.id from services s, categories c where (s.name, c.slug) in (
   ('Identitätsmanagement', 'identity'),
   ('WLAN an der UOS', 'data'),
   ('Zettelkasten Labor', 'ai-tools'),
-  ('Serververwaltung', 'it-infra')
+  ('Serververwaltung', 'it-infra'),
+  ('Team-Notizen', 'dash-team')
 )
 on conflict do nothing;
 

@@ -5,6 +5,7 @@ import { t } from '@/lib/i18n'
 import { useAdminActions } from '@/lib/admin-hooks'
 import { useMe, useTransientAnnouncement } from '@/lib/hooks'
 import { ChoiceChip } from '@/components/ui/choice-chip'
+import { RestrictedMarker } from '@/components/ui/restricted-marker'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { IconButton } from '@/components/ui/icon-button'
@@ -176,12 +177,16 @@ export function CategoriesAdmin({ categories, locale }: { categories: Category[]
                   <span className="mr-1.5 text-text-muted">{i + 1}.</span>
                   <span className="font-medium">{label(c)}</span>{' '}
                   <span className="text-text-muted">({c.slug})</span>
+                  {/* The reference treatment for "restricted to a group":
+                      the shared marker, so this row, the service rows and the
+                      user's own filter pill all say it the same way. */}
                   {c.visibility && (
                     <>
                       {' '}
-                      <span className="rounded-sm bg-surface px-1.5 py-0.5 text-xs text-text-muted">
-                        {groupLabel(c.visibility)}
-                      </span>
+                      <RestrictedMarker
+                        label={groupLabel(c.visibility)}
+                        srLabel={s.common.restrictedTo(groupLabel(c.visibility))}
+                      />
                     </>
                   )}
                 </span>

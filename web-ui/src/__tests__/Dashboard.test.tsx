@@ -323,3 +323,91 @@ describe('the Beta filter (issues #34, review findings 2 and 3)', () => {
     expect(window.location.search).toBe('?tab=dienste')
   })
 })
+
+
+// The holder's side of the marker: their restricted category is marked as one,
+// on the filter pill and on the section heading, so "can I send this link to a
+// colleague?" is answerable without opening the admin screens. Non-holders
+// never receive the category at all, which the server tests pin.
+describe('the restricted marker on the dashboard (issue #121)', () => {
+  const held: Me = {
+    ...ME,
+    visibility: { held: ['it-infra'], entries: [{ slug: 'it-infra', label: { de: 'IT-Infrastruktur', en: 'IT infrastructure' } }] },
+  }
+
+  beforeEach(() => {
+    stubMatchMedia()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.startsWith('/api/catalog')) {
+          return jsonResponse({
+            services: [
+              {
+                id: 's1', name: 'VPN', description: { de: 'Zugang', en: 'Access' },
+                service_url: 'https://vpn.example.edu', icon: 'shield',
+                categories: ['data'], doc_only: false,
+              },
+              {
+                id: 's2', name: 'Serververwaltung', description: { de: 'Server', en: 'Servers' },
+                service_url: 'https://srv.example.edu', icon: 'server',
+                categories: ['infra'], doc_only: false,
+              },
+            ],
+            categories: [
+              { slug: 'data', label: { de: 'Netz & Daten', en: 'Network & Data' }, sort: 10 },
+              // Only ever sent to a holder — the server drops it for everyone else.
+              { slug: 'infra', label: { de: 'Infrastruktur', en: 'Infrastructure' }, sort: 20, visibility: 'it-infra' },
+            ],
+          })
+        }
+        if (url.startsWith('/api/favorites')) return jsonResponse({ services: [] })
+        if (url.startsWith('/api/announcements')) return jsonResponse({ announcements: [] })
+        if (url.startsWith('/api/usage/frequent')) return jsonResponse({ services: [] })
+        return jsonResponse({})
+      }),
+    )
+  })
+
+  it('marks the restricted pill and its section, and says what the lock means', async () => {
+    setURL('/?tab=dienste')
+    const user = userEvent.setup()
+    renderDashboard(held)
+
+    // The pill keeps its name and gains the meaning in its accessible name —
+    // no visible label change, so the strip is the width it always was.
+    await waitFor(() => expect(screen.getByRole('link', { name: /Serververwaltung/ })).toBeVisible())
+    const pill = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.startsWith('Infrastruktur')) as HTMLElement
+    expect(pill, 'the restricted category still has its pill').toBeTruthy()
+    // The lock's meaning is part of what the button announces — the visible
+    // label is unchanged.
+    // A regex, not the exact string: jsdom's accname implementation does not
+    // insert the separator between element contributions that browsers do, so
+    // the exact spacing is pinned by the e2e run instead.
+    expect(pill).toHaveAccessibleName(/^Infrastruktur\s*Nur für IT-Infrastruktur sichtbar$/)
+    expect(within(pill).getByText('Infrastruktur')).toBeInTheDocument()
+    // The public category's pill is untouched.
+    expect(screen.getByRole('button', { name: 'Netz & Daten' })).toBeInTheDocument()
+
+    // Selecting it marks the section heading the same way.
+    await user.click(pill)
+    const heading = screen.getByRole('heading', { level: 2 })
+    expect(heading.textContent).toContain('Infrastruktur')
+    expect(within(heading).getByText('Nur für IT-Infrastruktur sichtbar')).toBeInTheDocument()
+  })
+
+  it('leaves a public section unmarked', async () => {
+    setURL('/?cat=data')
+    renderDashboard(held)
+
+    await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
+    // The pill strip still marks the restricted category — this is about the
+    // section the user is actually in.
+    const heading = screen.getByRole('heading', { level: 2 })
+    expect(heading.textContent).toContain('Netz & Daten')
+    expect(within(heading).queryByText(/Nur für/)).not.toBeInTheDocument()
+  })
+})

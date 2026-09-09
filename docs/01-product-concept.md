@@ -222,9 +222,11 @@ which IdP group grants membership. A service in several categories is visible on
 holds **every** restricted category it belongs to, so a second category cannot be used to bypass
 the restriction.
 
-Non-holders never see a restricted service — not in the catalog, the default view, search,
-favorites, "frequently used", nor through the public catalog MCP server (which holds nothing and
-cannot ask for beta, always). The restricted category disappears with its services, so there is
+Holders see the restricted category marked as one — a lock on its filter pill and on its section
+heading, and the group's name beside it in the admin lists — so "may I send this link to a
+colleague?" is answerable without opening the admin screens. Non-holders never see a restricted
+service at all — not in the catalog, the default view, search, favorites, "frequently used", nor
+through the public catalog MCP server (which holds nothing and cannot ask for beta, always). The restricted category disappears with its services, so there is
 no empty pill leaking the group's name. There are no separate tabs for either flavour. Role
 default views stay public-only: a service in a restricted category cannot be a role default, and
 restricting one that already is — by moving the service, or by restricting its category — removes

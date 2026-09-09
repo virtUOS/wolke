@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Tile } from '@/components/Tile'
 import { TopBar } from '@/components/TopBar'
 import { CategoriesAdmin } from '@/components/admin/CategoriesAdmin'
+import { ServicesAdmin } from '@/components/admin/ServicesAdmin'
 import { RoleDefaultsAdmin } from '@/components/admin/RoleDefaultsAdmin'
 import { ServiceForm } from '@/components/admin/ServiceForm'
 import { api, type AdminService, type Category, type Me, type Role, type Service, type VisibilityEntry } from '@/lib/api'
@@ -166,6 +167,69 @@ describe('Account menu beta switch', () => {
     await user.click(sw)
     expect(onSet).toHaveBeenCalledWith(false)
     expect(screen.queryByRole('dialog', { name: /anzeigen\?/ })).not.toBeInTheDocument()
+  })
+})
+
+// The one marker, on all three surfaces: the admin category row (the reference
+// treatment), the admin service row, and the holder's own filter pill and
+// section heading. Every one of them must say what it means — a bare lock with
+// no accessible name is worse than no marker.
+describe('the restricted marker', () => {
+  beforeEach(() => {
+    vi.spyOn(api, 'me').mockResolvedValue(me())
+  })
+
+  it('marks a restricted category in the admin list, and leaves a public one alone', async () => {
+    render(withClient(<CategoriesAdmin categories={categories} locale="de" />))
+
+    const rows = await screen.findAllByRole('listitem')
+    await waitFor(() =>
+      expect(within(rows[1]).getByText('Nur für IT-Infrastruktur sichtbar')).toBeInTheDocument(),
+    )
+    // The group's name is what the marker shows…
+    expect(within(rows[1]).getByText('IT-Infrastruktur')).toBeInTheDocument()
+    // …and the public category carries nothing.
+    expect(within(rows[0]).queryByText(/Nur für/)).not.toBeInTheDocument()
+  })
+
+  it('marks a service in a restricted category, once, naming every group', async () => {
+    vi.spyOn(api, 'adminServices').mockResolvedValue({
+      services: [
+        adminService({}),
+        adminService({ id: 'x1', name: 'Serververwaltung', categories: ['infra'] }),
+        // Two restricted categories: one marker, both groups named.
+        adminService({ id: 'x2', name: 'Doppelt', categories: ['infra', 'netz'] }),
+      ],
+    })
+    const twoGroups: Category[] = [
+      ...categories,
+      { slug: 'netz', label: { de: 'Netz', en: 'Network' }, sort: 30, visibility: 'net-ops' },
+    ]
+    vi.spyOn(api, 'me').mockResolvedValue(
+      me({ visibility: { held: [], entries: [itInfra, { slug: 'net-ops', label: { de: 'Netzbetrieb', en: 'Net ops' } }] } }),
+    )
+    render(withClient(<ServicesAdmin categories={twoGroups} categoriesReady locale="de" />))
+
+    const rows = await screen.findAllByRole('listitem')
+    const row = (name: string) => rows.find((r) => r.textContent?.includes(name)) as HTMLElement
+    await waitFor(() =>
+      expect(within(row('Serververwaltung')).getByText('Nur für IT-Infrastruktur sichtbar')).toBeInTheDocument(),
+    )
+    expect(within(row('VPN')).queryByText(/Nur für/)).not.toBeInTheDocument()
+
+    const both = within(row('Doppelt')).getAllByText(/Nur für/)
+    expect(both, 'one marker per row, however many restricted categories').toHaveLength(1)
+    expect(both[0].textContent?.trim()).toBe('Nur für IT-Infrastruktur, Netzbetrieb sichtbar')
+  })
+
+  it('renders no marker until the category list has answered', async () => {
+    vi.spyOn(api, 'adminServices').mockResolvedValue({
+      services: [adminService({ id: 'x1', name: 'Serververwaltung', categories: ['infra'] })],
+    })
+    render(withClient(<ServicesAdmin categories={[]} categoriesReady={false} locale="de" />))
+
+    await screen.findByText('Serververwaltung')
+    expect(screen.queryByText(/Nur für/)).not.toBeInTheDocument()
   })
 })
 

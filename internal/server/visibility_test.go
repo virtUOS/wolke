@@ -220,6 +220,19 @@ func TestNonHolderCannotObtainRestrictedService(t *testing.T) {
 		if len(body.Categories) != 2 {
 			t.Fatalf("holder categories = %+v, want both", body.Categories)
 		}
+		// A holder is told which of their categories is restricted, so the SPA
+		// can mark it. That is not a leak: they hold the group, and /api/me
+		// names it too — a non-holder never receives the category at all, which
+		// the assertion above already pins.
+		var marked bool
+		for _, c := range body.Categories {
+			if c.Slug == "labs" && c.Visibility == "it-infra" {
+				marked = true
+			}
+		}
+		if !marked {
+			t.Fatalf("holder categories = %+v, want the restricted one to carry its group", body.Categories)
+		}
 	})
 
 	t.Run("defaults", func(t *testing.T) {
