@@ -74,6 +74,60 @@ func TestCSPIncludesAssistantOrigin(t *testing.T) {
 	}
 }
 
+// Logout is a form POST that the server answers with a 302 to the IdP's
+// end-session endpoint. Chrome enforces form-action against redirect targets,
+// so the issuer's origin must be allowed there or single sign-out never reaches
+// the IdP (issue #144). Only the origin is allowed — never the issuer path.
+func TestCSPFormActionIncludesIssuerOrigin(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.OIDC.IssuerURL = "https://idp.example.edu/realms/uni"
+	h := newTestRouter(t, &cfg, Deps{})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+
+	csp := rec.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "form-action 'self' https://idp.example.edu;") {
+		t.Errorf("CSP form-action missing issuer origin: %q", csp)
+	}
+	if strings.Contains(csp, "/realms") {
+		t.Errorf("CSP must carry the issuer origin, not its path: %q", csp)
+	}
+	// The issuer widens exactly form-action; script/connect stay same-origin.
+	if n := strings.Count(csp, "https://idp.example.edu"); n != 1 {
+		t.Errorf("issuer origin appears %d times in CSP, want exactly 1 (form-action): %q", n, csp)
+	}
+	if strings.Contains(csp, "*") || strings.Count(csp, "'unsafe-") != 1 {
+		t.Errorf("CSP must contain no wildcard and no unsafe-* beyond style-src: %q", csp)
+	}
+}
+
+// A deployment with no assistant widget and no usable issuer must emit today's
+// CSP byte-for-byte: the issuer fix may add an origin, never reshape the policy.
+func TestCSPBaselineUnchanged(t *testing.T) {
+	const want = "default-src 'self'; base-uri 'self'; object-src 'none'; " +
+		"frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
+		"script-src 'self'; connect-src 'self'; form-action 'self'; " +
+		"worker-src 'self'; manifest-src 'self'"
+	if got := buildCSP("", ""); got != want {
+		t.Errorf("buildCSP(\"\", \"\") =\n%s\nwant\n%s", got, want)
+	}
+	// A malformed or empty issuer degrades to the baseline rather than to a
+	// broken directive (e.g. a dangling "form-action 'self' ;").
+	for _, raw := range []string{"", "not a url", "::bad", "/relative/only", "idp.example.edu"} {
+		if got := buildCSP("", originOf(raw)); got != want {
+			t.Errorf("issuer %q: CSP diverged from baseline:\n%s", raw, got)
+		}
+	}
+	// Baseline via the router: Defaults() has no widget and no issuer.
+	cfg := config.Defaults()
+	h := newTestRouter(t, &cfg, Deps{})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if got := rec.Header().Get("Content-Security-Policy"); got != want {
+		t.Errorf("router CSP diverged from baseline:\n%s", got)
+	}
+}
+
 func TestHSTSWhenForwardedHTTPS(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.TrustedProxies = []string{"10.0.0.0/8"}

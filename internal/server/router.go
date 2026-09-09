@@ -78,7 +78,7 @@ func New(cfg *config.Config, deps Deps) (http.Handler, error) {
 	if deps.Metrics != nil {
 		r.Use(metricsMiddleware(deps.Metrics))
 	}
-	r.Use(securityHeaders(buildCSP(originOf(cfg.Branding.AssistantWidgetURL))))
+	r.Use(securityHeaders(buildCSP(originOf(cfg.Branding.AssistantWidgetURL), originOf(cfg.OIDC.IssuerURL))))
 	r.Use(csrfGuard(originOf(cfg.PublicURL)))
 	// Rate-limit state-changing methods globally; catalog reads stay unthrottled.
 	r.Use(writeRateLimit(newKeyedLimiter(writeRatePerMinute)))

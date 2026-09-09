@@ -520,10 +520,14 @@ balancer only when an HA requirement (not raw load) forces it.
   and are answered from the body they carry, unlogged.
 - **Security headers:** strict CSP (the SPA is same-origin, so this is straightforward),
   HSTS, `SameSite` cookies, CSRF protection on state-changing requests (double-submit token
-  or `SameSite=Strict` + custom header check). The one sanctioned CSP exception: when the
-  embedded assistant widget is configured (`branding.assistant_widget_url`), its origin is
-  appended to `script-src` (loads the widget bundle) and `connect-src` (the SSE chat stream) —
-  no other directive is widened.
+  or `SameSite=Strict` + custom header check). Two sanctioned CSP exceptions, both origins
+  only (never a path): when the embedded assistant widget is configured
+  (`branding.assistant_widget_url`), its origin is appended to `script-src` (loads the widget
+  bundle) and `connect-src` (the SSE chat stream); and the OIDC issuer's origin (derived from
+  `OIDC_ISSUER_URL`, no extra config) is appended to `form-action`, because logout is a form
+  POST that `/auth/logout` answers with a redirect to the IdP's end-session endpoint and Chrome
+  enforces `form-action` against redirect targets (issue #144). Login is a top-level GET
+  navigation, which `form-action` does not govern. No other directive is widened.
 - **Rate limiting:** modest per-session limit on writes and search.
 - **i18n:** server stores localized fields as JSONB (`{de,en}`) and returns *both* languages; the
   SPA picks the active one client-side. Ship `de`, keep `en` wired. The active UI language is
