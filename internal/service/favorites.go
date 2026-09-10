@@ -3,10 +3,12 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/store"
+	"github.com/virtuos/wolke/internal/usage"
 )
 
 // NotFoundError is a missing/!owned resource the HTTP layer maps to 404.
@@ -18,18 +20,28 @@ func (e *NotFoundError) Error() string { return e.What + " not found" }
 // FavoritesStore is the persistence the favorites use case needs. Favorites are
 // a flat per-user set — no named lists (docs/01 §4.4).
 type FavoritesStore interface {
-	ListFavoritesByUsage(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
+	ListFavoritesByUsage(ctx context.Context, arg store.ListFavoritesByUsageParams) ([]pgtype.UUID, error)
 	ListFavoritesAlpha(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
 	ListFavoritesManual(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
 	ListActiveFavoriteIDs(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
 	SetFavoritesOrder(ctx context.Context, arg store.SetFavoritesOrderParams) (int64, error)
-	SeedManualFavoritesOrder(ctx context.Context, userID pgtype.UUID) error
+	SeedManualFavoritesOrder(ctx context.Context, arg store.SeedManualFavoritesOrderParams) error
 	MarkFavoritesManualSeeded(ctx context.Context, userID pgtype.UUID) error
 	NextFavoriteSort(ctx context.Context, userID pgtype.UUID) (int32, error)
 	AddFavorite(ctx context.Context, arg store.AddFavoriteParams) error
 	RemoveFavorite(ctx context.Context, arg store.RemoveFavoriteParams) (int64, error)
 	SeedFavoritesFromRoleDefaults(ctx context.Context, arg store.SeedFavoritesFromRoleDefaultsParams) error
 	MarkFavoritesSeeded(ctx context.Context, userID pgtype.UUID) error
+}
+
+// usageWindowStart is the start of the window the usage-ordered favorites list
+// ranks over. It is usage.FrequentWindow deliberately: "most used" in the
+// favorites list and "frequently used" on the dashboard are the same claim
+// about the same data, so they share one definition rather than drifting apart
+// (issue #159). Sharing it also means neither depends on how long raw
+// click_events happen to be retained.
+func usageWindowStart() pgtype.Timestamptz {
+	return pgtype.Timestamptz{Time: time.Now().Add(-usage.FrequentWindow), Valid: true}
 }
 
 // FavoritesOrderManual is the order mode in which the user arranges favorites
@@ -58,7 +70,9 @@ func ListFavorites(ctx context.Context, db FavoritesStore, u store.User) ([]stri
 	// is: it then covers every path into the mode, not just the prefs handler.
 	// Guarded by its own flag, so alpha → manual later keeps the arrangement.
 	if u.FavoritesOrder == FavoritesOrderManual && !u.FavoritesManualSeeded {
-		if err := db.SeedManualFavoritesOrder(ctx, u.ID); err != nil {
+		if err := db.SeedManualFavoritesOrder(ctx, store.SeedManualFavoritesOrderParams{
+			UserID: u.ID, Since: usageWindowStart(),
+		}); err != nil {
 			return nil, fmt.Errorf("seed manual favorites order: %w", err)
 		}
 		if err := db.MarkFavoritesManualSeeded(ctx, u.ID); err != nil {
@@ -76,7 +90,9 @@ func ListFavorites(ctx context.Context, db FavoritesStore, u store.User) ([]stri
 	case FavoritesOrderManual:
 		ids, err = db.ListFavoritesManual(ctx, u.ID)
 	default:
-		ids, err = db.ListFavoritesByUsage(ctx, u.ID)
+		ids, err = db.ListFavoritesByUsage(ctx, store.ListFavoritesByUsageParams{
+			UserID: u.ID, Since: usageWindowStart(),
+		})
 	}
 	if err != nil {
 		return nil, fmt.Errorf("list favorites: %w", err)

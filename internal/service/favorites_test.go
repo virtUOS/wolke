@@ -4,20 +4,26 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/virtuos/wolke/internal/store"
+	"github.com/virtuos/wolke/internal/usage"
 )
 
 type fakeFav struct {
 	byUsage, byAlpha, byManual []pgtype.UUID
 	// active is what ListActiveFavoriteIDs reports; nil means "same as byUsage",
 	// which is the normal case (every favorite resolves through the catalog).
-	active          []pgtype.UUID
-	seedCalls       int
-	markCalls       int
-	usedUsage       bool
+	active    []pgtype.UUID
+	seedCalls int
+	markCalls int
+	usedUsage bool
+	// usageSince/manualSince record the window boundary each usage-derived
+	// query was asked for (issue #159).
+	usageSince      time.Time
+	manualSince     time.Time
 	usedAlpha       bool
 	usedManual      bool
 	manualSeedCalls int
@@ -28,8 +34,9 @@ type fakeFav struct {
 	removed         int
 }
 
-func (f *fakeFav) ListFavoritesByUsage(context.Context, pgtype.UUID) ([]pgtype.UUID, error) {
+func (f *fakeFav) ListFavoritesByUsage(_ context.Context, arg store.ListFavoritesByUsageParams) ([]pgtype.UUID, error) {
 	f.usedUsage = true
+	f.usageSince = arg.Since.Time
 	return f.byUsage, nil
 }
 func (f *fakeFav) ListFavoritesAlpha(context.Context, pgtype.UUID) ([]pgtype.UUID, error) {
@@ -50,8 +57,9 @@ func (f *fakeFav) SetFavoritesOrder(_ context.Context, arg store.SetFavoritesOrd
 	f.orderWrites = append(f.orderWrites, arg.ServiceIds)
 	return int64(len(arg.ServiceIds)), nil
 }
-func (f *fakeFav) SeedManualFavoritesOrder(context.Context, pgtype.UUID) error {
+func (f *fakeFav) SeedManualFavoritesOrder(_ context.Context, arg store.SeedManualFavoritesOrderParams) error {
 	f.manualSeedCalls++
+	f.manualSince = arg.Since.Time
 	return nil
 }
 func (f *fakeFav) MarkFavoritesManualSeeded(context.Context, pgtype.UUID) error {
@@ -100,6 +108,41 @@ func TestListFavoritesSeedsOnceThenOrdersByUsage(t *testing.T) {
 	}
 	if !f.usedUsage || f.usedAlpha {
 		t.Errorf("usage order should query by usage (usage=%v alpha=%v)", f.usedUsage, f.usedAlpha)
+	}
+}
+
+// "Most used" has to mean a fixed, stated window — the same one "frequently
+// used" uses — and not "everything raw click retention happens to still hold"
+// (issue #159). Pinning the boundary here is what keeps the retention setting
+// from silently reordering the list.
+func TestListFavoritesByUsageAsksForTheFrequentWindow(t *testing.T) {
+	f := &fakeFav{byUsage: []pgtype.UUID{uuidVal()}}
+	user := store.User{ID: uuidVal(), PrimaryRole: "student", FavoritesSeeded: true, FavoritesOrder: "usage"}
+	before := time.Now()
+	if _, err := ListFavorites(context.Background(), f, user); err != nil {
+		t.Fatalf("ListFavorites: %v", err)
+	}
+	want := before.Add(-usage.FrequentWindow)
+	if d := f.usageSince.Sub(want); d < 0 || d > time.Minute {
+		t.Errorf("usage window starts at %v, want ~%v (usage.FrequentWindow ago)", f.usageSince, want)
+	}
+}
+
+// The manual-order seed mirrors the usage ranking (issue #125), so it has to
+// be handed the same window or entering manual mode reintroduces the drift.
+func TestListFavoritesManualSeedUsesTheSameWindow(t *testing.T) {
+	f := &fakeFav{byManual: []pgtype.UUID{uuidN(1)}}
+	user := store.User{
+		ID: uuidVal(), PrimaryRole: "student",
+		FavoritesSeeded: true, FavoritesOrder: "manual", FavoritesManualSeeded: false,
+	}
+	before := time.Now()
+	if _, err := ListFavorites(context.Background(), f, user); err != nil {
+		t.Fatalf("ListFavorites: %v", err)
+	}
+	want := before.Add(-usage.FrequentWindow)
+	if d := f.manualSince.Sub(want); d < 0 || d > time.Minute {
+		t.Errorf("manual seed window starts at %v, want ~%v (usage.FrequentWindow ago)", f.manualSince, want)
 	}
 }
 

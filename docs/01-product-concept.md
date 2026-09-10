@@ -272,7 +272,19 @@ no-op / not found, indistinguishable from an unknown id.
 7. **Announcement audience granularity** — role-level only, or also by category/faculty? (Default: role-level.)
 8. **Localization** — German only, or German + English? The catalog data and UI strings should
    assume i18n from the start even if you ship German first. (Default: build i18n-ready, ship `de`.)
-9. **Data retention** — how long to keep raw click events before rolling up/discarding? (Default:
-   keep aggregates indefinitely, raw events 90 days.)
+9. **Data retention** — how long to keep raw click events before rolling up/discarding?
+   **Decided:** keep aggregates (`usage_daily`) indefinitely, purge raw `click_events` after
+   **35 days** (issue #159). Raw events have exactly two readers, and both are windowed to
+   30 days: "frequently used" (§4.5) and favourites-ordered-by-usage (§4.4). 35 days is that
+   window plus slack for rollup timing and timezone edges — not a round number chosen for
+   its own sake. Nothing observability-facing shortens with it: the metrics gauges and the
+   Grafana dashboard read `usage_daily`, which the rollup keeps forever, and days whose raw
+   events have been purged stay frozen at their last aggregate value.
+
+   The shorter window is a data-minimisation decision, not a disk one. `click_events` carries
+   `user_id` — per-user behavioural data — and retaining it three times longer than any
+   feature reads it is hard to defend under DSGVO minimisation. (The disk saving is real but
+   secondary: raw clicks are the only table that grows with usage, and it dominates the
+   database at scale.) Coordinate the retention period and the privacy notice with the DSB.
 10. **MCP transport/host** — where the admin MCP server runs and which chat client connects to it
     (Claude Desktop, Claude Code, an internal tool). Affects auth wiring; see doc 02 §8.

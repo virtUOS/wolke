@@ -131,7 +131,15 @@ type Querier interface {
 	ListFavoritesAlpha(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
 	// Favorites ordered by the user's click count (most-used first), then by the
 	// stored order as a stable tiebreaker.
-	ListFavoritesByUsage(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error)
+	//
+	// The count is windowed by @since, which callers set from usage.FrequentWindow
+	// — the same 30 days "frequently used" ranks over, so the two usage-derived
+	// views agree by construction (issue #159). Without it the count covered every
+	// retained click, which made raw click_events retention (usageRetention in
+	// cmd/server/main.go) the de-facto definition of "most used": an unrelated
+	// operational setting quietly deciding what users see. The window belongs here,
+	// with the query, not in a purge job.
+	ListFavoritesByUsage(ctx context.Context, arg ListFavoritesByUsageParams) ([]pgtype.UUID, error)
 	// Favorites in the order the user arranged them (favorites_order = 'manual').
 	// created_at is the tiebreaker for rows that still share a manual_sort, which
 	// is only the case before the one-time seeding below has run.
@@ -199,8 +207,8 @@ type Querier interface {
 	// One-time initialization of the manual order: number manual_sort to the order
 	// the user currently sees in usage mode, so switching to manual starts from
 	// what they effectively have (issue #125). The ranking deliberately mirrors
-	// ListFavoritesByUsage above — the two must not drift.
-	SeedManualFavoritesOrder(ctx context.Context, userID pgtype.UUID) error
+	// ListFavoritesByUsage above — the two must not drift, @since included.
+	SeedManualFavoritesOrder(ctx context.Context, arg SeedManualFavoritesOrderParams) error
 	// Whole-list order write: one statement, so the renumbering is atomic. `with
 	// ordinality` numbers the incoming slugs; the gap-style step of 10 keeps
 	// create's `max(sort)+10` appending after the last row. A slug that is not a

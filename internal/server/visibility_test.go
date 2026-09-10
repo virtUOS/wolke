@@ -157,7 +157,7 @@ type fakeFavorites struct {
 	ordered                *[][]pgtype.UUID
 }
 
-func (f fakeFavorites) ListFavoritesByUsage(context.Context, pgtype.UUID) ([]pgtype.UUID, error) {
+func (f fakeFavorites) ListFavoritesByUsage(context.Context, store.ListFavoritesByUsageParams) ([]pgtype.UUID, error) {
 	return f.ids, nil
 }
 func (f fakeFavorites) NextFavoriteSort(context.Context, pgtype.UUID) (int32, error) { return 0, nil }
