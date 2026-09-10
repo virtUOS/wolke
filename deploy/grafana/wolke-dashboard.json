@@ -124,7 +124,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "topk(10, wolke_service_favorites)",
+          "expr": "topk(10, sum by (service) (wolke_service_favorites))",
           "legendFormat": "{{service}}",
           "instant": true
         }
