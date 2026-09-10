@@ -54,9 +54,10 @@ func notBuiltHandler() http.Handler {
 }
 
 // SPAHandler serves files from fsys and falls back to index.html for unknown
-// paths, so client-side routes deep-link correctly. Unknown /api/ paths return
-// 404 rather than index.html, so a missing API endpoint never masquerades as the
-// app shell. If fsys has no index.html (the SPA hasn't been built into this
+// extension-less paths, so client-side routes deep-link correctly. Unknown /api/
+// paths and missing static files (assets/, or any path with a file extension)
+// return 404 rather than index.html, so neither a missing API endpoint nor a
+// gone build artifact ever masquerades as the app shell. If fsys has no index.html (the SPA hasn't been built into this
 // binary), it returns a handler that serves a graceful "not built" response
 // instead of failing — this keeps `go build`/`go test` and router construction
 // working on a fresh clone with no npm step.
@@ -104,12 +105,27 @@ func SPAHandler(fsys fs.FS) (http.Handler, error) {
 			fileServer.ServeHTTP(w, r)
 			return
 		}
-		// Not a real file. An unknown API path is a 404; anything else is a
-		// client route and falls back to the SPA shell.
-		if strings.HasPrefix(upath, "api/") {
+		// Not a real file. An unknown API path is a 404, and so is a missing
+		// static file: anything under assets/, and any path whose final segment
+		// carries a file extension, since a client route never does. Serving the
+		// shell for a hashed chunk the build no longer has answered a module
+		// request with text/html — the browser cannot parse that as an ES module,
+		// the failure is an uncaught rejection rather than a render error, and
+		// the page blanks (issue #156). A real 404 is what Vite's preload helper
+		// turns into vite:preloadError, which lib/pwa-update reloads on. Only an
+		// extension-less path is a client route and falls back to the SPA shell.
+		if strings.HasPrefix(upath, "api/") || isStaticFilePath(upath) {
 			http.NotFound(w, r)
 			return
 		}
 		serveIndex(w)
 	}), nil
+}
+
+// isStaticFilePath reports whether a request path names a static file rather
+// than a client route: everything under assets/ (hashed build output), and any
+// path whose final segment has a file extension. Client routes never carry one,
+// so a missing file here is a 404 and never the shell.
+func isStaticFilePath(upath string) bool {
+	return strings.HasPrefix(upath, "assets/") || path.Ext(upath) != ""
 }
