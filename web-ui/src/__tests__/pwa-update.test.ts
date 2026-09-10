@@ -1,4 +1,6 @@
 import {
+  NETWORK_PROBE_TIMEOUT_MS,
+  NETWORK_PROBE_URL,
   PRELOAD_ERROR_EVENT,
   RELOAD_FALLBACK_MS,
   STALE_SHELL_RELOAD_KEY,
@@ -226,9 +228,23 @@ describe('startStaleShellRecovery', () => {
     return updateServiceWorker
   }
 
+  /**
+   * The reachability probe (issue #162). Online is the default for every test
+   * below; the offline suite overrides it. `navigator.onLine` is an own
+   * property here so it can be deleted again in teardown.
+   */
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  function setOnLine(value: boolean) {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value })
+  }
+
   beforeEach(() => {
     sessionStorage.clear()
     stubNavigatorSW(undefined)
+    setOnLine(true)
+    fetchMock = vi.fn(() => Promise.resolve(new Response('', { status: 200 })))
+    vi.stubGlobal('fetch', fetchMock)
   })
   afterEach(async () => {
     // Let a recovery still waiting on its budget run out against the stubs of
@@ -239,9 +255,12 @@ describe('startStaleShellRecovery', () => {
     dropEscape?.()
     dropEscape = undefined
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
     sessionStorage.clear()
     // Property added by stubNavigatorSW; jsdom's navigator has none of its own.
     delete (navigator as unknown as { serviceWorker?: unknown }).serviceWorker
+    // Same for onLine: restore jsdom's prototype getter.
+    delete (navigator as unknown as { onLine?: unknown }).onLine
   })
 
   describe('with a newer worker', () => {
@@ -452,6 +471,164 @@ describe('startStaleShellRecovery', () => {
       fail()
       await settle()
       expect(reload).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // Issue #162: a failed dynamic import is all the recovery sees, and it means
+  // either "the chunk is gone" or "the network is gone". Offline, the
+  // unregister-and-reload branch is strictly worse than doing nothing: the page
+  // was rendered (the icon boundary's glyph stands in for the chunk that did
+  // not load), and afterwards there is no page and no worker. So with no route
+  // to the network the recovery must do *nothing at all* — and must not spend
+  // the guard, because the next load that has a network recovers normally.
+  describe('when the network is what is gone', () => {
+    /** Nothing happened: no unregister, no reload, and the guard still available. */
+    function expectStoodDown(reg: FakeRegistration, reload: ReturnType<typeof vi.fn>) {
+      expect(reg.unregister, 'the worker serving the page was unregistered').not.toHaveBeenCalled()
+      expect(reload, 'a reload offline lands on the browser error page').not.toHaveBeenCalled()
+      expect(
+        sessionStorage.getItem(STALE_SHELL_RELOAD_KEY),
+        'the guard was spent on an attempt that never happened',
+      ).toBeNull()
+    }
+
+    it('does nothing when navigator.onLine says there is no link', async () => {
+      const reload = stubReload()
+      setOnLine(false)
+      const reg = new FakeRegistration()
+      provide(reg)
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      await settle(STALE_WORKER_WAIT_MS + NETWORK_PROBE_TIMEOUT_MS)
+      expect(fetchMock, 'onLine === false needs no probe').not.toHaveBeenCalled()
+      expectStoodDown(reg, reload)
+    })
+
+    it('does nothing when the probe cannot reach the server', async () => {
+      // onLine is true — an interface is up — but there is no route: the case
+      // onLine alone cannot see.
+      const reload = stubReload()
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+      const reg = new FakeRegistration()
+      provide(reg)
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      await settle()
+      expect(fetchMock).toHaveBeenCalledWith(NETWORK_PROBE_URL, expect.objectContaining({ cache: 'no-store' }))
+      expectStoodDown(reg, reload)
+    })
+
+    it('does nothing when the probe hangs past its timeout', async () => {
+      const reload = stubReload()
+      fetchMock.mockImplementation(
+        (_url: string, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+          }),
+      )
+      const reg = new FakeRegistration()
+      provide(reg)
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      await settle(NETWORK_PROBE_TIMEOUT_MS - 1)
+      expect(reload).not.toHaveBeenCalled()
+      await settle(1)
+      expectStoodDown(reg, reload)
+    })
+
+    it('leaves an earlier visit\'s registration alone too', async () => {
+      // The no-hand-over path: nothing was provided, so the registration is
+      // looked up directly — and offline it must survive that lookup.
+      const reload = stubReload()
+      setOnLine(false)
+      const reg = new FakeRegistration()
+      stubNavigatorSW(reg)
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      await settle(STALE_WORKER_WAIT_MS)
+      expectStoodDown(reg, reload)
+    })
+
+    it('does not reload a page no worker serves either', async () => {
+      // No registration at all: the recovery would be a plain reload, which
+      // offline is the same error page.
+      const reload = stubReload()
+      setOnLine(false)
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      await settle(STALE_WORKER_WAIT_MS)
+      expect(reload).not.toHaveBeenCalled()
+      expect(sessionStorage.getItem(STALE_SHELL_RELOAD_KEY)).toBeNull()
+    })
+
+    it('does not reload where service workers are unsupported either', async () => {
+      const reload = stubReload()
+      setOnLine(false)
+      delete (navigator as unknown as { serviceWorker?: unknown }).serviceWorker
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      await settle()
+      expect(reload).not.toHaveBeenCalled()
+    })
+
+    it('still applies a worker that has already installed', async () => {
+      // Not gated: that worker serves the new build from its own precache, so
+      // applying it is a recovery that works with no network at all.
+      stubReload()
+      setOnLine(false)
+      const reg = new FakeRegistration()
+      reg.waiting = new FakeWorker('installed')
+      const updateServiceWorker = provide(reg)
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      await settle()
+      expect(updateServiceWorker).toHaveBeenCalledWith(true)
+      expect(reg.unregister).not.toHaveBeenCalled()
+    })
+
+    it('lets a later failure try again, since the guard was not spent', async () => {
+      const reload = stubReload()
+      setOnLine(false)
+      const reg = new FakeRegistration()
+      provide(reg)
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      await settle(STALE_WORKER_WAIT_MS)
+      expect(reload).not.toHaveBeenCalled()
+
+      // The link comes back, and the chunk fails again.
+      setOnLine(true)
+      fail()
+      await settle()
+      expect(reg.unregister).toHaveBeenCalledTimes(1)
+      expect(reload).toHaveBeenCalledTimes(1)
+    })
+
+    it('treats any answer as a route to the network, 404 included', async () => {
+      // The probe tests reachability, not the response: a server answering at
+      // all means the reload can reach it.
+      const reload = stubReload()
+      fetchMock.mockResolvedValue(new Response('nope', { status: 404 }))
+      const reg = new FakeRegistration()
+      provide(reg)
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      await settle()
+      expect(reg.unregister).toHaveBeenCalledTimes(1)
+      expect(reload).toHaveBeenCalledTimes(1)
+    })
+
+    it('probes sw.js, which is served no-cache and never precached', () => {
+      expect(NETWORK_PROBE_URL).toBe('/sw.js')
     })
   })
 

@@ -165,12 +165,24 @@ Installed standalone windows share every row above in code; none was measured th
    `import()` holds (the 404s reached the server through the worker in every run). But a
    bookmarked or shared asset URL bypasses the server's 404. **Fix:** add `/^\/assets\//` and
    a file-extension pattern to `navigateFallbackDenylist`, with an e2e assertion.
+   *Fixed (#163): both patterns are in `navigateFallbackDenylist`, mirroring `isStaticFilePath`,
+   and `e2e/issue-163-sw-asset-fallback.spec.ts` asserts it in a deliberately controlled tab —
+   the one spec in the suite that runs with a worker in control.*
 2. **The recovery cannot tell "chunk gone" from "network gone".** Measured offline in both
    engines. In the real app the reach is narrower than in the stand-in, since tiles need the
    catalog from the API first, so connectivity has to drop between the catalog response and the
    icon chunk — a mobile-network shape. **Fix:** gate the unregister branch on a cheap probe
    (`fetch('/sw.js', { cache: 'no-store' })` succeeding) or at least on `navigator.onLine`;
    without a route to the network, leave the worker alone and let the boundary's glyph stand.
+   *Fixed (#162): `unregisterAndReload` in `lib/pwa-update.ts` probes `/sw.js` (after an
+   `onLine === false` short-circuit) and, with no route to the network, does nothing at all —
+   and hands the guard back, since nothing was spent. CI cannot reach this state, so it was
+   re-verified by hand with the §3 harness (Chromium, persistent profile): browser offline and
+   server-unreachable-while-`onLine`-true both leave the page rendered with the boundary's
+   glyph, the registration active and the guard unclaimed, with no navigation; the same harness
+   on the pre-fix code lands on `chrome-error://chromewebdata/` with the registration gone.
+   With the link back and the chunk genuinely gone (deploy B), the escape still runs and the
+   page lands on B.*
 3. **The guard is one-shot for the tab's lifetime and never resets after a successful
    landing.** In an installed PWA window that lifetime can be weeks. Nobody is stranded — the
    update notice still arrives and works (measured) — but a second stale event in the same

@@ -126,6 +126,10 @@ func SPAHandler(fsys fs.FS) (http.Handler, error) {
 // than a client route: everything under assets/ (hashed build output), and any
 // path whose final segment has a file extension. Client routes never carry one,
 // so a missing file here is a 404 and never the shell.
+//
+// The service worker has to agree, or a controlled client never reaches this
+// rule: the same two patterns are in navigateFallbackDenylist in
+// web-ui/vite.config.ts (issue #163). One rule, two layers — change both.
 func isStaticFilePath(upath string) bool {
 	return strings.HasPrefix(upath, "assets/") || path.Ext(upath) != ""
 }
