@@ -14,7 +14,13 @@ import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { t, type Lang } from '@/lib/i18n'
-import { SW_NEED_REFRESH_EVENT, applyUpdate, startUpdateChecks } from '@/lib/pwa-update'
+import {
+  SW_NEED_REFRESH_EVENT,
+  applyUpdate,
+  declineStaleShellEscape,
+  provideStaleShellEscape,
+  startUpdateChecks,
+} from '@/lib/pwa-update'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 
@@ -32,6 +38,7 @@ export function UpdateNotice({ locale }: { locale: Lang }) {
   const [applying, setApplying] = useState(false)
 
   const stopChecks = useRef<(() => void) | null>(null)
+  const dropEscape = useRef<(() => void) | null>(null)
   const cancelReload = useRef<(() => void) | null>(null)
 
   const { updateServiceWorker } = useRegisterSW({
@@ -43,6 +50,19 @@ export function UpdateNotice({ locale }: { locale: Lang }) {
       // otherwise leave an orphaned interval and visibility listener behind.
       stopChecks.current?.()
       stopChecks.current = startUpdateChecks(registration)
+      // Hand the stale-shell recovery (lib/pwa-update, started from main.tsx)
+      // what it needs to escape the worker that served a stale shell: this
+      // registration and the same skip-waiting call the Reload button uses
+      // (issue #158). `updateServiceWorker` is the hook's stable function; it
+      // is initialised by the time this async callback runs.
+      dropEscape.current?.()
+      dropEscape.current = provideStaleShellEscape({ registration, updateServiceWorker })
+    },
+    onRegisterError: () => {
+      // No worker to escape to — and in the stale shell the failing chunk can
+      // be workbox-window itself. Tell the recovery so it does not wait.
+      dropEscape.current?.()
+      dropEscape.current = declineStaleShellEscape()
     },
   })
 
@@ -52,6 +72,7 @@ export function UpdateNotice({ locale }: { locale: Lang }) {
     return () => {
       window.removeEventListener(SW_NEED_REFRESH_EVENT, onSeam)
       stopChecks.current?.()
+      dropEscape.current?.()
       cancelReload.current?.()
     }
   }, [])
