@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ComponentProps } from 'react'
+import { Component, lazy, Suspense, type ComponentProps, type ReactNode } from 'react'
 import {
   AppWindow, BookOpen, Calendar, Cloud, Database, FileText, Folder, Globe,
   GraduationCap, HardDrive, KeyRound, Laptop, LibraryBig, Mail, MessageSquare,
@@ -31,15 +31,46 @@ type IconProps = Omit<ComponentProps<LucideIcon>, 'ref'>
 // icon ever fetch it.
 const FullIcon = lazy(() => import('@/lib/full-icon'))
 
+// LazyIconBoundary renders `fallback` instead of its children once anything
+// below it throws — in practice a lazy chunk that failed to load (issue #150).
+// Every redeploy invalidates the hashed chunk names a still-open client is
+// holding, and Suspense only covers the *pending* import: a failed one throws
+// during render, and with no boundary above it React unmounts the tree, so one
+// missing icon blanks the whole dashboard. Caught here it costs a glyph.
+// Recovering the stale shell itself is lib/pwa-update's job.
+//
+// A class is the only way to catch a render error in React; there is no hook
+// equivalent. It never resets: the chunk is gone for this page load, and a retry
+// loop would just throw again.
+export class LazyIconBoundary extends Component<
+  { fallback: ReactNode; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
+}
+
 // ServiceIcon renders any lucide icon by its kebab-case name: instantly from the
 // curated set, or via the lazy full set otherwise (showing app-window until it
-// loads, and for an unknown name).
+// loads, for an unknown name, and if the chunk never arrives).
 export function ServiceIcon({ name, ...rest }: { name: string } & IconProps) {
   const Curated = curated[name]
   if (Curated) return <Curated {...rest} />
+  // The same glyph for both states, so a slow load and a failed one look alike:
+  // the tile keeps its layout either way.
+  const fallback = <AppWindow {...rest} />
   return (
-    <Suspense fallback={<AppWindow {...rest} />}>
-      <FullIcon name={name} {...rest} />
-    </Suspense>
+    <LazyIconBoundary fallback={fallback}>
+      <Suspense fallback={fallback}>
+        <FullIcon name={name} {...rest} />
+      </Suspense>
+    </LazyIconBoundary>
   )
 }

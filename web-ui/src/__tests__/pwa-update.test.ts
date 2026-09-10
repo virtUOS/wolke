@@ -1,4 +1,12 @@
-import { RELOAD_FALLBACK_MS, UPDATE_POLL_INTERVAL_MS, applyUpdate, startUpdateChecks } from '@/lib/pwa-update'
+import {
+  PRELOAD_ERROR_EVENT,
+  RELOAD_FALLBACK_MS,
+  STALE_SHELL_RELOAD_KEY,
+  UPDATE_POLL_INTERVAL_MS,
+  applyUpdate,
+  startStaleShellRecovery,
+  startUpdateChecks,
+} from '@/lib/pwa-update'
 
 // A long-lived tab (or an installed PWA resuming from the background) must be
 // told about a new deploy: the registration is polled on an interval and
@@ -136,5 +144,90 @@ describe('applyUpdate', () => {
 
   it('waits 1.5s — long enough for the handoff, short enough to feel like a click', () => {
     expect(RELOAD_FALLBACK_MS).toBe(1500)
+  })
+})
+
+// The other half of issue #150: a client holding a stale index.html asks for a
+// hashed chunk the deploy no longer has. Vite fires `vite:preloadError`, and one
+// reload lands the page on the current build — but only ever *one*, or an asset
+// that is genuinely gone would reload forever.
+describe('startStaleShellRecovery', () => {
+  function stubReload() {
+    const reload = vi.fn()
+    vi.spyOn(window, 'location', 'get').mockReturnValue({ ...window.location, reload } as Location)
+    return reload
+  }
+
+  let stopRecovery: (() => void) | undefined
+
+  beforeEach(() => sessionStorage.clear())
+  afterEach(() => {
+    stopRecovery?.()
+    stopRecovery = undefined
+    vi.restoreAllMocks()
+    sessionStorage.clear()
+  })
+
+  it('reloads once on a failed chunk preload', () => {
+    const reload = stubReload()
+    stopRecovery = startStaleShellRecovery()
+
+    window.dispatchEvent(new Event(PRELOAD_ERROR_EVENT))
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not reload again for a second failure in the same session', () => {
+    const reload = stubReload()
+    stopRecovery = startStaleShellRecovery()
+
+    window.dispatchEvent(new Event(PRELOAD_ERROR_EVENT))
+    window.dispatchEvent(new Event(PRELOAD_ERROR_EVENT))
+    window.dispatchEvent(new Event(PRELOAD_ERROR_EVENT))
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not reload when the reloaded page fails the same way', () => {
+    // The flag survives the reload, which is the whole point: the page that
+    // comes back is the one that must not bounce again.
+    sessionStorage.setItem(STALE_SHELL_RELOAD_KEY, '1')
+    const reload = stubReload()
+    stopRecovery = startStaleShellRecovery()
+
+    window.dispatchEvent(new Event(PRELOAD_ERROR_EVENT))
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('records the attempt so a reload can be recognised after it happens', () => {
+    stubReload()
+    stopRecovery = startStaleShellRecovery()
+
+    window.dispatchEvent(new Event(PRELOAD_ERROR_EVENT))
+    expect(sessionStorage.getItem(STALE_SHELL_RELOAD_KEY)).not.toBeNull()
+  })
+
+  it('stays put when sessionStorage is unavailable, rather than risking a loop', () => {
+    // Private-mode / blocked storage: without somewhere to remember the attempt
+    // the guard cannot hold, so no reload happens at all — the icon boundary
+    // still keeps the page usable.
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('storage disabled')
+    })
+    const reload = stubReload()
+    stopRecovery = startStaleShellRecovery()
+
+    window.dispatchEvent(new Event(PRELOAD_ERROR_EVENT))
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('stops listening once torn down', () => {
+    const reload = stubReload()
+    startStaleShellRecovery()()
+
+    window.dispatchEvent(new Event(PRELOAD_ERROR_EVENT))
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('listens for the event Vite actually emits', () => {
+    expect(PRELOAD_ERROR_EVENT).toBe('vite:preloadError')
   })
 })

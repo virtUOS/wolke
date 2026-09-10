@@ -86,3 +86,60 @@ export function applyUpdate(updateServiceWorker: (reloadPage?: boolean) => Promi
   })
   return () => clearTimeout(timer)
 }
+
+// The other side of the update story (issue #150). Everything above handles "a
+// new version is available": the worker has already fetched it and waits for the
+// user's click. What follows handles the opposite case — "the version you have is
+// already gone". A tab (or a precached shell) can hold an index.html naming
+// hashed chunks the current deployment no longer has, so a lazy import 404s.
+// Nothing is waiting to be applied and there is nothing to ask the user about:
+// the only cure is to fetch the shell again.
+
+/**
+ * Vite's event for a dynamic import whose chunk could not be fetched. Emitted by
+ * the preload helper in the build output, so it fires in production, which is
+ * the only place the stale-shell shape occurs.
+ */
+export const PRELOAD_ERROR_EVENT = 'vite:preloadError'
+
+/**
+ * Where the one allowed reload is recorded. sessionStorage, not the API: this is
+ * not app data (CLAUDE.md forbids storing that in the browser) but a per-tab
+ * loop guard that must be readable by the very page load it guards — before any
+ * request could answer, and while the app may be too broken to make one.
+ */
+export const STALE_SHELL_RELOAD_KEY = 'wolke:stale-shell-reload'
+
+/**
+ * Claims the single reload this tab is allowed. Returns false once one has been
+ * taken — and also when sessionStorage is unavailable (private mode, blocked
+ * site data), because a guard that cannot remember is no guard at all and a
+ * reload loop is worse than a missing icon. Either way the lazy component's
+ * error boundary (lib/icons) keeps the page usable.
+ */
+function claimStaleShellReload(): boolean {
+  try {
+    if (sessionStorage.getItem(STALE_SHELL_RELOAD_KEY) !== null) return false
+    sessionStorage.setItem(STALE_SHELL_RELOAD_KEY, '1')
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Starts self-healing for a stale shell: on the first failed chunk preload,
+ * reload onto whatever the server serves now. Returns a teardown for tests.
+ *
+ * The event is deliberately *not* cancelled — the rejection still reaches the
+ * lazy component's error boundary, so the render degrades to a fallback whether
+ * or not this reload happens or helps.
+ */
+export function startStaleShellRecovery(): () => void {
+  const onPreloadError = () => {
+    if (!claimStaleShellReload()) return
+    window.location.reload()
+  }
+  window.addEventListener(PRELOAD_ERROR_EVENT, onPreloadError)
+  return () => window.removeEventListener(PRELOAD_ERROR_EVENT, onPreloadError)
+}

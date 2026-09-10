@@ -10,6 +10,7 @@ import '@fontsource-variable/hanken-grotesk/wght.css'
 import '@fontsource-variable/newsreader/opsz.css'
 import './index.css'
 import { initInstallCapture } from './lib/pwa-install'
+import { startStaleShellRecovery } from './lib/pwa-update'
 
 // The service worker is registered by <UpdateNotice> (components/UpdateNotice)
 // via useRegisterSW, not here: registration is now in *prompt* mode, so whoever
@@ -19,6 +20,13 @@ import { initInstallCapture } from './lib/pwa-install'
 // Capture the install prompt from startup — the event can fire before React
 // mounts, and a missed event means no install hint (issue #42).
 initInstallCapture()
+
+// Self-heal a stale shell: if a lazy chunk this build references is already gone
+// from the server (a redeploy happened under an open tab), reload once onto the
+// current build. From startup, because the failing import can be the first one
+// (issue #150). The complementary case — a *newer* version waiting to be applied
+// — is UpdateNotice's.
+startStaleShellRecovery()
 
 // TanStack Query is the convention for all server state (CLAUDE.md). Don't retry
 // 4xx responses (a 401 means "log in", not "try again") — only retry transient
