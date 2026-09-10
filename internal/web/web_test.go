@@ -167,3 +167,87 @@ func TestSPAUnknownAPIPathCarriesNoCacheHeader(t *testing.T) {
 		t.Errorf("Cache-Control = %q, want none (API responses are not the SPA handler's business)", got)
 	}
 }
+
+// A static file the build does not contain must be a 404, never the shell
+// (issue #156). Serving index.html for /assets/<gone-chunk>.js answered a module
+// request with text/html: the browser could not parse it as an ES module, the
+// failure was an uncaught rejection rather than a React render error, and the
+// page blanked. On a real 404, Vite emits vite:preloadError and lib/pwa-update
+// reloads once onto the current shell — the recovery #150/#151 built.
+
+func TestSPAMissingAssetIs404NotShell(t *testing.T) {
+	h, err := SPAHandler(testFS())
+	if err != nil {
+		t.Fatalf("SPAHandler: %v", err)
+	}
+	for _, p := range []string{
+		"/assets/does-not-exist.js",
+		"/assets/icon-set-Cdv2Vew-.js",
+		"/assets/fonts/gone.woff2",
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("path %s: status = %d, want 404 (a missing asset must never masquerade as the shell)", p, rec.Code)
+		}
+		// The property that actually broke: a module request answered with HTML.
+		if ct := rec.Header().Get("Content-Type"); strings.HasPrefix(ct, "text/html") {
+			t.Errorf("path %s: content-type = %q, must not be text/html", p, ct)
+		}
+		if body := rec.Body.String(); strings.Contains(body, "<title>shell</title>") {
+			t.Errorf("path %s: body is the SPA shell, want a plain 404", p)
+		}
+		if got := rec.Header().Get("Cache-Control"); got != "" {
+			t.Errorf("path %s: Cache-Control = %q, want none on a 404", p, got)
+		}
+	}
+}
+
+func TestSPAMissingFileWithExtensionIs404(t *testing.T) {
+	// Client routes never carry a file extension, so any path whose final
+	// segment has one is a request for a static file — a missing one is a 404
+	// wherever it lives, not only under assets/.
+	h, err := SPAHandler(testFS())
+	if err != nil {
+		t.Fatalf("SPAHandler: %v", err)
+	}
+	for _, p := range []string{
+		"/favicon.ico",
+		"/robots.txt",
+		"/workbox-deadbeef.js",
+		"/some/deep/file.png",
+		"/services/deep/link.html",
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("path %s: status = %d, want 404 (a path with a file extension is not a client route)", p, rec.Code)
+		}
+		if ct := rec.Header().Get("Content-Type"); strings.HasPrefix(ct, "text/html") {
+			t.Errorf("path %s: content-type = %q, must not be text/html", p, ct)
+		}
+	}
+}
+
+func TestSPAClientRoutesStillGetShellAfterAssetGuard(t *testing.T) {
+	// The guard is by extension, so extension-less client routes — including
+	// ones with a dot elsewhere in the path or a trailing slash — keep the
+	// shell, and the shell keeps its no-store contract from #152.
+	h, err := SPAHandler(testFS())
+	if err != nil {
+		t.Fatalf("SPAHandler: %v", err)
+	}
+	for _, p := range []string{"/favorites", "/favorites/", "/admin/services", "/v1.2/route"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if rec.Code != http.StatusOK {
+			t.Errorf("path %s: status = %d, want 200 (SPA fallback)", p, rec.Code)
+		}
+		if body := rec.Body.String(); !strings.Contains(body, "<title>shell</title>") {
+			t.Errorf("path %s: body = %q, want the SPA shell", p, body)
+		}
+		if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+			t.Errorf("path %s: Cache-Control = %q, want no-store", p, got)
+		}
+	}
+}

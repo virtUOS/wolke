@@ -625,7 +625,12 @@ The app is an installable PWA. Like the rest of branding, this stays white-label
   a browser invented for it could pin an `index.html` naming chunks a later deploy deleted (the
   cause behind #150). `/assets/*` is `public, max-age=31536000, immutable`, which is what the
   content hash in each filename exists to enable. `sw.js` stays `no-cache` so deploys land, and
-  `/api`, `/auth`, `/branding` and `/metrics` set their own.
+  `/api`, `/auth`, `/branding` and `/metrics` set their own. Only an **extension-less** unknown
+  path is a client route and gets the shell: a missing static file — anything under `/assets/`, or
+  any path whose last segment has a file extension — is a plain `404`, never `index.html`
+  (issue #156). A stale bundle asking for a chunk the deploy no longer has must see a real 404,
+  which is what fires `vite:preloadError` and the one-shot self-heal reload (#150); an HTML answer
+  cannot be parsed as an ES module and made that failure fatal.
 - **Updates are prompted, never silent** (`registerType: 'prompt'`, issue #42). A new deploy's
   worker installs and then *waits*; the app shows a small, polite `role="status"` notice — "Neue
   Version verfügbar." + a Reload button — and only that click activates the waiting worker and
