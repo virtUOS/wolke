@@ -14,6 +14,7 @@ const updateServiceWorker = vi.fn<(reloadPage?: boolean) => Promise<void>>()
 type Opts = {
   onNeedRefresh?: () => void
   onRegisteredSW?: (url: string, r?: ServiceWorkerRegistration) => void
+  onRegisterError?: (err: unknown) => void
 }
 let registeredOpts: Opts | undefined
 
@@ -32,9 +33,19 @@ vi.mock('virtual:pwa-register/react', () => ({
 // wiring matters, so it is stubbed to hand back an observable teardown.
 const stopChecks = vi.fn()
 const startUpdateChecks = vi.fn(() => stopChecks)
+// So is the stale-shell hand-over (issue #158): the notice owns the
+// registration, the recovery in lib/pwa-update needs it.
+const dropEscape = vi.fn()
+const provideStaleShellEscape = vi.fn<(e: unknown) => () => void>(() => dropEscape)
+const declineStaleShellEscape = vi.fn(() => dropEscape)
 vi.mock('@/lib/pwa-update', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/pwa-update')>()
-  return { ...actual, startUpdateChecks: () => startUpdateChecks() }
+  return {
+    ...actual,
+    startUpdateChecks: () => startUpdateChecks(),
+    provideStaleShellEscape: (e: unknown) => provideStaleShellEscape(e),
+    declineStaleShellEscape: () => declineStaleShellEscape(),
+  }
 })
 
 // Imported after the mock is registered (vi.mock is hoisted, but keep it explicit).
@@ -46,6 +57,11 @@ beforeEach(() => {
   startUpdateChecks.mockReset()
   startUpdateChecks.mockReturnValue(stopChecks)
   stopChecks.mockReset()
+  provideStaleShellEscape.mockReset()
+  provideStaleShellEscape.mockReturnValue(dropEscape)
+  declineStaleShellEscape.mockReset()
+  declineStaleShellEscape.mockReturnValue(dropEscape)
+  dropEscape.mockReset()
   registeredOpts = undefined
 })
 
@@ -247,6 +263,60 @@ describe('UpdateNotice', () => {
       expect(screen.queryByRole('status')).not.toBeInTheDocument()
       fireSeam()
       expect(screen.getByRole('status')).toBeInTheDocument()
+    })
+  })
+
+  // Issue #158: the stale-shell recovery (lib/pwa-update) needs the
+  // registration this component owns, and the same skip-waiting call the
+  // Reload button uses, to escape a worker that served a stale shell.
+  describe('the stale-shell hand-over', () => {
+    it('hands the registration and updateServiceWorker to the recovery', () => {
+      render(<UpdateNotice locale="de" />)
+      const registration = {} as ServiceWorkerRegistration
+      act(() => {
+        registeredOpts?.onRegisteredSW?.('/sw.js', registration)
+      })
+      expect(provideStaleShellEscape).toHaveBeenCalledTimes(1)
+      expect(provideStaleShellEscape).toHaveBeenCalledWith({ registration, updateServiceWorker })
+    })
+
+    it('hands nothing over when registration failed', () => {
+      render(<UpdateNotice locale="de" />)
+      act(() => {
+        registeredOpts?.onRegisteredSW?.('/sw.js', undefined)
+      })
+      expect(provideStaleShellEscape).not.toHaveBeenCalled()
+    })
+
+    it('replaces the hand-over when a registration is reported twice', () => {
+      render(<UpdateNotice locale="de" />)
+      act(() => {
+        registeredOpts?.onRegisteredSW?.('/sw.js', {} as ServiceWorkerRegistration)
+      })
+      expect(dropEscape).not.toHaveBeenCalled()
+      act(() => {
+        registeredOpts?.onRegisteredSW?.('/sw.js', {} as ServiceWorkerRegistration)
+      })
+      expect(dropEscape).toHaveBeenCalledTimes(1)
+      expect(provideStaleShellEscape).toHaveBeenCalledTimes(2)
+    })
+
+    it('tells the recovery when registration fails, so it does not wait', () => {
+      render(<UpdateNotice locale="de" />)
+      act(() => {
+        registeredOpts?.onRegisterError?.(new Error('import failed'))
+      })
+      expect(declineStaleShellEscape).toHaveBeenCalledTimes(1)
+      expect(provideStaleShellEscape).not.toHaveBeenCalled()
+    })
+
+    it('withdraws the hand-over when the notice unmounts', () => {
+      const { unmount } = render(<UpdateNotice locale="de" />)
+      act(() => {
+        registeredOpts?.onRegisteredSW?.('/sw.js', {} as ServiceWorkerRegistration)
+      })
+      unmount()
+      expect(dropEscape).toHaveBeenCalledTimes(1)
     })
   })
 

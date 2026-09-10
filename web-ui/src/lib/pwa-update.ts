@@ -94,6 +94,18 @@ export function applyUpdate(updateServiceWorker: (reloadPage?: boolean) => Promi
 // hashed chunks the current deployment no longer has, so a lazy import 404s.
 // Nothing is waiting to be applied and there is nothing to ask the user about:
 // the only cure is to fetch the shell again.
+//
+// Fetching it again is not a plain reload, though (issue #158). The stale shell
+// is normally *served by the old service worker from its precache*; the one
+// chunk that is not precached (icon-set, vite.config `globIgnores`) is the one
+// that reaches the server and 404s. A plain reload asks the same worker for the
+// same shell and gets the same missing chunk — and with the per-tab guard spent,
+// the page stayed on a build that no longer exists (blank, in production, before
+// #151's boundary). The recovery below therefore escapes the old worker:
+// sw.js is served no-cache, so the new deploy's worker is already installing or
+// waiting; it is activated (the same skip-waiting path as the Reload button, so
+// the reload lands on the new precache), and when no worker turns up the
+// registration is unregistered so the reload goes to the network instead.
 
 /**
  * Vite's event for a dynamic import whose chunk could not be fetched. Emitted by
@@ -103,19 +115,108 @@ export function applyUpdate(updateServiceWorker: (reloadPage?: boolean) => Promi
 export const PRELOAD_ERROR_EVENT = 'vite:preloadError'
 
 /**
- * Where the one allowed reload is recorded. sessionStorage, not the API: this is
- * not app data (CLAUDE.md forbids storing that in the browser) but a per-tab
+ * Where the one allowed recovery is recorded. sessionStorage, not the API: this
+ * is not app data (CLAUDE.md forbids storing that in the browser) but a per-tab
  * loop guard that must be readable by the very page load it guards — before any
  * request could answer, and while the app may be too broken to make one.
  */
 export const STALE_SHELL_RELOAD_KEY = 'wolke:stale-shell-reload'
 
 /**
- * Claims the single reload this tab is allowed. Returns false once one has been
- * taken — and also when sessionStorage is unavailable (private mode, blocked
- * site data), because a guard that cannot remember is no guard at all and a
- * reload loop is worse than a missing icon. Either way the lazy component's
- * error boundary (lib/icons) keeps the page usable.
+ * How long the recovery waits for the new deploy's worker to finish installing
+ * before it gives up on it and unregisters instead. The install is a precache
+ * download of the whole shell (~700 KiB); ten seconds covers a slow mobile link,
+ * and the fallback that follows still recovers the page — it just re-downloads.
+ * Only reached while a worker is *actually installing*: when the update check
+ * finds nothing, the fallback runs at once.
+ */
+export const STALE_WORKER_WAIT_MS = 10_000
+
+/**
+ * What the registered service worker hands the recovery: the registration, to
+ * see whether a newer worker is installing or waiting, and vite-plugin-pwa's
+ * updateServiceWorker, to activate it. Provided by UpdateNotice (the owner of
+ * useRegisterSW) as module state rather than React state, because the recovery
+ * starts in main.tsx before React mounts and runs from a plain event listener.
+ */
+export interface StaleShellEscape {
+  registration: ServiceWorkerRegistration
+  updateServiceWorker: (reloadPage?: boolean) => Promise<void>
+}
+
+let escape: StaleShellEscape | null = null
+/** Registration failed, so no hand-over is coming — the recovery must not wait for one. */
+let escapeDeclined = false
+let escapeWaiters: Array<(e: StaleShellEscape | null) => void> = []
+
+function settleEscapeWaiters(value: StaleShellEscape | null) {
+  const waiters = escapeWaiters
+  escapeWaiters = []
+  for (const resolve of waiters) resolve(value)
+}
+
+/**
+ * Registers the escape hatch for the stale-shell recovery. Returns a teardown
+ * that only clears its own hand-over, so a stale unmount cannot drop a newer one.
+ */
+export function provideStaleShellEscape(next: StaleShellEscape): () => void {
+  escape = next
+  escapeDeclined = false
+  settleEscapeWaiters(next)
+  return () => {
+    if (escape === next) escape = null
+  }
+}
+
+/**
+ * Tells the recovery that registration failed (vite-plugin-pwa's
+ * onRegisterError), so it stops waiting for a hand-over and falls back at once.
+ * The stale shell's own failing chunk can be workbox-window itself. Returns a
+ * teardown that clears the notice again.
+ */
+export function declineStaleShellEscape(): () => void {
+  escapeDeclined = true
+  settleEscapeWaiters(null)
+  return () => {
+    escapeDeclined = false
+  }
+}
+
+/**
+ * The hand-over, waiting up to `timeoutMs` for it. The failing chunk and the
+ * registration race each other on a fresh page load — the catalog can render
+ * (and import a missing icon chunk) before workbox-window has registered — and
+ * losing that race must not cost the waiting worker.
+ */
+function awaitEscape(timeoutMs: number): Promise<StaleShellEscape | null> {
+  if (escape) return Promise.resolve(escape)
+  if (escapeDeclined) return Promise.resolve(null)
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      escapeWaiters = escapeWaiters.filter((w) => w !== onArrival)
+      resolve(null)
+    }, timeoutMs)
+    const onArrival = (e: StaleShellEscape | null) => {
+      clearTimeout(timer)
+      resolve(e)
+    }
+    escapeWaiters.push(onArrival)
+  })
+}
+
+/**
+ * Claims the single recovery this tab is allowed. Returns false once one has
+ * been taken — and also when sessionStorage is unavailable (private mode,
+ * blocked site data), because a guard that cannot remember is no guard at all
+ * and a reload loop is worse than a missing icon. Either way the lazy
+ * component's error boundary (lib/icons) keeps the page usable.
+ *
+ * One attempt, and it is the escape — not a plain reload first. A plain reload
+ * only helps a tab that no worker serves, and there the escape *is* a plain
+ * reload (no registration, nothing to unregister). Wherever a worker is
+ * registered, a plain reload lands on its precache again — whether the tab was
+ * controlled or not, the navigation is — and would spend the guard on a retry
+ * that cannot succeed, which is exactly the #158 blank page.
  */
 function claimStaleShellReload(): boolean {
   try {
@@ -128,17 +229,118 @@ function claimStaleShellReload(): boolean {
 }
 
 /**
+ * Resolves with the newer worker once it has installed (and is waiting), or with
+ * null when none is coming: the update check found the same sw.js, the install
+ * failed, or it took longer than `timeoutMs`.
+ */
+function awaitWaitingWorker(reg: ServiceWorkerRegistration, timeoutMs: number): Promise<ServiceWorker | null> {
+  if (reg.waiting) return Promise.resolve(reg.waiting)
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (worker: ServiceWorker | null) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      reg.removeEventListener('updatefound', onUpdateFound)
+      resolve(worker)
+    }
+    const timer = setTimeout(() => finish(null), timeoutMs)
+    const watch = (worker: ServiceWorker | null) => {
+      if (!worker) return
+      const onState = () => {
+        // 'installing' is the only state still worth waiting on: 'installed'
+        // means it is waiting; 'activating'/'activated' means it took over on
+        // its own (nothing was active) and a reload lands on it; 'redundant'
+        // means the install failed.
+        if (worker.state === 'installing') return
+        worker.removeEventListener('statechange', onState)
+        finish(worker.state === 'redundant' ? null : worker)
+      }
+      worker.addEventListener('statechange', onState)
+      onState()
+    }
+    const onUpdateFound = () => watch(reg.installing)
+    reg.addEventListener('updatefound', onUpdateFound)
+    watch(reg.installing)
+    // Make sure a check is under way (registration already ran one on this
+    // page load, but it may have been rejected offline). update() settles when
+    // the check has either started an install — watched above — or found the
+    // same script, in which case nothing will ever arrive.
+    reg.update().then(
+      () => {
+        if (!reg.installing && !reg.waiting) finish(null)
+      },
+      () => finish(null),
+    )
+  })
+}
+
+/**
+ * Leaves the old service worker behind and lands the page on the current
+ * deployment, one way or another:
+ *
+ * 1. A newer worker is waiting (or finishes installing within
+ *    STALE_WORKER_WAIT_MS): apply it exactly as the Reload button does —
+ *    skip-waiting through updateServiceWorker(true), which reloads on the
+ *    control change, with applyUpdate's own reload as the backstop.
+ * 2. Otherwise unregister the registration, so the reload is not matched to the
+ *    old worker and fetches the shell from the network; the page that comes up
+ *    registers a fresh worker for the current build.
+ * 3. No registration at all (unsupported, or never registered): a plain reload,
+ *    which then already goes to the network.
+ *
+ * The hand-over from UpdateNotice is awaited too, within the same budget, since
+ * a fresh page can lose a chunk before workbox-window has registered — unless
+ * registration is reported failed, which ends the wait at once.
+ *
+ * Never does nothing: any failure along the way ends in a reload.
+ */
+async function escapeStaleShell(): Promise<void> {
+  // Without service workers nothing but the network served this shell, and
+  // nothing will ever register: a plain reload is the whole recovery.
+  if (!('serviceWorker' in navigator)) {
+    window.location.reload()
+    return
+  }
+  // One budget for both waits: the hand-over from UpdateNotice, then the
+  // newer worker's install.
+  const deadline = Date.now() + STALE_WORKER_WAIT_MS
+  const current = await awaitEscape(STALE_WORKER_WAIT_MS)
+  if (current) {
+    const waiting = await awaitWaitingWorker(current.registration, Math.max(0, deadline - Date.now()))
+    if (waiting) {
+      applyUpdate(current.updateServiceWorker)
+      return
+    }
+    await current.registration.unregister()
+    window.location.reload()
+    return
+  }
+  // No hand-over came (registration failed, or the shell never got as far as
+  // mounting UpdateNotice), but a worker from an earlier visit may still own
+  // the navigation: look it up directly.
+  const reg = await navigator.serviceWorker.getRegistration()
+  if (reg) await reg.unregister()
+  window.location.reload()
+}
+
+/**
  * Starts self-healing for a stale shell: on the first failed chunk preload,
- * reload onto whatever the server serves now. Returns a teardown for tests.
+ * escape the service worker that served it and land on whatever the server
+ * serves now (see escapeStaleShell). Returns a teardown for tests.
  *
  * The event is deliberately *not* cancelled — the rejection still reaches the
  * lazy component's error boundary, so the render degrades to a fallback whether
- * or not this reload happens or helps.
+ * or not this recovery happens or helps.
  */
 export function startStaleShellRecovery(): () => void {
   const onPreloadError = () => {
     if (!claimStaleShellReload()) return
-    window.location.reload()
+    escapeStaleShell().catch(() => {
+      // Whatever went wrong on the way (a rejected unregister, a registration
+      // that vanished), the last resort is still a reload.
+      window.location.reload()
+    })
   }
   window.addEventListener(PRELOAD_ERROR_EVENT, onPreloadError)
   return () => window.removeEventListener(PRELOAD_ERROR_EVENT, onPreloadError)

@@ -22,10 +22,13 @@ import { startStaleShellRecovery } from './lib/pwa-update'
 initInstallCapture()
 
 // Self-heal a stale shell: if a lazy chunk this build references is already gone
-// from the server (a redeploy happened under an open tab), reload once onto the
-// current build. From startup, because the failing import can be the first one
-// (issue #150). The complementary case — a *newer* version waiting to be applied
-// — is UpdateNotice's.
+// from the server (a redeploy happened under an open tab), escape the service
+// worker that served this shell and land once on the current build. From
+// startup, because the failing import can be the first one (issue #150); the
+// escape rather than a plain reload, because the reload would otherwise come
+// from the same worker's precache (issue #158). The complementary case — a
+// *newer* version waiting to be applied — is UpdateNotice's, which also hands
+// this recovery its registration.
 startStaleShellRecovery()
 
 // TanStack Query is the convention for all server state (CLAUDE.md). Don't retry

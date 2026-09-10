@@ -629,8 +629,21 @@ The app is an installable PWA. Like the rest of branding, this stays white-label
   path is a client route and gets the shell: a missing static file — anything under `/assets/`, or
   any path whose last segment has a file extension — is a plain `404`, never `index.html`
   (issue #156). A stale bundle asking for a chunk the deploy no longer has must see a real 404,
-  which is what fires `vite:preloadError` and the one-shot self-heal reload (#150); an HTML answer
+  which is what fires `vite:preloadError` and the one-shot self-heal (#150); an HTML answer
   cannot be parsed as an ES module and made that failure fatal.
+- **A stale shell escapes its service worker** (`lib/pwa-update`, issue #158). The shell a
+  returning browser runs is usually the old worker's *precached* one, and the only chunk that
+  reaches the server is the lazily loaded icon set (kept out of the precache on purpose). A plain
+  reload after its 404 would be answered by the same worker from the same precache, so the
+  self-heal instead applies the new deploy's worker — `sw.js` is `no-cache`, so it is already
+  installing or waiting — through the same skip-waiting path as the Reload button and reloads onto
+  the new precache. When no newer worker turns up (the update check finds the same script, the
+  install fails or takes longer than ten seconds, registration failed) the registration is
+  unregistered and the reload goes to the network; without any registration it is a plain reload.
+  One attempt per tab, guarded in `sessionStorage`, and it is the escape rather than a plain reload
+  first: wherever a worker is registered a plain reload lands on its precache again and would only
+  spend the guard. The prompted update notice below is untouched by this — it covers a *newer*
+  version waiting, the self-heal covers a version that is already gone.
 - **Updates are prompted, never silent** (`registerType: 'prompt'`, issue #42). A new deploy's
   worker installs and then *waits*; the app shows a small, polite `role="status"` notice — "Neue
   Version verfügbar." + a Reload button — and only that click activates the waiting worker and
