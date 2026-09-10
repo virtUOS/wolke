@@ -107,13 +107,21 @@ func SPAHandler(fsys fs.FS) (http.Handler, error) {
 		}
 		// Not a real file. An unknown API path is a 404, and so is a missing
 		// static file: anything under assets/, and any path whose final segment
-		// carries a file extension, since a client route never does. Serving the
-		// shell for a hashed chunk the build no longer has answered a module
-		// request with text/html — the browser cannot parse that as an ES module,
-		// the failure is an uncaught rejection rather than a render error, and
-		// the page blanks (issue #156). A real 404 is what Vite's preload helper
-		// turns into vite:preloadError, which lib/pwa-update reloads on. Only an
-		// extension-less path is a client route and falls back to the SPA shell.
+		// carries a file extension, since a client route never does. A 404 is
+		// simply the honest answer for an asset that is gone, and a navigation
+		// to one must not look like a page: serving the shell for a hashed chunk
+		// the build no longer has answered a module request with text/html,
+		// which is unparseable as an ES module, and answered a bookmarked asset
+		// URL with a 200 (issue #156). It is also what Vite's preload helper
+		// turns into vite:preloadError, the signal lib/pwa-update recovers on.
+		// Only an extension-less path is a client route and falls back to the
+		// SPA shell.
+		//
+		// Not the reason the 2026-09-10 blank page happened: that client was
+		// running a pre-#151 bundle from its own service-worker precache and so
+		// had no error boundary at all. A rejected lazy() import *is* a render
+		// error and a boundary does catch it — see docs/specs/spa-delivery-audit.md
+		// §1, which measured both (issue #166).
 		if strings.HasPrefix(upath, "api/") || isStaticFilePath(upath) {
 			http.NotFound(w, r)
 			return

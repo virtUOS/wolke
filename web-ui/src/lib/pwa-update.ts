@@ -99,7 +99,7 @@ export function applyUpdate(updateServiceWorker: (reloadPage?: boolean) => Promi
 // is normally *served by the old service worker from its precache*; the one
 // chunk that is not precached (icon-set, vite.config `globIgnores`) is the one
 // that reaches the server and 404s. A plain reload asks the same worker for the
-// same shell and gets the same missing chunk — and with the per-tab guard spent,
+// same shell and gets the same missing chunk — and with the guard already spent,
 // the page stayed on a build that no longer exists (blank, in production, before
 // #151's boundary). The recovery below therefore escapes the old worker:
 // sw.js is served no-cache, so the new deploy's worker is already installing or
@@ -117,12 +117,39 @@ export function applyUpdate(updateServiceWorker: (reloadPage?: boolean) => Promi
 export const PRELOAD_ERROR_EVENT = 'vite:preloadError'
 
 /**
- * Where the one allowed recovery is recorded. sessionStorage, not the API: this
- * is not app data (CLAUDE.md forbids storing that in the browser) but a per-tab
- * loop guard that must be readable by the very page load it guards — before any
- * request could answer, and while the app may be too broken to make one.
+ * Where the last recovery attempt is recorded, as an epoch-millisecond
+ * timestamp. sessionStorage, not the API: this is not app data (CLAUDE.md
+ * forbids storing that in the browser) but a per-tab loop guard that must be
+ * readable by the very page load it guards — before any request could answer,
+ * and while the app may be too broken to make one.
  */
 export const STALE_SHELL_RELOAD_KEY = 'wolke:stale-shell-reload'
+
+/**
+ * How long a recovery blocks the next one in the same tab.
+ *
+ * The guard has to separate two things that both arrive as a failed chunk: a
+ * deploy the tab missed (recover), and an asset that is simply gone for good
+ * (stop, or the page reloads forever — that loop is what made #158 blank). It
+ * separates them by timescale, which needs no counter and no build identity:
+ * deploys are minutes to days apart, while a genuine loop recurs in seconds,
+ * as fast as the page can come back. Five minutes sits between the two.
+ *
+ * The property this buys, and the point of the guard: at most one recovery per
+ * tab per five minutes, so a pathological page reloads about twelve times an
+ * hour instead of without bound — while a long-lived tab or installed PWA
+ * window still self-heals across every later deploy (issue #164). The previous
+ * one-shot flag bounded the loop just as well but spent the tab's only
+ * recovery on the first deploy it saw, leaving weeks-old PWA windows on
+ * fallback glyphs until the user noticed the update notice.
+ *
+ * Deliberately not cleared on a successful mount: the app can mount and *then*
+ * fail the same chunk (the icon is lazy and rendered late), so clearing there
+ * would re-arm the guard on every bounce — exactly the unbounded loop it
+ * exists to prevent. Telling that apart from a real recovery needs build
+ * identity in the guard, which this does not warrant.
+ */
+export const STALE_SHELL_RETRY_AFTER_MS = 5 * 60 * 1000
 
 /**
  * How long the recovery waits for the new deploy's worker to finish installing
@@ -207,23 +234,34 @@ function awaitEscape(timeoutMs: number): Promise<StaleShellEscape | null> {
 }
 
 /**
- * Claims the single recovery this tab is allowed. Returns false once one has
- * been taken — and also when sessionStorage is unavailable (private mode,
- * blocked site data), because a guard that cannot remember is no guard at all
- * and a reload loop is worse than a missing icon. Either way the lazy
- * component's error boundary (lib/icons) keeps the page usable.
+ * Claims a recovery for this tab, and records when. Returns false while the
+ * last one is less than STALE_SHELL_RETRY_AFTER_MS old — and also when
+ * sessionStorage is unavailable (private mode, blocked site data), because a
+ * guard that cannot remember is no guard at all and a reload loop is worse than
+ * a missing icon. Either way the lazy component's error boundary (lib/icons)
+ * keeps the page usable.
  *
- * One attempt, and it is the escape — not a plain reload first. A plain reload
- * only helps a tab that no worker serves, and there the escape *is* a plain
- * reload (no registration, nothing to unregister). Wherever a worker is
- * registered, a plain reload lands on its precache again — whether the tab was
- * controlled or not, the navigation is — and would spend the guard on a retry
- * that cannot succeed, which is exactly the #158 blank page.
+ * A stored value that is not a number cannot be dated, so it counts as "just
+ * now" and refuses: the safe direction, and the only writer is the line below.
+ * A clock that has jumped backwards refuses for the same reason.
+ *
+ * The attempt is the escape, not a plain reload first. A plain reload only
+ * helps a tab that no worker serves, and there the escape *is* a plain reload
+ * (no registration, nothing to unregister). Wherever a worker is registered, a
+ * plain reload lands on its precache again — whether the tab was controlled or
+ * not, the navigation is — and would spend the claim on a retry that cannot
+ * succeed, which is exactly the #158 blank page.
  */
 function claimStaleShellReload(): boolean {
   try {
-    if (sessionStorage.getItem(STALE_SHELL_RELOAD_KEY) !== null) return false
-    sessionStorage.setItem(STALE_SHELL_RELOAD_KEY, '1')
+    const last = sessionStorage.getItem(STALE_SHELL_RELOAD_KEY)
+    if (last !== null) {
+      const at = Number(last)
+      if (!Number.isFinite(at)) return false
+      const since = Date.now() - at
+      if (since < STALE_SHELL_RETRY_AFTER_MS) return false
+    }
+    sessionStorage.setItem(STALE_SHELL_RELOAD_KEY, String(Date.now()))
     return true
   } catch {
     return false
@@ -231,10 +269,11 @@ function claimStaleShellReload(): boolean {
 }
 
 /**
- * Hands the claim back, so a later load can still recover. Only ever called
- * from a path that did nothing at all — no unregister, no reload — so it cannot
- * open the door to the loop the guard exists to prevent. (A tab whose storage
- * is unavailable never gets here: the claim fails first.)
+ * Hands the claim back, so the next failure can still recover instead of
+ * waiting out the window. Only ever called from a path that did nothing at all
+ * — no unregister, no reload (issue #162) — so it cannot open the door to the
+ * loop the guard exists to prevent. (A tab whose storage is unavailable never
+ * gets here: the claim fails first.)
  */
 function releaseStaleShellReload(): void {
   try {
@@ -410,9 +449,10 @@ async function escapeStaleShell(): Promise<void> {
 }
 
 /**
- * Starts self-healing for a stale shell: on the first failed chunk preload,
- * escape the service worker that served it and land on whatever the server
- * serves now (see escapeStaleShell). Returns a teardown for tests.
+ * Starts self-healing for a stale shell: on a failed chunk preload, escape the
+ * service worker that served it and land on whatever the server serves now
+ * (see escapeStaleShell), at most once per STALE_SHELL_RETRY_AFTER_MS. Returns
+ * a teardown for tests.
  *
  * The event is deliberately *not* cancelled — the rejection still reaches the
  * lazy component's error boundary, so the render degrades to a fallback whether

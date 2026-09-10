@@ -4,6 +4,7 @@ import {
   PRELOAD_ERROR_EVENT,
   RELOAD_FALLBACK_MS,
   STALE_SHELL_RELOAD_KEY,
+  STALE_SHELL_RETRY_AFTER_MS,
   STALE_WORKER_WAIT_MS,
   UPDATE_POLL_INTERVAL_MS,
   applyUpdate,
@@ -155,8 +156,9 @@ describe('applyUpdate', () => {
 // The other half of issue #150, corrected by issue #158: a client holding a
 // stale index.html asks for a hashed chunk the deploy no longer has. Vite fires
 // `vite:preloadError`, and the recovery must land the page on the current build
-// — but only ever *one* attempt, or an asset that is genuinely gone would
-// reload forever. The stale shell is normally served by the old service worker
+// — but at most once every STALE_SHELL_RETRY_AFTER_MS (issue #164), or an asset
+// that is genuinely gone would reload forever. The stale shell is normally
+// served by the old service worker
 // from its precache, so the attempt is not a plain reload (which the same
 // worker would answer identically): the newer worker is applied, or the
 // registration is dropped so the reload reaches the network.
@@ -632,8 +634,14 @@ describe('startStaleShellRecovery', () => {
     })
   })
 
-  describe('the one-attempt guard', () => {
-    it('does not start a second recovery for a second failure in the same session', async () => {
+  // The loop guard (issue #164). One recovery per tab per
+  // STALE_SHELL_RETRY_AFTER_MS: enough to bound a page whose chunk is gone for
+  // good at about twelve reloads an hour, while a tab or installed PWA window
+  // that lives across several deploys still heals every time — which the
+  // one-shot flag this replaced did not, since it spent the window's only
+  // recovery on the first deploy it saw.
+  describe('the rate-limited guard', () => {
+    it('starts one recovery for a burst of failures in the same load', async () => {
       const reload = stubReload()
       const reg = new FakeRegistration()
       provide(reg)
@@ -647,10 +655,18 @@ describe('startStaleShellRecovery', () => {
       expect(reload).toHaveBeenCalledTimes(1)
     })
 
-    it('does nothing when the recovered page fails the same way', async () => {
-      // The flag survives the reload, which is the whole point: the page that
-      // comes back is the one that must not bounce again.
-      sessionStorage.setItem(STALE_SHELL_RELOAD_KEY, '1')
+    it('records when the attempt happened, so the page that comes back can date it', async () => {
+      stubReload()
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      expect(Number(sessionStorage.getItem(STALE_SHELL_RELOAD_KEY))).toBe(Date.now())
+    })
+
+    it('does nothing when the recovered page fails the same way straight away', async () => {
+      // The timestamp survives the reload, which is the whole point: the page
+      // that comes back must not bounce again seconds later.
+      sessionStorage.setItem(STALE_SHELL_RELOAD_KEY, String(Date.now()))
       const reload = stubReload()
       const reg = new FakeRegistration()
       reg.waiting = new FakeWorker('installed')
@@ -664,12 +680,102 @@ describe('startStaleShellRecovery', () => {
       expect(reload).not.toHaveBeenCalled()
     })
 
-    it('records the attempt so the recovered page can recognise it', async () => {
-      stubReload()
+    it('still refuses just under the window', async () => {
+      sessionStorage.setItem(STALE_SHELL_RELOAD_KEY, String(Date.now() - (STALE_SHELL_RETRY_AFTER_MS - 1)))
+      const reload = stubReload()
+      const reg = new FakeRegistration()
+      provide(reg)
       stopRecovery = startStaleShellRecovery()
 
       fail()
-      expect(sessionStorage.getItem(STALE_SHELL_RELOAD_KEY)).not.toBeNull()
+      await settle(STALE_WORKER_WAIT_MS)
+      expect(reg.unregister).not.toHaveBeenCalled()
+      expect(reload).not.toHaveBeenCalled()
+    })
+
+    it('recovers again once the window has passed — the long-lived PWA window', async () => {
+      // Two deploys, one window that was never closed. The second stale shell
+      // is a fresh deploy, not a loop, and the timescale is what says so.
+      sessionStorage.setItem(STALE_SHELL_RELOAD_KEY, String(Date.now() - STALE_SHELL_RETRY_AFTER_MS))
+      const reload = stubReload()
+      const reg = new FakeRegistration()
+      reg.waiting = new FakeWorker('installed')
+      const updateServiceWorker = provide(reg)
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      await settle()
+      expect(updateServiceWorker).toHaveBeenCalledWith(true)
+      expect(Number(sessionStorage.getItem(STALE_SHELL_RELOAD_KEY))).toBe(Date.now())
+      await settle(RELOAD_FALLBACK_MS)
+      expect(reload).toHaveBeenCalledTimes(1)
+    })
+
+    it('bounds a page whose chunk is gone for good, and only the window releases it', async () => {
+      // The #158 shape that made the guard necessary: every load fails the same
+      // way. Time is the only thing that lets another attempt through, so the
+      // reloads are bounded at one per window however often the chunk fails.
+      const reload = stubReload()
+      stopRecovery = startStaleShellRecovery()
+
+      for (let i = 0; i < 5; i++) {
+        fail()
+        await settle(STALE_SHELL_RETRY_AFTER_MS / 5)
+      }
+      expect(reload).toHaveBeenCalledTimes(1)
+
+      fail()
+      await settle(STALE_WORKER_WAIT_MS)
+      expect(reload).toHaveBeenCalledTimes(2)
+    })
+
+    it('refuses when the stored value cannot be dated', async () => {
+      // Nothing writes this — but a value that cannot be placed in time cannot
+      // be shown to be old, so the guard holds rather than guesses.
+      sessionStorage.setItem(STALE_SHELL_RELOAD_KEY, 'yes')
+      const reload = stubReload()
+      const reg = new FakeRegistration()
+      provide(reg)
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      await settle(STALE_WORKER_WAIT_MS)
+      expect(reg.unregister).not.toHaveBeenCalled()
+      expect(reload).not.toHaveBeenCalled()
+    })
+
+    it('refuses when the clock has jumped backwards', async () => {
+      sessionStorage.setItem(STALE_SHELL_RELOAD_KEY, String(Date.now() + 60_000))
+      const reload = stubReload()
+      const reg = new FakeRegistration()
+      provide(reg)
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      await settle(STALE_WORKER_WAIT_MS)
+      expect(reg.unregister).not.toHaveBeenCalled()
+      expect(reload).not.toHaveBeenCalled()
+    })
+
+    it('lets the next failure through at once when the last attempt was handed back', async () => {
+      // Issue #162's stand-down does nothing at all, so it costs nothing: the
+      // claim is removed rather than dated, and the next failure need not wait
+      // out the window.
+      const reload = stubReload()
+      setOnLine(false)
+      const reg = new FakeRegistration()
+      provide(reg)
+      stopRecovery = startStaleShellRecovery()
+
+      fail()
+      await settle(STALE_WORKER_WAIT_MS)
+      expect(sessionStorage.getItem(STALE_SHELL_RELOAD_KEY)).toBeNull()
+
+      setOnLine(true)
+      fail()
+      await settle()
+      expect(reg.unregister).toHaveBeenCalledTimes(1)
+      expect(reload).toHaveBeenCalledTimes(1)
     })
 
     it('stays put when sessionStorage is unavailable, rather than risking a loop', async () => {
@@ -689,6 +795,10 @@ describe('startStaleShellRecovery', () => {
       await settle(STALE_WORKER_WAIT_MS + RELOAD_FALLBACK_MS)
       expect(updateServiceWorker).not.toHaveBeenCalled()
       expect(reload).not.toHaveBeenCalled()
+    })
+
+    it('separates a deploy from a loop by five minutes', () => {
+      expect(STALE_SHELL_RETRY_AFTER_MS).toBe(5 * 60 * 1000)
     })
   })
 

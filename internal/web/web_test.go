@@ -169,11 +169,16 @@ func TestSPAUnknownAPIPathCarriesNoCacheHeader(t *testing.T) {
 }
 
 // A static file the build does not contain must be a 404, never the shell
-// (issue #156). Serving index.html for /assets/<gone-chunk>.js answered a module
-// request with text/html: the browser could not parse it as an ES module, the
-// failure was an uncaught rejection rather than a React render error, and the
-// page blanked. On a real 404, Vite emits vite:preloadError and lib/pwa-update
-// reloads once onto the current shell — the recovery #150/#151 built.
+// (issue #156): a 404 is the honest answer for an asset that is gone, and
+// index.html for /assets/<gone-chunk>.js was not — it answered a module request
+// with text/html, unparseable as an ES module, and a bookmarked asset URL with a
+// 200. A real 404 is also what Vite turns into vite:preloadError, the signal
+// lib/pwa-update recovers on (#150/#151, #158, #164).
+//
+// It is not what blanked the page on 2026-09-10, though the issue says so: that
+// client had no error boundary, being on a pre-#151 bundle from its own
+// precache. A rejected lazy() import does reach a boundary — measured in
+// docs/specs/spa-delivery-audit.md §1 (issue #166).
 
 func TestSPAMissingAssetIs404NotShell(t *testing.T) {
 	h, err := SPAHandler(testFS())

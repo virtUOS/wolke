@@ -189,6 +189,17 @@ Installed standalone windows share every row above in code; none was measured th
    window degrades to glyph fallbacks until the notice shows. **Fix:** a timestamp guard (one
    recovery per minute) or clearing the key once the new build has mounted; either keeps the
    loop protection.
+   *Fixed (#164): the key now holds the timestamp of the last attempt and
+   `STALE_SHELL_RETRY_AFTER_MS` (five minutes) is the window — deploys are minutes to days
+   apart, a genuine loop recurs in seconds, so one value tells them apart with no counter and
+   no build identity. The loop bound is one recovery per tab per window (~12 reloads an hour),
+   and a window open across several deploys heals at every one. Clearing on a successful mount
+   was rejected: the icon is lazy, so the app can mount and *then* fail the same chunk, which
+   would clear-and-re-arm into the unbounded loop. Storage-unavailable still means no recovery,
+   and #162's stand-down still hands the claim back unspent. Unit-tested in
+   `web-ui/src/__tests__/pwa-update.test.ts` (a fake clock plus sessionStorage); the
+   across-a-real-deploy behaviour is not CI-reproducible and was not re-measured with the §3
+   harness — the shape it depends on is the one this audit already established.*
 4. **Stranded pre-#151 clients exist until they close all tabs.** Any client whose worker
    precached a build older than the #151 merge blanks on every load and has nothing to click.
    Nothing the server does can reach them. Worth a line in the ops notes: "close the app

@@ -1,18 +1,22 @@
 // Regression for issue #156, at the layer that actually failed: the server.
 //
 // SPAHandler used to answer any unknown path outside api/ with index.html, so a
-// hashed chunk the deployed build no longer contained came back 200 text/html.
-// The browser cannot parse HTML as an ES module, and the page blanked. The
-// #150 spec stubs that 404 client-side with page.route; this one lets the
-// request reach the real binary and asserts what it answers.
+// hashed chunk the deployed build no longer contained came back 200 text/html,
+// which the browser cannot parse as an ES module — and a bookmarked asset URL
+// came back a page. A 404 is the honest answer for an asset that is gone; it is
+// also what fires vite:preloadError. (It did not cause the 2026-09-10 blank
+// page: that client had no error boundary — docs/specs/spa-delivery-audit.md
+// §1.) The #150 spec stubs the 404 client-side with page.route; this one lets
+// the request reach the real binary and asserts what it answers.
 //
 // The second test replays the production shape end to end without a stub on
 // the failing request: a bundle that references a chunk name the server does
 // not have. The bundle is rewritten once, in the browser, to point at a bogus
 // workbox-window chunk (imported via Vite's preload helper on every load, so it
 // needs no beta pref and no cross-worker lock); the chunk request itself hits
-// the server. A real 404 fires vite:preloadError, lib/pwa-update reloads once,
-// the second load gets the untouched bundle, and the page comes up.
+// the server. A real 404 fires vite:preloadError, lib/pwa-update recovers once
+// (its guard then holds for five minutes), the second load gets the untouched
+// bundle, and the page comes up.
 
 import { gotoApp } from './helpers/session'
 import { expect, test } from './fixtures'
@@ -83,8 +87,9 @@ test('a stale chunk reference self-heals through the real server', async ({ page
   // The healed page is a dashboard on the current build.
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await expect(page.getByRole('main')).toBeVisible()
-  expect(
-    await page.evaluate(() => sessionStorage.getItem('wolke:stale-shell-reload')),
-    'the one reload is recorded, so a repeat failure could not loop',
-  ).toBe('1')
+  // The attempt is recorded as the time it happened, which is what bounds a
+  // repeat failure to one recovery per five-minute window (issue #164).
+  const recordedAt = Number(await page.evaluate(() => sessionStorage.getItem('wolke:stale-shell-reload')))
+  expect(recordedAt, 'the reload is recorded, so a repeat failure could not loop').toBeGreaterThan(0)
+  expect(Date.now() - recordedAt, 'and recorded as just now').toBeLessThan(60_000)
 })
