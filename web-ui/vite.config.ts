@@ -40,6 +40,21 @@ export default defineConfig({
           /^\/metrics$/,
           /^\/manifest\.webmanifest$/,
           /^\/sw\.js$/,
+          // Static files, not client routes — the client-side twin of
+          // isStaticFilePath in internal/web/web.go (issues #157 and #163).
+          // Without these two the worker answered a *navigation* to a hashed
+          // chunk or an image with the shell, reproducing in the browser
+          // exactly what #157 removed from the server: a bookmarked or shared
+          // asset URL got 200 + HTML instead of an honest 404. (Module loads
+          // were never affected — workbox's NavigationRoute only matches
+          // `mode: 'navigate'` — so #157's contract for import() held.)
+          // Keep the two lists in step: one rule, two layers.
+          /^\/assets\//,
+          // Any path whose final segment carries an extension. The denylist is
+          // tested against pathname + search, so `[^?]` keeps a query string
+          // that happens to end in something dot-like (`/?q=logo.png`) from
+          // looking like a file.
+          /^[^?]*\/[^/?]+\.[^/?]+$/,
         ],
         cleanupOutdatedCaches: true,
         // `clientsClaim` stays off (the generateSW default). It was evaluated

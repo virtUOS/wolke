@@ -105,7 +105,9 @@ export function applyUpdate(updateServiceWorker: (reloadPage?: boolean) => Promi
 // sw.js is served no-cache, so the new deploy's worker is already installing or
 // waiting; it is activated (the same skip-waiting path as the Reload button, so
 // the reload lands on the new precache), and when no worker turns up the
-// registration is unregistered so the reload goes to the network instead.
+// registration is unregistered so the reload goes to the network instead —
+// unless the network is what is gone, in which case the recovery does nothing
+// at all rather than trading a rendered page for an error page (issue #162).
 
 /**
  * Vite's event for a dynamic import whose chunk could not be fetched. Emitted by
@@ -229,6 +231,20 @@ function claimStaleShellReload(): boolean {
 }
 
 /**
+ * Hands the claim back, so a later load can still recover. Only ever called
+ * from a path that did nothing at all — no unregister, no reload — so it cannot
+ * open the door to the loop the guard exists to prevent. (A tab whose storage
+ * is unavailable never gets here: the claim fails first.)
+ */
+function releaseStaleShellReload(): void {
+  try {
+    sessionStorage.removeItem(STALE_SHELL_RELOAD_KEY)
+  } catch {
+    // Nothing was stored, so there is nothing to hand back.
+  }
+}
+
+/**
  * Resolves with the newer worker once it has installed (and is waiting), or with
  * null when none is coming: the update check found the same sw.js, the install
  * failed, or it took longer than `timeoutMs`.
@@ -276,6 +292,74 @@ function awaitWaitingWorker(reg: ServiceWorkerRegistration, timeoutMs: number): 
 }
 
 /**
+ * What the recovery probes to find out whether there is a network at all
+ * (issue #162). sw.js is the right target: same-origin, tiny, served `no-cache`
+ * by the Go handler, and deliberately not precached — the service worker has no
+ * route for it, so the answer comes from the network or not at all.
+ */
+export const NETWORK_PROBE_URL = '/sw.js'
+
+/**
+ * How long that probe may take before the network counts as gone. Short,
+ * because the page it protects is already rendered (the icon boundary is
+ * showing its fallback glyph): the cost of waiting is a delayed recovery, never
+ * a broken page.
+ */
+export const NETWORK_PROBE_TIMEOUT_MS = 3000
+
+/**
+ * Whether there is a route to the network right now.
+ *
+ * The recovery cannot tell "the chunk is gone" from "the network is gone" —
+ * both reach it as one failed dynamic import (issue #162) — so it asks.
+ * `navigator.onLine` is believed only in the negative (false means there is no
+ * link at all; true only means some interface is up), and the real evidence is
+ * an answer from the server. *Any* answer counts, a 404 or a 502 included:
+ * what is under test is the route, not the response.
+ */
+async function networkReachable(): Promise<boolean> {
+  if (navigator.onLine === false) return false
+  const abort = new AbortController()
+  const timer = setTimeout(() => abort.abort(), NETWORK_PROBE_TIMEOUT_MS)
+  try {
+    await fetch(NETWORK_PROBE_URL, { cache: 'no-store', signal: abort.signal })
+    return true
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * The destructive half of the recovery, and the only place it happens: drop the
+ * registration (when there is one) so the reload cannot be answered by the old
+ * worker's precache, then reload — landing the page on whatever the network
+ * serves now.
+ *
+ * Both steps are gated on the network being reachable, because offline they are
+ * strictly worse than doing nothing (issue #162). By the time the recovery
+ * runs, the page is rendered and usable — the lazy icon's error boundary
+ * (lib/icons) shows a fallback glyph for the chunk that did not load. A reload
+ * with no route to the network replaces that with the browser's own error page,
+ * and the unregister also takes away the worker that was serving the shell:
+ * the user ends up with no page *and* no worker, from a state that worked.
+ *
+ * So with no network this returns having done nothing whatsoever: no
+ * unregister, no reload, and the guard handed back — nothing was spent, and the
+ * next load that has a network recovers normally. Doing nothing reads like an
+ * omission, which is why it is written down here: it is the correct outcome.
+ */
+async function reloadFromNetwork(reg: ServiceWorkerRegistration | null): Promise<void> {
+  if (!(await networkReachable())) {
+    releaseStaleShellReload()
+    return
+  }
+  if (reg) await reg.unregister()
+  window.location.reload()
+}
+
+/**
  * Leaves the old service worker behind and lands the page on the current
  * deployment, one way or another:
  *
@@ -293,13 +377,16 @@ function awaitWaitingWorker(reg: ServiceWorkerRegistration, timeoutMs: number): 
  * a fresh page can lose a chunk before workbox-window has registered — unless
  * registration is reported failed, which ends the wait at once.
  *
- * Never does nothing: any failure along the way ends in a reload.
+ * Steps 2 and 3 go through reloadFromNetwork, which does nothing at all when
+ * the network is what is gone (issue #162). Step 1 is not gated: a worker that
+ * has already installed serves the new build from its own precache, so applying
+ * it is a recovery that works offline too.
  */
 async function escapeStaleShell(): Promise<void> {
   // Without service workers nothing but the network served this shell, and
   // nothing will ever register: a plain reload is the whole recovery.
   if (!('serviceWorker' in navigator)) {
-    window.location.reload()
+    await reloadFromNetwork(null)
     return
   }
   // One budget for both waits: the hand-over from UpdateNotice, then the
@@ -312,16 +399,14 @@ async function escapeStaleShell(): Promise<void> {
       applyUpdate(current.updateServiceWorker)
       return
     }
-    await current.registration.unregister()
-    window.location.reload()
+    await reloadFromNetwork(current.registration)
     return
   }
   // No hand-over came (registration failed, or the shell never got as far as
   // mounting UpdateNotice), but a worker from an earlier visit may still own
   // the navigation: look it up directly.
   const reg = await navigator.serviceWorker.getRegistration()
-  if (reg) await reg.unregister()
-  window.location.reload()
+  await reloadFromNetwork(reg ?? null)
 }
 
 /**
@@ -338,8 +423,10 @@ export function startStaleShellRecovery(): () => void {
     if (!claimStaleShellReload()) return
     escapeStaleShell().catch(() => {
       // Whatever went wrong on the way (a rejected unregister, a registration
-      // that vanished), the last resort is still a reload.
-      window.location.reload()
+      // that vanished), the last resort is still a reload — but the same
+      // offline gate applies to it: with no network, a reload would take away
+      // the page the boundary is still rendering (issue #162).
+      void reloadFromNetwork(null)
     })
   }
   window.addEventListener(PRELOAD_ERROR_EVENT, onPreloadError)
