@@ -145,6 +145,38 @@
           "instant": true
         }
       ]
+    },
+    {
+      "id": 9,
+      "title": "Favorites per service and role (current)",
+      "type": "table",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (service, role) (wolke_service_favorites)",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Clicks per service, role and target (total)",
+      "type": "table",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (service, role, target) (wolke_service_clicks_total)",
+          "format": "table",
+          "instant": true
+        }
+      ]
     }
   ]
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
 )
 
@@ -26,7 +27,7 @@ type Metrics struct {
 	activeSessions      prometheus.Gauge
 	catalogServices     *prometheus.GaugeVec // state=active|inactive
 	announcementsActive *prometheus.GaugeVec // severity
-	serviceFavorites    *prometheus.GaugeVec // service (name, as on ClicksTotal)
+	serviceFavorites    *prometheus.GaugeVec // service (name, as on ClicksTotal), role
 }
 
 // New builds and registers the collectors on a private registry.
@@ -56,8 +57,8 @@ func New() *Metrics {
 		}, []string{"severity"}),
 		serviceFavorites: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "wolke_service_favorites",
-			Help: "Users currently having a service favorited, per active service.",
-		}, []string{"service"}),
+			Help: "Users currently having a service favorited, per active service and role. Current state: a user's favorites move between roles when their role changes.",
+		}, []string{"service", "role"}),
 	}
 	m.reg.MustRegister(m.ClicksTotal, m.RequestDuration, m.activeSessions, m.catalogServices, m.announcementsActive, m.serviceFavorites)
 	return m
@@ -80,11 +81,11 @@ type GaugeSource interface {
 	CountActiveSessions(ctx context.Context) (int64, error)
 	CountServicesByState(ctx context.Context) ([]store.CountServicesByStateRow, error)
 	CountActiveAnnouncementsBySeverity(ctx context.Context) ([]store.CountActiveAnnouncementsBySeverityRow, error)
-	CountFavoritesByService(ctx context.Context) ([]store.CountFavoritesByServiceRow, error)
+	CountFavoritesByServiceAndRole(ctx context.Context, roles []string) ([]store.CountFavoritesByServiceAndRoleRow, error)
 }
 
 // RefreshGauges updates the gauges from the database.
-func (m *Metrics) RefreshGauges(ctx context.Context, src GaugeSource) error {
+func (m *Metrics) RefreshGauges(ctx context.Context, src GaugeSource, roles config.RoleSet) error {
 	n, err := src.CountActiveSessions(ctx)
 	if err != nil {
 		return err
@@ -115,16 +116,27 @@ func (m *Metrics) RefreshGauges(ctx context.Context, src GaugeSource) error {
 		m.announcementsActive.WithLabelValues(a.Severity).Set(float64(a.N))
 	}
 
-	favs, err := src.CountFavoritesByService(ctx)
+	favs, err := src.CountFavoritesByServiceAndRole(ctx, roles.Slugs())
 	if err != nil {
 		return err
 	}
-	// Reset first: a service that was soft-deleted or renamed has left the
-	// query, and its series must go with it instead of freezing at its last
-	// value.
-	m.serviceFavorites.Reset()
+	// The query returns a zero row per (active service x configured role) plus
+	// the real counts grouped by the role as stored on the user, so a pair can
+	// appear twice and is summed here. Folding a stale role — one this
+	// deployment no longer configures — onto the configured default happens in
+	// Go rather than in SQL so the rule stays in exactly one place,
+	// config.RoleSet.Effective, the same function withEffectiveRole uses to
+	// decide what that user is actually served.
+	totals := make(map[[2]string]float64, len(favs))
 	for _, f := range favs {
-		m.serviceFavorites.WithLabelValues(f.Name).Set(float64(f.N))
+		totals[[2]string{f.Name, roles.Effective(f.Role)}] += float64(f.N)
+	}
+	// Reset first: a service that was soft-deleted or renamed has left the
+	// query, and all of its series must go with it instead of freezing at
+	// their last values.
+	m.serviceFavorites.Reset()
+	for key, n := range totals {
+		m.serviceFavorites.WithLabelValues(key[0], key[1]).Set(n)
 	}
 	return nil
 }

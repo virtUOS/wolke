@@ -41,11 +41,11 @@ const (
 )
 
 // refreshGauges periodically updates the metric gauges from the database.
-func refreshGauges(ctx context.Context, log *slog.Logger, m *metrics.Metrics, src metrics.GaugeSource) {
+func refreshGauges(ctx context.Context, log *slog.Logger, m *metrics.Metrics, src metrics.GaugeSource, roles config.RoleSet) {
 	t := time.NewTicker(gaugeRefreshInterval)
 	defer t.Stop()
 	for {
-		if err := m.RefreshGauges(ctx, src); err != nil {
+		if err := m.RefreshGauges(ctx, src, roles); err != nil {
 			log.Debug("refresh gauges", "error", err)
 		}
 		select {
@@ -241,7 +241,7 @@ func run() error {
 
 	// Background workers: refresh the metric gauges and roll up click events.
 	if db != nil {
-		go refreshGauges(ctx, logger, m, db)
+		go refreshGauges(ctx, logger, m, db, cfg.Roles())
 		go runUsageRollup(ctx, logger, db)
 		go runSearchEventPrune(ctx, logger, db)
 		go runAnnouncementPurge(ctx, logger, db, cfg.AnnouncementRetentionDays)
