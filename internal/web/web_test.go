@@ -12,6 +12,7 @@ func testFS() fstest.MapFS {
 	return fstest.MapFS{
 		"index.html":           {Data: []byte("<!doctype html><title>shell</title>")},
 		"assets/app-abc123.js": {Data: []byte("console.log('app')")},
+		"sw.js":                {Data: []byte("/* service worker */")},
 	}
 }
 
@@ -99,5 +100,70 @@ func TestSPAUnknownAPIPathIs404(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/does-not-exist", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404 (API must not fall back to SPA)", rec.Code)
+	}
+}
+
+// The caching contract (issue #152) is asserted here rather than in the
+// Caddyfile, so a deployment fronted by something other than Caddy behaves
+// identically (golden rule 8). Nothing else in the suite would catch a
+// regression: a wrong header still serves the right bytes.
+
+func TestSPAShellIsNeverCached(t *testing.T) {
+	// The shell names hashed chunks a later deploy removes. With no directive
+	// and no validator (serveIndex writes bytes; embed has a zero modtime),
+	// browsers invent a freshness lifetime and can hold a shell whose chunks
+	// are gone — the cause of issue #150. no-store removes the guesswork.
+	h, err := SPAHandler(testFS())
+	if err != nil {
+		t.Fatalf("SPAHandler: %v", err)
+	}
+	for _, p := range []string{"/", "/favorites", "/services/deep/link"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+			t.Errorf("path %s: Cache-Control = %q, want no-store (the shell must never be served from cache)", p, got)
+		}
+	}
+}
+
+func TestSPAHashedAssetIsImmutablyCached(t *testing.T) {
+	// Content-hashed filenames exist to make this safe: a changed file has a
+	// changed URL, so the old one can be cached for as long as the client likes.
+	h, err := SPAHandler(testFS())
+	if err != nil {
+		t.Fatalf("SPAHandler: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/app-abc123.js", nil))
+	if got := rec.Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
+		t.Errorf("Cache-Control = %q, want public, max-age=31536000, immutable", got)
+	}
+}
+
+func TestSPAServiceWorkerIsRevalidated(t *testing.T) {
+	// sw.js keeps no-cache: it is the one file whose URL never changes, so a
+	// deploy only lands if the browser revalidates it.
+	h, err := SPAHandler(testFS())
+	if err != nil {
+		t.Fatalf("SPAHandler: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/sw.js", nil))
+	if got := rec.Header().Get("Cache-Control"); got != "no-cache" {
+		t.Errorf("Cache-Control = %q, want no-cache (a new deploy must be picked up)", got)
+	}
+}
+
+func TestSPAUnknownAPIPathCarriesNoCacheHeader(t *testing.T) {
+	// /api, /auth, /branding and /metrics own their own caching; the SPA
+	// handler must not reach into them, not even on the 404 it does answer.
+	h, err := SPAHandler(testFS())
+	if err != nil {
+		t.Fatalf("SPAHandler: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/does-not-exist", nil))
+	if got := rec.Header().Get("Cache-Control"); got != "" {
+		t.Errorf("Cache-Control = %q, want none (API responses are not the SPA handler's business)", got)
 	}
 }

@@ -618,7 +618,14 @@ The app is an installable PWA. Like the rest of branding, this stays white-label
   never answered from the shell (a `navigateFallback` denylist), so per-user/role-aware data can't
   leak on a shared device and the OIDC redirect flow is untouched. The app needs a connection to do
   anything beyond the shell, so there is no offline catalog — just an installable, standalone
-  window. `sw.js` is served `Cache-Control: no-cache` so deploys land.
+  window.
+- **Static caching is set in the Go handler** (`internal/web`), not the `Caddyfile`, so a fork
+  fronting the app with something else behaves identically (issue #152). The shell — `/` and every
+  SPA-fallback route — is `no-store`: it is written from memory with no validator, so any freshness
+  a browser invented for it could pin an `index.html` naming chunks a later deploy deleted (the
+  cause behind #150). `/assets/*` is `public, max-age=31536000, immutable`, which is what the
+  content hash in each filename exists to enable. `sw.js` stays `no-cache` so deploys land, and
+  `/api`, `/auth`, `/branding` and `/metrics` set their own.
 - **Updates are prompted, never silent** (`registerType: 'prompt'`, issue #42). A new deploy's
   worker installs and then *waits*; the app shows a small, polite `role="status"` notice — "Neue
   Version verfügbar." + a Reload button — and only that click activates the waiting worker and

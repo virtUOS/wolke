@@ -47,6 +47,7 @@ which does both) and restart the server.</p>
 func notBuiltHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte(notBuiltHTML))
 	})
@@ -71,6 +72,13 @@ func SPAHandler(fsys fs.FS) (http.Handler, error) {
 
 	serveIndex := func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		// The shell is written straight from memory, and embed's zero modtime
+		// leaves http.FileServer no validator to offer either, so without a
+		// directive a browser invents a freshness lifetime (RFC 9111 §4.2.2)
+		// and can keep serving a shell whose hashed chunks a later deploy has
+		// removed — the cause behind issue #150. no-store, not no-cache: the
+		// shell is a couple of kB and has nothing to revalidate against.
+		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(index)
 	}
@@ -83,10 +91,15 @@ func SPAHandler(fsys fs.FS) (http.Handler, error) {
 		}
 		if f, err := fsys.Open(upath); err == nil {
 			_ = f.Close()
-			// The service worker must be revalidated every load so a new deploy is
-			// picked up promptly; hashed assets under assets/ stay immutably cached.
-			if upath == "sw.js" {
+			// The service worker's URL never changes, so it must be revalidated
+			// every load for a new deploy to land. Everything under assets/ carries
+			// a content hash in its name — a changed file is a changed URL — which
+			// is exactly what makes a year of immutable caching safe (issue #152).
+			switch {
+			case upath == "sw.js":
 				w.Header().Set("Cache-Control", "no-cache")
+			case strings.HasPrefix(upath, "assets/"):
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			}
 			fileServer.ServeHTTP(w, r)
 			return
