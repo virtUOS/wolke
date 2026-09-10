@@ -144,7 +144,13 @@ Caddy, take `PUBLIC_URL` from config for OIDC redirects and `Secure` cookies.
 - **Audit:** every catalog/announcement change (form and MCP) is in `audit_log` — the answer to
   "who changed this service and when."
 - **Data hygiene:** scheduled rollup of `click_events` → `usage_daily`; purge raw events past the
-  retention window (concept §8.9); keep aggregates. Coordinate the privacy notice with the DSB.
+  retention window; keep aggregates. The window is **35 days** (`usageRetention` in
+  `cmd/server/main.go`, concept §8.9): raw clicks are read only by "frequently used" and by
+  favourites-ordered-by-usage, both of which look back 30 days, so 35 is that window plus slack
+  for rollup timing and timezone edges. Metrics and Grafana read `usage_daily`, which is kept
+  forever — shortening raw retention costs no history. Keeping `user_id`-bearing click rows
+  three times longer than any feature reads them would be poor data minimisation; coordinate the
+  period and the privacy notice with the DSB.
 - **Backups:** regular Postgres backups + a tested restore. The catalog and favorites are the
   irreplaceable data. **Shipped:** the opt-in `backup` service in `compose.prod.yaml`
   (`--profile backup`) dumps with `pg_dump -Fc` and pushes to a restic/S3 repository with a

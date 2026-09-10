@@ -1,12 +1,20 @@
 -- name: ListFavoritesByUsage :many
 -- Favorites ordered by the user's click count (most-used first), then by the
 -- stored order as a stable tiebreaker.
+--
+-- The count is windowed by @since, which callers set from usage.FrequentWindow
+-- — the same 30 days "frequently used" ranks over, so the two usage-derived
+-- views agree by construction (issue #159). Without it the count covered every
+-- retained click, which made raw click_events retention (usageRetention in
+-- cmd/server/main.go) the de-facto definition of "most used": an unrelated
+-- operational setting quietly deciding what users see. The window belongs here,
+-- with the query, not in a purge job.
 select f.service_id
 from favorites f
 left join (
     select click_events.service_id, count(*) as c
     from click_events
-    where click_events.user_id = @user_id
+    where click_events.user_id = @user_id and click_events.clicked_at >= @since
     group by click_events.service_id
 ) cc on cc.service_id = f.service_id
 where f.user_id = @user_id
@@ -83,7 +91,7 @@ where f.user_id = @user_id and f.service_id = o.service_id;
 -- One-time initialization of the manual order: number manual_sort to the order
 -- the user currently sees in usage mode, so switching to manual starts from
 -- what they effectively have (issue #125). The ranking deliberately mirrors
--- ListFavoritesByUsage above — the two must not drift.
+-- ListFavoritesByUsage above — the two must not drift, @since included.
 update favorites f
 set manual_sort = ranked.rn
 from (
@@ -93,7 +101,7 @@ from (
     left join (
         select click_events.service_id, count(*) as c
         from click_events
-        where click_events.user_id = @user_id
+        where click_events.user_id = @user_id and click_events.clicked_at >= @since
         group by click_events.service_id
     ) cc on cc.service_id = f2.service_id
     where f2.user_id = @user_id

@@ -32,7 +32,15 @@ const catalogCacheTTL = 60 * time.Second
 const (
 	gaugeRefreshInterval = 30 * time.Second
 	usageRollupInterval  = time.Hour
-	usageRetention       = 90 * 24 * time.Hour // raw click_events retention (docs/01 §8.9)
+	// Raw click_events retention (docs/01 §8.9). 35 days = the 30-day window
+	// both readers of the raw table rank over (usage.FrequentWindow, shared by
+	// "frequently used" and usage-ordered favorites) plus five days of slack,
+	// so an hourly rollup that is late, or a click landing on the far side of a
+	// timezone or DST boundary, can never fall out of the window before the
+	// features have finished reading it. Longer buys nothing: metrics and
+	// Grafana read usage_daily, which is kept forever, and click_events carries
+	// user_id, so surplus retention is per-user behavioural data nothing reads.
+	usageRetention = 35 * 24 * time.Hour
 
 	searchPruneInterval  = 24 * time.Hour
 	searchEventRetention = 180 * 24 * time.Hour // aggregate search_events retention (docs/02 §5)

@@ -100,17 +100,30 @@ from favorites f
 left join (
     select click_events.service_id, count(*) as c
     from click_events
-    where click_events.user_id = $1
+    where click_events.user_id = $1 and click_events.clicked_at >= $2
     group by click_events.service_id
 ) cc on cc.service_id = f.service_id
 where f.user_id = $1
 order by coalesce(cc.c, 0) desc, f.sort, f.created_at
 `
 
+type ListFavoritesByUsageParams struct {
+	UserID pgtype.UUID        `json:"user_id"`
+	Since  pgtype.Timestamptz `json:"since"`
+}
+
 // Favorites ordered by the user's click count (most-used first), then by the
 // stored order as a stable tiebreaker.
-func (q *Queries) ListFavoritesByUsage(ctx context.Context, userID pgtype.UUID) ([]pgtype.UUID, error) {
-	rows, err := q.db.Query(ctx, listFavoritesByUsage, userID)
+//
+// The count is windowed by @since, which callers set from usage.FrequentWindow
+// — the same 30 days "frequently used" ranks over, so the two usage-derived
+// views agree by construction (issue #159). Without it the count covered every
+// retained click, which made raw click_events retention (usageRetention in
+// cmd/server/main.go) the de-facto definition of "most used": an unrelated
+// operational setting quietly deciding what users see. The window belongs here,
+// with the query, not in a purge job.
+func (q *Queries) ListFavoritesByUsage(ctx context.Context, arg ListFavoritesByUsageParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, listFavoritesByUsage, arg.UserID, arg.Since)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +249,7 @@ from (
     left join (
         select click_events.service_id, count(*) as c
         from click_events
-        where click_events.user_id = $1
+        where click_events.user_id = $1 and click_events.clicked_at >= $2
         group by click_events.service_id
     ) cc on cc.service_id = f2.service_id
     where f2.user_id = $1
@@ -244,12 +257,17 @@ from (
 where f.user_id = $1 and f.service_id = ranked.service_id
 `
 
+type SeedManualFavoritesOrderParams struct {
+	UserID pgtype.UUID        `json:"user_id"`
+	Since  pgtype.Timestamptz `json:"since"`
+}
+
 // One-time initialization of the manual order: number manual_sort to the order
 // the user currently sees in usage mode, so switching to manual starts from
 // what they effectively have (issue #125). The ranking deliberately mirrors
-// ListFavoritesByUsage above — the two must not drift.
-func (q *Queries) SeedManualFavoritesOrder(ctx context.Context, userID pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, seedManualFavoritesOrder, userID)
+// ListFavoritesByUsage above — the two must not drift, @since included.
+func (q *Queries) SeedManualFavoritesOrder(ctx context.Context, arg SeedManualFavoritesOrderParams) error {
+	_, err := q.db.Exec(ctx, seedManualFavoritesOrder, arg.UserID, arg.Since)
 	return err
 }
 
