@@ -418,13 +418,21 @@ wolke_active_sessions                                           # gauge
 wolke_http_request_duration_seconds{route,method,code}          # histogram
 wolke_catalog_services{state="active|inactive"}                 # gauge
 wolke_announcements_active{severity}                            # gauge
-wolke_service_favorites{service="MyShare"}                      # gauge
+wolke_service_favorites{service="MyShare", role="student"}      # gauge
 ```
 `wolke_service_clicks_total` is the usage-by-role requirement. It is fed from the same click
 ingestion that powers "frequently used", incremented in-process and reconciled against
 `usage_daily` so a restart doesn't lose history. `wolke_service_favorites` counts the users
 currently having each **active** service pinned — zeros included, refreshed from the DB by the
-same gauge ticker, and labelled by service name so it joins the click counter. Ship a Grafana
+same gauge ticker, and labelled by service name so it joins the click counter, plus the role.
+The role set is config (§6), not schema: the refresh emits a row per (active service ×
+configured role), so a service nobody pinned and a role that pinned nothing both stay in the
+dashboard as an explicit zero, and a user whose stored role is no longer configured is counted
+under the configured default — the same effective role that user is served. It is a
+**current-state** gauge keyed on each user's *present* role: a cohort changing roles (students
+becoming staff) moves their existing favourites between buckets rather than leaving them where
+they were pinned. As with clicks by role, in a deployment with very few users of a role a count
+of 1 is a weak inference. Ship a Grafana
 dashboard JSON alongside (doc 04 §maintenance). **Exported labels are aggregate only — never a user identifier.**
 
 ## 8. Admin MCP server

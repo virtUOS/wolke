@@ -33,10 +33,21 @@ type Querier interface {
 	// soft-deleted: a soft-deleted service keeps its row and keeps blocking the FK,
 	// so counting only active ones would promise a delete that then fails.
 	CountCategoryServices(ctx context.Context, categoryID pgtype.UUID) (int64, error)
-	// Favorites per active service. The left join keeps a service nobody has
-	// pinned in the result with n = 0, so its gauge series exists rather than
-	// silently dropping out of the dashboard.
-	CountFavoritesByService(ctx context.Context) ([]CountFavoritesByServiceRow, error)
+	// Favorites per active service and configured role. Two branches:
+	//
+	//  1. The cross join of active services with the configured role list emits a
+	//     zero for every (service × role) pair, so a service nobody pinned — or a
+	//     role that pinned nothing — keeps its series instead of dropping out of
+	//     the dashboard (#128's deliberate property, now in two dimensions).
+	//  2. The actual counts, grouped by the role as stored on the user. Roles the
+	//     config no longer defines come back verbatim; the caller folds them onto
+	//     the configured default (internal/metrics), which keeps the "effective
+	//     role" rule in one place — config.RoleSet.Effective — rather than
+	//     duplicating it here as a second parameter and a case expression.
+	//
+	// A (service, role) pair therefore appears more than once and the caller sums;
+	// the zero rows are the additive identity that makes that safe.
+	CountFavoritesByServiceAndRole(ctx context.Context, roles []string) ([]CountFavoritesByServiceAndRoleRow, error)
 	CountServicesByState(ctx context.Context) ([]CountServicesByStateRow, error)
 	CreateAnnouncement(ctx context.Context, arg CreateAnnouncementParams) (Announcement, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
