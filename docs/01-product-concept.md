@@ -155,6 +155,16 @@ retention window (`announcement_retention_days`, default 60 days from `starts_at
 disables purging). Only expired notices are purged, so an active banner is never removed
 regardless of age.
 
+**Links in the body.** A body is plain text, but two link forms are recognised when it is
+rendered (issue #168): a bare URL on an allowlisted scheme (`https:`, `http:`, `mailto:`,
+`tel:`) is autolinked, and `[Statusseite](https://…)` gives a link its own label — needed
+because a bare URL is often wider than a 324px phone. Nothing else is markdown, and a target
+on any other scheme (`javascript:`, `data:`, a scheme-relative `//host`) stays literal text
+rather than becoming a link. Parsing happens client-side only, so a notice written before
+this existed still renders and the server never rejects a body containing `[` or a URL. The
+notification history *row* shows the body's text projection (the label, not the URL) because
+the row is itself a button and cannot hold a link; the full notice in its dialog does.
+
 ## 5. Features resolved into behavior
 
 ### 5.1 The catalog changes over time

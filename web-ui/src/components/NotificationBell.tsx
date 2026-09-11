@@ -3,6 +3,7 @@ import { AlertTriangle, Bell, Info, OctagonAlert } from 'lucide-react'
 import type { VariantProps } from 'class-variance-authority'
 import { localized, type Announcement, type Severity } from '@/lib/api'
 import { t, type Lang } from '@/lib/i18n'
+import { LinkedText, plainText } from '@/lib/rich-text'
 import { useAnnouncements, useAnnouncementHistory } from '@/lib/admin-hooks'
 import { useDismissAnnouncement } from '@/lib/hooks'
 import { Alert, type alertVariants } from '@/components/ui/alert'
@@ -37,12 +38,25 @@ export function NotificationBell({ locale }: { locale: Lang }) {
   // The dot mirrors the active, undismissed count — no separate read-state.
   const unread = activeList.length
 
+  // role="dialog" promises focus containment: move focus in on open. Its own
+  // effect, keyed on `open` alone — re-running it when a history row is
+  // selected would pull focus out of the notice dialog just opened.
+  useEffect(() => {
+    if (open) focusFirst(panelRef.current)
+  }, [open])
+
   useEffect(() => {
     if (!open) return
-    // role="dialog" promises focus containment: move focus in on open, trap Tab,
-    // and dismiss on Escape / outside-click (same contract as the account menu).
-    focusFirst(panelRef.current)
+    // Trap Tab and dismiss on Escape / outside-click (same contract as the
+    // account menu) — but not while the notice dialog is layered over the
+    // panel. That dialog is portalled to <body>, outside rootRef, and runs its
+    // own trap, so the panel's listeners would treat every interaction inside
+    // it as "outside" and yank Tab straight back into the panel. Only the
+    // topmost overlay traps (Escape never gets here: the Dialog stops it in
+    // the capture phase).
+    const layered = () => selected !== null
     function onPointerDown(e: MouseEvent) {
+      if (layered()) return
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
     function onKeyDown(e: KeyboardEvent) {
@@ -51,6 +65,7 @@ export function NotificationBell({ locale }: { locale: Lang }) {
         triggerRef.current?.focus()
         return
       }
+      if (layered()) return
       trapTab(e, panelRef.current)
     }
     document.addEventListener('pointerdown', onPointerDown)
@@ -59,7 +74,7 @@ export function NotificationBell({ locale }: { locale: Lang }) {
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [open])
+  }, [open, selected])
 
   const fmtDate = (iso?: string) => {
     if (!iso) return ''
@@ -127,7 +142,7 @@ export function NotificationBell({ locale }: { locale: Lang }) {
                           a.dismissible && a.severity !== 'critical' ? () => dismiss.mutate(a.id) : undefined
                         }
                       >
-                        {localized(a.body, locale)}
+                        <LinkedText text={localized(a.body, locale)} />
                       </Alert>
                     </li>
                   ))}
@@ -157,8 +172,11 @@ export function NotificationBell({ locale }: { locale: Lang }) {
                             <p className="hyphenate-compound truncate text-sm font-medium text-text">
                               {localized(a.title, locale)}
                             </p>
+                            {/* Inside the row <button>: the body's text projection, never an
+                                anchor — a nested link is invalid HTML and an a11y bug (issue
+                                #168). The full notice, with its links, is in the dialog. */}
                             <p className="hyphenate-compound line-clamp-2 text-xs text-text-muted">
-                              {localized(a.body, locale)}
+                              {plainText(localized(a.body, locale))}
                             </p>
                           </div>
                           <time className="shrink-0 text-xs text-text-muted" dateTime={a.created_at}>
@@ -184,7 +202,9 @@ export function NotificationBell({ locale }: { locale: Lang }) {
         {selected && (
           <div className="space-y-3">
             <Alert variant={severityVariant(selected.severity)} icon={severityIcon(selected.severity)}>
-              <p className="hyphenate-compound whitespace-pre-wrap">{localized(selected.body, locale)}</p>
+              <p className="hyphenate-compound whitespace-pre-wrap">
+                <LinkedText text={localized(selected.body, locale)} />
+              </p>
             </Alert>
             {validity(selected) && <p className="text-xs text-text-muted">{validity(selected)}</p>}
           </div>

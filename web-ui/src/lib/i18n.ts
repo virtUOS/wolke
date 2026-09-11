@@ -273,6 +273,9 @@ const de = {
     fTitleEn: 'Titel (en)',
     fTextDe: 'Text (de)',
     fTextEn: 'Text (en)',
+    // Die beiden im Text erkannten Link-Formen (issue #168) — mehr Markdown gibt es nicht.
+    bodyLinkHint: 'Links: https://… wird automatisch erkannt, oder [Text](https://…) für einen eigenen Linktext.',
+    bodyPreview: (lang: string) => `Vorschau (${lang})`,
     fSeverity: 'Schweregrad',
     fAudience: 'Zielgruppe',
     severityLabel: (s: string): string =>
@@ -518,6 +521,8 @@ const en: Strings = {
     fTitleEn: 'Title (en)',
     fTextDe: 'Text (de)',
     fTextEn: 'Text (en)',
+    bodyLinkHint: 'Links: https://… is detected automatically, or [Text](https://…) to give the link its own label.',
+    bodyPreview: (lang: string) => `Preview (${lang})`,
     fSeverity: 'Severity',
     fAudience: 'Audience',
     severityLabel: (s: string): string =>
