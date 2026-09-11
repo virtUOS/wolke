@@ -1,6 +1,7 @@
 import { AlertTriangle, Info, OctagonAlert } from 'lucide-react'
 import { localized, type Announcement, type Severity } from '@/lib/api'
 import { t } from '@/lib/i18n'
+import { LinkedText } from '@/lib/rich-text'
 import { useDismissAnnouncement } from '@/lib/hooks'
 import { Alert } from '@/components/ui/alert'
 import type { alertVariants } from '@/components/ui/alert'
@@ -27,7 +28,7 @@ export function AnnouncementBanner({ announcements, locale }: { announcements: A
       dismissLabel={s.announce.dismiss}
       onDismiss={a.dismissible && a.severity !== 'critical' ? () => dismiss.mutate(a.id) : undefined}
     >
-      {localized(a.body, locale)}
+      <LinkedText text={localized(a.body, locale)} />
     </Alert>
   )
 

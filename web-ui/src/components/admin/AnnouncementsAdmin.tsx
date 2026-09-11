@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { localized, localizedInput, type Announcement, type AnnouncementInput, type Audience, type Role, type Severity } from '@/lib/api'
 import { t } from '@/lib/i18n'
+import { LinkedText } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
 import { useAdminActions, useAdminAnnouncements } from '@/lib/admin-hooks'
 import { useRoles } from '@/lib/hooks'
@@ -269,12 +270,14 @@ function AnnouncementForm({
       <Field label={s.admin.fTitleEn} required>
         <Input value={titleEn} onChange={(e) => setTitleEn(e.target.value)} />
       </Field>
-      <Field label={s.admin.fTextDe} required>
+      <Field label={s.admin.fTextDe} required hint={s.admin.bodyLinkHint}>
         <Textarea value={bodyDe} onChange={(e) => setBodyDe(e.target.value)} rows={2} />
       </Field>
-      <Field label={s.admin.fTextEn} required>
+      <BodyPreview text={bodyDe} label={s.admin.bodyPreview('de')} />
+      <Field label={s.admin.fTextEn} required hint={s.admin.bodyLinkHint}>
         <Textarea value={bodyEn} onChange={(e) => setBodyEn(e.target.value)} rows={2} />
       </Field>
+      <BodyPreview text={bodyEn} label={s.admin.bodyPreview('en')} />
       <div className="flex flex-wrap gap-3">
         <Field label={s.admin.fSeverity}>
           <Select value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}>
@@ -312,5 +315,29 @@ function AnnouncementForm({
         </Button>
       </div>
     </form>
+  )
+}
+
+// BodyPreview renders the body exactly as a user will see it, so the author can
+// tell whether their link took (issue #168). Same renderer as the banner and the
+// history dialog — there is only one parser — and `whitespace-pre-wrap`, since a
+// body's newlines survive to the dialog. Hidden while the field is empty: an
+// empty box is noise, and it keeps the form short on a phone.
+function BodyPreview({ text, label }: { text: string; label: string }) {
+  const labelId = useId()
+  if (text.trim() === '') return null
+  return (
+    // Named by the visible caption rather than an aria-label, so a screen
+    // reader announces it once, not twice.
+    <div role="group" aria-labelledby={labelId} className="space-y-1">
+      <p id={labelId} className="text-xs font-medium text-text-muted">
+        {label}
+      </p>
+      <div className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-text">
+        <p className="hyphenate-compound whitespace-pre-wrap">
+          <LinkedText text={text} />
+        </p>
+      </div>
+    </div>
   )
 }
