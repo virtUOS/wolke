@@ -28,8 +28,9 @@ import { CatalogView } from './CatalogView'
 import { DashboardShell } from './DashboardShell'
 import { FavoritesArrange, FavoritesSortMenu } from './FavoritesOrder'
 import { Greeting } from './Greeting'
+import { LauncherTabs } from './LauncherTabs'
 import { type TileActions } from './Tile'
-import { type Tab } from './TopBar'
+import { type Tab } from '@/lib/view-url'
 import { PillButton } from '@/components/ui/pill-button'
 import { RestrictedMarker } from '@/components/ui/restricted-marker'
 
@@ -213,12 +214,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     if (value.trim() && filter.kind !== 'all') replace({ ...view, filter: { kind: 'all' } })
   }
 
-  // Jump to the favorites tab (shortcut from the greeting's favorites count).
-  const showFavorites = () => {
-    setQuery('')
-    navigate({ tab: 'favoriten', filter: { kind: 'all' }, admin: false })
-  }
-
   // Jump to the Dienste tab showing only services currently in maintenance.
   const showMaintenance = () => {
     setQuery('')
@@ -257,7 +252,11 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   // The group restricting the section currently on screen, if any.
   const activeGroup = filter.kind === 'category' ? restrictedBy(filter.slug) : undefined
 
-  // Section heading for the current view.
+  // Section heading for the current view. Only rendered where it adds
+  // something the tab row above the list doesn't already say (issue #170): the
+  // unfiltered Favoriten / Alle Dienste views are the tabs' own labels, so the
+  // heading there was the same word twice. A facet ("In Wartung", a category —
+  // which also carries the restricted marker) and the search results are not.
   const heading = useMemo(() => {
     if (searching) return tr.dash.searchResults
     if (tab === 'favoriten') return tr.dash.favorites
@@ -289,14 +288,17 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     settleKey,
   )
 
+  const showHeading = searching || filter.kind !== 'all'
+
   const favCount = favoriteServices.length
   const arranging = arrangeRequested && me.favorites_order === 'manual' && favCount > 0
   const firstName = me.display_name.split(' ')[0]
 
-  // The sort trigger belongs to the favorites heading (issue #125): it makes
+  // The sort trigger rides on the right of the tab row (issue #170; it sat
+  // beside the "Favoriten" heading the row replaced, issue #125): it makes
   // usage/alpha discoverable and manual reachable, and it is what opens the
-  // Anordnen edit mode. Hidden while searching — a search is global, so it is
-  // not the favorites list being ordered.
+  // Anordnen edit mode. Favorites-only, and hidden while searching — a search
+  // is global, so it is not the favorites list being ordered.
   const showSortMenu = !searching && tab === 'favoriten'
   const sortMenu = showSortMenu && (
     <FavoritesSortMenu
@@ -309,23 +311,21 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     />
   )
 
+  // Switching the view always returns to the dashboard — out of the admin view
+  // and out of search mode (a switch during a search cancels the search). Also
+  // clears the filter: filter ≠ all implies the Dienste tab, which is what keeps
+  // the view's URL unambiguous.
+  const onTab = (next: Tab) => {
+    setQuery('')
+    navigate({ tab: next, filter: { kind: 'all' }, admin: false })
+  }
+
   const adminOpen = view.admin && me.is_admin
 
   const shellProps = {
     branding,
     me,
     locale,
-    // Search results are their own view (global, across all services), so no
-    // section tab is highlighted while a query is active.
-    tab: searching ? null : tab,
-    // Switching tab always returns to the dashboard — out of the admin view and
-    // out of search mode (a tab click during a search cancels the search).
-    // Also clears the filter: filter ≠ all implies the Dienste tab, which is
-    // what keeps the view's URL unambiguous.
-    onTab: (next: Tab) => {
-      setQuery('')
-      navigate({ tab: next, filter: { kind: 'all' }, admin: false })
-    },
     isDark,
     theme: me.theme,
     onSetTheme: (next: Me['theme']) => prefs.mutate({ theme: next }),
@@ -367,9 +367,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         firstName={firstName}
         locale={locale}
         isMobile={isMobile}
-        favCount={favCount}
         maintenanceCount={maintenanceCount}
-        onShowFavorites={showFavorites}
         onShowMaintenance={showMaintenance}
       />
 
@@ -383,33 +381,44 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         </div>
       )}
 
-      {/* Section head. Mobile is intentionally minimal — the search box, plus
-          (on the favorites tab) the heading row that carries the sort trigger;
-          no category chips, discovery relies on search. Desktop keeps the
-          heading + search and the category filters.
+      {/* The view switch (issue #170): an underline tab row directly above the
+          list it controls, carrying each set's count and the favorites sort
+          control. It sits where the old "Favoriten" heading row sat — and so
+          it inherits that row's behaviour in the arrange edit mode below:
+          arrange brings its own Abbrechen · Anordnen · Fertig bar and owns the
+          view, and two stacked control rows ate too much phone screen
+          (#125/#127). Counts are the full visible sets, not the filtered ones,
+          and are omitted until their query has answered. */}
+      {!arranging && (
+        <LauncherTabs
+          locale={locale}
+          // Search results are their own view (global, across all services), so
+          // neither tab is current while a query is active.
+          tab={searching ? null : tab}
+          onTab={onTab}
+          favCount={favorites.data ? favCount : undefined}
+          allCount={catalog.data ? allServices.length : undefined}
+          sort={sortMenu || undefined}
+          isMobile={isMobile}
+        />
+      )}
 
-          The arrange edit mode brings its own Abbrechen · Anordnen · Fertig
-          bar and owns the view while it is open, so the section head steps
-          aside rather than stacking a second header above it. */}
+      {/* Section head. The in-content search field stays exactly where it is —
+          #171 is what moves search into the app bar. Mobile is intentionally
+          minimal (search only; no heading, no category chips — discovery relies
+          on search); desktop adds the heading for the views the tab row doesn't
+          already name. */}
       {!arranging &&
         (isMobile ? (
           <div style={{ marginBottom: 16 }}>
-            {showSortMenu && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                <h2 className="m-0 min-w-0 truncate text-base font-medium text-text">{heading}</h2>
-                {sortMenu}
-              </div>
-            )}
-            <div style={{ marginTop: showSortMenu ? 14 : 0 }}>
-              <SearchBox
-                value={query}
-                onChange={onSearch}
-                placeholder={tr.dash.searchPlaceholder}
-                label={tr.dash.searchLabel}
-                clearLabel={tr.dash.searchClear}
-                width="100%"
-              />
-            </div>
+            <SearchBox
+              value={query}
+              onChange={onSearch}
+              placeholder={tr.dash.searchPlaceholder}
+              label={tr.dash.searchLabel}
+              clearLabel={tr.dash.searchClear}
+              width="100%"
+            />
           </div>
         ) : (
           <div
@@ -417,17 +426,14 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
               display: 'flex',
               flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'space-between',
+              justifyContent: showHeading ? 'space-between' : 'flex-end',
               gap: 20,
               marginBottom: 18,
             }}
           >
-            {/* Heading + sort trigger are one group: the trigger labels how
-                the list below it is ordered, so it belongs to the heading and
-                not to the search field on the other side of the row. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            {showHeading && (
               <h2
-                style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em', flexShrink: 0 }}
+                style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em', minWidth: 0 }}
                 className="inline-flex items-center gap-1.5"
               >
                 {heading}
@@ -437,8 +443,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
                     has no pills and resets the filter to "all". */}
                 {activeGroup && <RestrictedMarker srLabel={tr.common.restrictedTo(activeGroup)} />}
               </h2>
-              {sortMenu}
-            </div>
+            )}
             <SearchBox
               value={query}
               onChange={onSearch}

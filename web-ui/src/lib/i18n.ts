@@ -60,9 +60,6 @@ const de = {
       'Falls der Server ohne OIDC läuft, sind die angemeldeten Endpunkte nicht verfügbar. Siehe README → „Local development".',
   },
   topbar: {
-    mainNav: 'Hauptnavigation',
-    favorites: 'Favoriten',
-    services: 'Dienste',
     bot: 'Chatbot öffnen',
     help: 'Hilfe & Kontakt',
     openAccount: 'Konto-Menü öffnen',
@@ -99,6 +96,9 @@ const de = {
     maintenanceCount: (n: number) => `${n} ${n === 1 ? 'Dienst' : 'Dienste'} in Wartung`,
   },
   dash: {
+    // Die Ansichtsumschaltung sitzt seit Issue #170 als Tab-Zeile über der
+    // Liste, nicht mehr in der Kopfzeile — der Name bleibt derselbe.
+    viewNav: 'Hauptnavigation',
     favorites: 'Favoriten',
     searchPlaceholder: 'Dienste durchsuchen…',
     searchLabel: 'Dienste suchen',
@@ -325,9 +325,6 @@ const en: Strings = {
       'If the server is running without OIDC, the authenticated endpoints are unavailable. See README → “Local development”.',
   },
   topbar: {
-    mainNav: 'Main navigation',
-    favorites: 'Favorites',
-    services: 'Services',
     bot: 'Open chatbot',
     help: 'Help & contact',
     openAccount: 'Open account menu',
@@ -361,6 +358,7 @@ const en: Strings = {
     maintenanceCount: (n: number) => `${n} ${n === 1 ? 'service' : 'services'} in maintenance`,
   },
   dash: {
+    viewNav: 'Main navigation',
     favorites: 'Favorites',
     searchPlaceholder: 'Search services…',
     searchLabel: 'Search services',

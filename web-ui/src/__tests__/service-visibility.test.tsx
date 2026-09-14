@@ -98,8 +98,6 @@ describe('Account menu beta switch', () => {
           branding={branding}
           locale="de"
           currentLocalePref="auto"
-          tab="dienste"
-          onTab={() => {}}
           theme="system"
           onSetTheme={() => {}}
           onSetLocale={() => {}}

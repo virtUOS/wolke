@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { TopBar, type Tab } from '@/components/TopBar'
+import { TopBar } from '@/components/TopBar'
 import { api, type Me } from '@/lib/api'
 import type { Branding } from '@/lib/branding'
 
@@ -31,8 +31,6 @@ function withClient(ui: ReactNode) {
 }
 
 function renderTopBar(
-  tab: Tab | null,
-  onTab: (t: Tab) => void = () => {},
   opts: { isMobile?: boolean; branding?: Branding; theme?: Me['theme']; onSetTheme?: (next: Me['theme']) => void } = {},
 ) {
   return render(
@@ -41,8 +39,6 @@ function renderTopBar(
         branding={opts.branding ?? branding}
         locale="de"
         currentLocalePref="auto"
-        tab={tab}
-        onTab={onTab}
         theme={opts.theme ?? 'system'}
         onSetTheme={opts.onSetTheme ?? (() => {})}
         onSetLocale={() => {}}
@@ -57,40 +53,24 @@ function renderTopBar(
   )
 }
 
-describe('TopBar section tabs', () => {
+// The Favoriten/Dienste switch left the bar in issue #170 — it is an underline
+// tab row above the list now. Its behaviour (aria-current, click reporting, the
+// phone layout) is covered where it lives: launcher-tabs.test.tsx.
+describe('TopBar after the view switch moved out (issue #170)', () => {
   beforeEach(() => {
     vi.spyOn(api, 'announcements').mockResolvedValue({ announcements: [] })
   })
   afterEach(() => vi.restoreAllMocks())
 
-  it('marks the active tab with aria-current', () => {
-    renderTopBar('favoriten')
-    expect(screen.getByRole('button', { name: 'Favoriten' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('button', { name: 'Dienste' })).not.toHaveAttribute('aria-current')
-  })
-
-  it('highlights no tab in search mode (tab = null)', () => {
-    renderTopBar(null)
-    expect(screen.getByRole('button', { name: 'Favoriten' })).not.toHaveAttribute('aria-current')
-    expect(screen.getByRole('button', { name: 'Dienste' })).not.toHaveAttribute('aria-current')
-  })
-
-  it('still reports tab clicks while in search mode', async () => {
-    const user = userEvent.setup()
-    const onTab = vi.fn()
-    renderTopBar(null, onTab)
-    await user.click(screen.getByRole('button', { name: 'Dienste' }))
-    expect(onTab).toHaveBeenCalledWith('dienste')
-    await user.click(screen.getByRole('button', { name: 'Favoriten' }))
-    expect(onTab).toHaveBeenCalledWith('favoriten')
-  })
-
-  it('reports tab clicks from the phone layout too', async () => {
-    const user = userEvent.setup()
-    const onTab = vi.fn()
-    renderTopBar('favoriten', onTab, { isMobile: true })
-    await user.click(screen.getByRole('button', { name: 'Dienste' }))
-    expect(onTab).toHaveBeenCalledWith('dienste')
+  it('carries no view switch, at either width', () => {
+    for (const isMobile of [false, true]) {
+      const { unmount } = renderTopBar({ isMobile })
+      const bar = screen.getByRole('banner')
+      expect(within(bar).queryByRole('button', { name: /^Favoriten/ })).toBeNull()
+      expect(within(bar).queryByRole('button', { name: /^(Alle )?Dienste/ })).toBeNull()
+      expect(within(bar).queryByRole('navigation')).toBeNull()
+      unmount()
+    }
   })
 })
 
@@ -106,14 +86,14 @@ describe('TopBar quick links', () => {
   afterEach(() => vi.restoreAllMocks())
 
   it('shows them in the bar on a desktop', () => {
-    renderTopBar('favoriten', () => {}, { branding: linked })
+    renderTopBar({ branding: linked })
     expect(screen.getByRole('banner').querySelector('a[href="https://bot.example.edu"]')).not.toBeNull()
     expect(screen.getByRole('banner').querySelector('a[href="https://help.example.edu"]')).not.toBeNull()
   })
 
   it('moves them into the account menu on a phone', async () => {
     const user = userEvent.setup()
-    renderTopBar('favoriten', () => {}, { branding: linked, isMobile: true })
+    renderTopBar({ branding: linked, isMobile: true })
 
     // Not in the bar itself…
     expect(screen.queryByRole('link', { name: 'Chatbot' })).toBeNull()
@@ -142,7 +122,7 @@ describe('TopBar theme group', () => {
   }
 
   it('renders three options and marks the active one aria-pressed', async () => {
-    renderTopBar('favoriten', () => {}, { theme: 'light' })
+    renderTopBar({ theme: 'light' })
     const { group } = await openMenu()
     const g = within(group)
     expect(g.getByRole('button', { name: 'Automatisch' })).toHaveAttribute('aria-pressed', 'false')
@@ -152,7 +132,7 @@ describe('TopBar theme group', () => {
 
   it('each option calls onSetTheme with system/light/dark', async () => {
     const onSetTheme = vi.fn()
-    renderTopBar('favoriten', () => {}, { theme: 'system', onSetTheme })
+    renderTopBar({ theme: 'system', onSetTheme })
     const { user, group } = await openMenu()
     const g = within(group)
 
