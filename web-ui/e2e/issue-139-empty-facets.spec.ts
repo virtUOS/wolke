@@ -139,6 +139,15 @@ test.describe('issue #139 — the pill strip only offers facets that select some
     await expectViewportHealthy(page, { isMobile, label: 'beta facet active' })
   })
 
+  /** The view the launcher tab row reports as current. Since issue #170 the
+   *  unfiltered "Alle Dienste" view has no section heading of its own — the
+   *  active tab is what names it. */
+  function activeTab(page: Page) {
+    return page
+      .getByRole('navigation', { name: /Hauptnavigation|Main navigation/i })
+      .locator('button[aria-current="page"]')
+  }
+
   test('a ?cat= link to a category the catalog no longer carries degrades to "Alle"', async ({ page }, testInfo) => {
     const isMobile = testInfo.project.use.isMobile === true
     // An emptied category is simply absent from /api/catalog after #139, which
@@ -149,7 +158,7 @@ test.describe('issue #139 — the pill strip only offers facets that select some
     await expect(page).not.toHaveURL(/cat=/)
     await expect(page.getByRole('link', { name: /Stud\.IP/ }).first()).toBeVisible()
     if (!isMobile) {
-      await expect(page.getByRole('heading', { level: 2, name: /Alle Dienste|All services/ })).toBeVisible()
+      await expect(activeTab(page)).toHaveText(/Alle Dienste|All services/)
       await expect(filterStrip(page).getByRole('button', { name: /^Alle$|^All$/ })).toHaveAttribute(
         'aria-pressed',
         'true',
@@ -165,7 +174,7 @@ test.describe('issue #139 — the pill strip only offers facets that select some
 
     await expect(page).not.toHaveURL(/filter=/)
     if (!isMobile) {
-      await expect(page.getByRole('heading', { level: 2, name: /Alle Dienste|All services/ })).toBeVisible()
+      await expect(activeTab(page)).toHaveText(/Alle Dienste|All services/)
       await expect(filterStrip(page).getByRole('button', { name: /In Wartung|In maintenance/ })).toHaveCount(0)
     }
     await expectViewportHealthy(page, { isMobile, label: 'stale maintenance link degraded to Alle' })

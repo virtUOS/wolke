@@ -7,14 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { iconButtonVariants } from '@/components/ui/icon-button'
 import { OptionGroup } from '@/components/ui/option-group'
-import { PillButton } from '@/components/ui/pill-button'
 import { focusFirst, trapTab } from '@/lib/focus'
 import { NotificationBell } from './NotificationBell'
-
-// Tab lives in the view-url lib (it is part of the URL-serialized view state);
-// re-exported here so the chrome's consumers keep importing it from TopBar.
-export type { Tab } from '@/lib/view-url'
-import type { Tab } from '@/lib/view-url'
 
 interface TopBarProps {
   branding: Branding
@@ -22,10 +16,6 @@ interface TopBarProps {
   locale: Lang
   /** The user's raw preference ('auto' | 'de' | 'en'), for the switcher's state. */
   currentLocalePref: Me['locale']
-  /** The active section, or null when none is (e.g. while a search is active —
-   *  search results are their own view, so neither tab is highlighted). */
-  tab: Tab | null
-  onTab: (t: Tab) => void
   theme: Me['theme']
   onSetTheme: (next: Me['theme']) => void
   onSetLocale: (locale: Me['locale']) => void
@@ -36,8 +26,9 @@ interface TopBarProps {
   onAdmin: () => void
   onLogout: () => void
   /** Phone layout (below the MOBILE_BREAKPOINT_PX breakpoint, src/lib/breakpoints.ts):
-   *  the bar is two rows and the quick links move into the account menu — see
-   *  the layout note below. */
+   *  the quick links move into the account menu — see the layout note below.
+   *  Since issue #170 the bar is a single row at every width: the view switch
+   *  lives above the list (LauncherTabs), not up here. */
   isMobile: boolean
   /** Whether the user asked to see beta services
    *  (docs/specs/service-visibility.md §2.1). */
@@ -47,14 +38,13 @@ interface TopBarProps {
   onSetShowBeta?: (next: boolean) => void
 }
 
-// Editorial sticky top bar: translucent blur, hairline bottom, logo + tabs +
-// theme toggle + avatar-triggered account menu.
+// Editorial sticky top bar: translucent blur, hairline bottom, logo +
+// theme toggle + avatar-triggered account menu. One row at every width — the
+// Favoriten/Dienste switch moved out of here and above the list in issue #170.
 export function TopBar({
   branding,
   locale,
   currentLocalePref,
-  tab,
-  onTab,
   theme,
   onSetTheme,
   onSetLocale,
@@ -72,36 +62,6 @@ export function TopBar({
   const help = contactHref(branding.help_url)
   const bot = branding.bot_url && !assistantEnabled(branding) ? branding.bot_url : ''
 
-  // View switcher. These are nav controls, not an ARIA tablist (there's no
-  // tabpanel/arrow-key model behind them), so they signal state with
-  // aria-current — consistent with the admin nav. On a phone it is a full-width
-  // segmented control on its own row (docs/03 §4): the two German labels plus
-  // the logo and the actions do not fit one 324px row, and squeezing them was
-  // what pushed the whole document into horizontal scroll (issue #23).
-  const tabs = (
-    <nav
-      aria-label={s.topbar.mainNav}
-      style={{ display: 'flex', gap: 4, alignItems: 'center', width: isMobile ? '100%' : undefined }}
-    >
-      <PillButton
-        active={tab === 'favoriten'}
-        aria-current={tab === 'favoriten' ? 'page' : undefined}
-        onClick={() => onTab('favoriten')}
-        className={isMobile ? 'min-h-11 flex-1' : undefined}
-      >
-        {s.topbar.favorites}
-      </PillButton>
-      <PillButton
-        active={tab === 'dienste'}
-        aria-current={tab === 'dienste' ? 'page' : undefined}
-        onClick={() => onTab('dienste')}
-        className={isMobile ? 'min-h-11 flex-1' : undefined}
-      >
-        {s.topbar.services}
-      </PillButton>
-    </nav>
-  )
-
   return (
     <header
       style={{
@@ -116,18 +76,23 @@ export function TopBar({
         style={{ display: 'flex', alignItems: 'center', gap: 12, maxWidth: 1180, margin: '0 auto' }}
         className="px-4 py-2.5 md:px-6 md:py-3"
       >
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginRight: 4 }}>
+        {/* Logo + wordmark. The wordmark truncates rather than pushing the row
+            wider: branding.product_name is runtime config, and a real
+            institution's name ("Serviceportal Universität") put a 324px phone
+            into horizontal document scroll — the mark and the actions are what
+            must survive, the name can ellipsize (issue #170). */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, marginRight: 4 }}>
           <picture className="shrink-0">
             <source srcSet={branding.logo_dark} media="(prefers-color-scheme: dark)" />
             <img src={branding.logo_light} alt="" className="h-6" aria-hidden="true" />
           </picture>
-          <span style={{ fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', color: 'var(--text)' }}>
+          <span
+            className="truncate"
+            style={{ fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', color: 'var(--text)' }}
+          >
             {branding.product_name}
           </span>
         </div>
-
-        {!isMobile && tabs}
 
         <div style={{ flex: 1 }} />
 
@@ -180,7 +145,6 @@ export function TopBar({
           />
         </div>
       </div>
-      {isMobile && <div className="px-4 pb-2.5">{tabs}</div>}
     </header>
   )
 }

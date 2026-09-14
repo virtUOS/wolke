@@ -87,8 +87,15 @@ structural device — keep it as the page-title motif.
 
 ## 4. Layout & responsive
 
-- **Phone (default):** single-column **List** view. Top bar collapses to logo + search + a menu;
-  Services/Favorites as a segmented control; the theme/view toggles move into an overflow menu.
+- **Phone (default):** single-column **List** view. Top bar collapses to logo + a menu and is a
+  **single row** at every width; the theme/view toggles and the quick links move into the account
+  menu. The Favorites/Services switch is **not** in the bar: it is the underline **tab row**
+  directly above the list (issue #170) — the two labels with their item counts, flush with the
+  content's left edge, on a hairline the active tab's 2px brand underline sits on, with the
+  favorites sort control on the row's right (icon-only on a phone). It is *navigation*, not an
+  ARIA tablist: switching changes the URL and pushes a history entry, so the controls are buttons
+  carrying `aria-current`, never `role="tab"`. The row steps aside while the favorites arrange
+  mode is open, which brings its own bar.
   The list row is **two lines, not three columns**: the icon chip, the service name and the row's
   controls (documentation, favourite) share the top line, and the description spans the row's
   full width underneath. One line of controls beside the text left the description barely 40% of

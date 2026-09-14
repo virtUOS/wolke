@@ -172,22 +172,20 @@ export function FavoritesSortMenu({
       <>
         {/* The sheet is a modal Dialog, so the trigger owns its own state here
             rather than being cloned by Popover. */}
-        <Button
-          variant="ghost"
+        {/* Icon-only on a phone (issue #170): the trigger now shares the tab
+            row with "Favoriten n" and "Alle Dienste n", and at 324px a label
+            as long as "Eigene Reihenfolge" leaves the tabs nothing. The order
+            it carries is still in the accessible name, which is what the
+            label was there for. */}
+        <IconButton
           aria-label={tr.dash.favOrderTrigger(active)}
           aria-haspopup="dialog"
           aria-expanded={sheetOpen}
           onClick={() => setSheetOpen(true)}
-          // min-w-0 rather than shrink-0: on a 324px phone the heading and a
-          // long order label ("Eigene Reihenfolge") share one row, so the
-          // trigger has to be able to give ground and truncate instead of
-          // pushing the row past the viewport.
-          className="h-11 min-w-0 gap-1.5 rounded-md bg-surface-2 px-2.5 text-sm font-normal text-text hover:bg-surface-2/70"
+          className="h-11 w-11 shrink-0 text-text"
         >
-          <ArrowUpDown className="h-[15px] w-[15px] shrink-0" aria-hidden="true" />
-          <span className="truncate">{active}</span>
-          <ChevronDown className="h-3 w-3 shrink-0 text-text-muted" aria-hidden="true" />
-        </Button>
+          <ArrowUpDown className="h-[18px] w-[18px]" aria-hidden="true" />
+        </IconButton>
         <Dialog
           variant="sheet"
           open={sheetOpen}
