@@ -122,6 +122,10 @@ const de = {
     betaServices: 'Beta',
     allServices: 'Alle Dienste',
     searchResults: 'Suchergebnisse',
+    // Gruppenkopf in den Suchergebnissen (Issue #171): „FAVORITEN · 3".
+    // Groß geschrieben wird per CSS, nicht hier — sonst liest ein Screenreader
+    // Buchstaben einzeln vor.
+    searchGroup: (label: string, n: number) => `${label} · ${n}`,
     categoriesCount: (n: number) => `${n} Kategorien`,
     filterCategories: 'Kategorien filtern',
     favEmpty: 'Noch keine Favoriten — markiere Dienste mit dem Stern.',
@@ -388,6 +392,7 @@ const en: Strings = {
     betaServices: 'Beta',
     allServices: 'All services',
     searchResults: 'Search results',
+    searchGroup: (label: string, n: number) => `${label} · ${n}`,
     categoriesCount: (n: number) => `${n} categories`,
     filterCategories: 'Filter by category',
     favEmpty: 'No favorites yet — mark services with the star.',

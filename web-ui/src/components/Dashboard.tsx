@@ -30,6 +30,7 @@ import { DashboardShell } from './DashboardShell'
 import { FavoritesArrange, FavoritesSortMenu } from './FavoritesOrder'
 import { Greeting } from './Greeting'
 import { LauncherTabs } from './LauncherTabs'
+import { SearchResults } from './SearchResults'
 import { GlobalSearch, useSearchHotkeys } from './GlobalSearch'
 import { type TileActions } from './Tile'
 import { type Tab } from '@/lib/view-url'
@@ -532,6 +533,19 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         <p style={{ fontSize: 14, color: 'var(--text-muted)' }} role="status" aria-busy="true">{tr.dash.searching}</p>
       ) : !searching && catalog.isLoading ? (
         <p style={{ fontSize: 14, color: 'var(--text-muted)' }} role="status" aria-busy="true">{tr.common.loading}</p>
+      ) : searching ? (
+        // Grouped by set (issue #171): the hits say which side of the
+        // Favoriten / Alle Dienste line they fell on, so a global search never
+        // pretends to be local. Ranking stays the server's inside each group.
+        <SearchResults
+          services={results}
+          favoritedIDs={favoritedIDs}
+          categories={allCategories}
+          locale={locale}
+          layout={layout}
+          actions={actions}
+          emptyMessage={tr.dash.searchEmpty(query)}
+        />
       ) : (
         <CatalogView
           services={results}
@@ -539,7 +553,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           locale={locale}
           layout={layout}
           actions={actions}
-          emptyMessage={searching ? tr.dash.searchEmpty(query) : undefined}
         />
       )}
     </DashboardShell>
