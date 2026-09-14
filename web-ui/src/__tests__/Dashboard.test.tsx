@@ -57,6 +57,14 @@ function setURL(path: string) {
   window.history.replaceState(null, '', path)
 }
 
+/** The current view, as the launcher tab row names it (issue #170): the
+ *  unfiltered Favoriten / Alle Dienste views have no section heading any more —
+ *  it would only repeat the active tab's own label. */
+function activeTab() {
+  const nav = screen.getByRole('navigation', { name: /Hauptnavigation|Main navigation/i })
+  return within(nav).getByRole('button', { current: 'page' })
+}
+
 function renderDashboard(me: Me = ME) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -137,12 +145,12 @@ describe('Dashboard tab navigation resets the filter (issue #31)', () => {
     expect(screen.queryByRole('link', { name: /Stud\.IP/ })).not.toBeInTheDocument()
 
     const nav = within(screen.getByRole('navigation', { name: /Hauptnavigation|Main navigation/i }))
-    await user.click(nav.getByRole('button', { name: 'Favoriten' }))
-    await user.click(nav.getByRole('button', { name: 'Dienste' }))
+    await user.click(nav.getByRole('button', { name: /^Favoriten/ }))
+    await user.click(nav.getByRole('button', { name: /^Alle Dienste/ }))
 
     expect(window.location.search).toBe('?tab=dienste')
     await waitFor(() => expect(screen.getByRole('link', { name: /Stud\.IP/ })).toBeVisible())
-    expect(screen.getByRole('heading', { level: 2, name: 'Alle Dienste' })).toBeVisible()
+    expect(activeTab()).toHaveTextContent(/^Alle Dienste/)
   })
 
   it('re-clicking the already-active Dienste tab clears an active category filter', async () => {
@@ -153,11 +161,11 @@ describe('Dashboard tab navigation resets the filter (issue #31)', () => {
     await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
 
     const nav = within(screen.getByRole('navigation', { name: /Hauptnavigation|Main navigation/i }))
-    await user.click(nav.getByRole('button', { name: 'Dienste' }))
+    await user.click(nav.getByRole('button', { name: /^Alle Dienste/ }))
 
     expect(window.location.search).toBe('?tab=dienste')
     await waitFor(() => expect(screen.getByRole('link', { name: /Stud\.IP/ })).toBeVisible())
-    expect(screen.getByRole('heading', { level: 2, name: 'Alle Dienste' })).toBeVisible()
+    expect(activeTab()).toHaveTextContent(/^Alle Dienste/)
   })
 })
 
@@ -320,7 +328,7 @@ describe('the Beta filter (issues #34, review findings 2 and 3)', () => {
     // no longer claims a filter that cannot apply.
     await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
     expect(screen.queryByRole('button', { name: 'Beta' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'Alle Dienste' })).toBeVisible()
+    expect(activeTab()).toHaveTextContent(/^Alle Dienste/)
     expect(window.location.search).toBe('?tab=dienste')
   })
 })
@@ -497,7 +505,7 @@ describe('empty facets are not offered (issue #139)', () => {
     // "In Wartung" heading over an empty page, and the URL drops the filter.
     await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
     expect(screen.queryByRole('button', { name: /In Wartung/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'Alle Dienste' })).toBeVisible()
+    expect(activeTab()).toHaveTextContent(/^Alle Dienste/)
     expect(window.location.search).toBe('?tab=dienste')
   })
 
@@ -519,7 +527,7 @@ describe('empty facets are not offered (issue #139)', () => {
 
     await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
     expect(screen.queryByRole('button', { name: 'Beta' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'Alle Dienste' })).toBeVisible()
+    expect(activeTab()).toHaveTextContent(/^Alle Dienste/)
     expect(window.location.search).toBe('?tab=dienste')
   })
 

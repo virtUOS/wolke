@@ -77,6 +77,8 @@ test('re-clicking the active Dienste tab resets the category filter', async ({ p
 // Same regression, driven through the actual category pills and the heading
 // they filter down to — desktop only, since both are desktop-only chrome
 // (mobile has no filter controls or section heading; discovery is search-only).
+// The unfiltered view it lands back on is named by the active tab, not by a
+// heading: a section heading there would only repeat the tab (issue #170).
 test('picking a category pill then leaving Dienste resets it (desktop pills)', async ({ page }, testInfo) => {
   test.skip(testInfo.project.use.isMobile === true, 'category pills and the section heading are desktop-only')
   await page.goto('/?tab=dienste')
@@ -89,6 +91,7 @@ test('picking a category pill then leaving Dienste resets it (desktop pills)', a
   await nav.getByRole('button', { name: 'Favoriten' }).click()
   await nav.getByRole('button', { name: 'Dienste' }).click()
 
-  await expect(page.getByRole('heading', { level: 2, name: 'Alle Dienste' })).toBeVisible()
+  await expect(nav.getByRole('button', { name: /^Alle Dienste/ })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('heading', { level: 2, name: 'Netz & Daten' })).toHaveCount(0)
   await expect(page).not.toHaveURL(/cat=/)
 })
