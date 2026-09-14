@@ -106,6 +106,17 @@ const de = {
     searchPlaceholder: 'Alle Dienste durchsuchen',
     searchLabel: 'Alle Dienste durchsuchen',
     searchClear: 'Suche löschen',
+    // Der Einstiegspunkt in der Kopfzeile (Issue #171). Auf dem Telefon ist er
+    // eine Pille mit sichtbarem „Suchen"; der zugängliche Name nennt zusätzlich
+    // den Umfang und enthält den sichtbaren Text („label in name", WCAG 2.5.3).
+    searchPill: 'Suchen',
+    searchPillLabel: 'Suchen: Alle Dienste durchsuchen',
+    searchClose: 'Suche schließen',
+    // Der Tastenkürzel-Hinweis rechts im Feld. Sichtbar ist nur „⌘K"/„Strg K";
+    // vorgelesen wird dieser Satz, über aria-describedby am Feld.
+    searchShortcut: (keys: string) => `Tastenkürzel: ${keys}`,
+    searchShortcutMeta: 'Befehlstaste',
+    searchShortcutCtrl: 'Strg',
     all: 'Alle',
     inMaintenance: 'In Wartung',
     betaServices: 'Beta',
@@ -371,6 +382,12 @@ const en: Strings = {
     searchPlaceholder: 'Search all services',
     searchLabel: 'Search all services',
     searchClear: 'Clear search',
+    searchPill: 'Search',
+    searchPillLabel: 'Search: search all services',
+    searchClose: 'Close search',
+    searchShortcut: (keys: string) => `Keyboard shortcut: ${keys}`,
+    searchShortcutMeta: 'Command',
+    searchShortcutCtrl: 'Ctrl',
     all: 'All',
     inMaintenance: 'In maintenance',
     betaServices: 'Beta',

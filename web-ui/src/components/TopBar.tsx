@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { ArrowRight, Bot, Eye, Languages, MessageCircleQuestionMark, Shield, SunMoon, LogOut } from 'lucide-react'
 import { assistantEnabled, contactHref, type Branding } from '@/lib/branding'
 import { t, type Lang } from '@/lib/i18n'
@@ -30,6 +30,11 @@ interface TopBarProps {
    *  Since issue #170 the bar is a single row at every width: the view switch
    *  lives above the list (LauncherTabs), not up here. */
   isMobile: boolean
+  /** The launcher's global search entry point (issue #171): the field on a
+   *  desktop, the "Suchen" pill on a phone. A slot rather than a built-in,
+   *  because the query lives in Dashboard (it is what drives /api/search and
+   *  the results view) and the admin surface has no search at all. */
+  search?: ReactNode
   /** Whether the user asked to see beta services
    *  (docs/specs/service-visibility.md §2.1). */
   showBeta?: boolean
@@ -55,6 +60,7 @@ export function TopBar({
   onAdmin,
   onLogout,
   isMobile,
+  search,
   showBeta = false,
   onSetShowBeta = () => {},
 }: TopBarProps) {
@@ -95,6 +101,12 @@ export function TopBar({
         </div>
 
         <div style={{ flex: 1 }} />
+
+        {/* Global search (issue #171). Between the spacer and the actions, so
+            it is the first thing right of the wordmark on a desktop and the
+            first of the three touch targets on a phone. On a phone it also
+            lays its revealed field over this whole row — see GlobalSearch. */}
+        {search}
 
         {/* Actions. The chatbot + help links each appear only when configured
             (branding.bot_url / help_url); the bot link is superseded by the
