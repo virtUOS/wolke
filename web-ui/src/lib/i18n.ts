@@ -100,8 +100,11 @@ const de = {
     // Liste, nicht mehr in der Kopfzeile — der Name bleibt derselbe.
     viewNav: 'Hauptnavigation',
     favorites: 'Favoriten',
-    searchPlaceholder: 'Dienste durchsuchen…',
-    searchLabel: 'Dienste suchen',
+    // „Alle Dienste", nicht „Dienste": die Suche war immer global, das Feld
+    // hat es nur nicht gesagt — und lieferte aus der Favoriten-Ansicht heraus
+    // Treffer, die gar nicht in ihr liegen (Issue #171).
+    searchPlaceholder: 'Alle Dienste durchsuchen',
+    searchLabel: 'Alle Dienste durchsuchen',
     searchClear: 'Suche löschen',
     all: 'Alle',
     inMaintenance: 'In Wartung',
@@ -365,8 +368,8 @@ const en: Strings = {
   dash: {
     viewNav: 'Main navigation',
     favorites: 'Favorites',
-    searchPlaceholder: 'Search services…',
-    searchLabel: 'Search services',
+    searchPlaceholder: 'Search all services',
+    searchLabel: 'Search all services',
     searchClear: 'Clear search',
     all: 'All',
     inMaintenance: 'In maintenance',
