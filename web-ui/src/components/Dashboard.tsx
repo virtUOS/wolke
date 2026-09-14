@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { FlaskConical, Wrench, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
+import { FlaskConical, Wrench } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { assistantEnabled, type Branding } from '@/lib/branding'
 import { DESKTOP_MEDIA_QUERY } from '@/lib/breakpoints'
@@ -29,51 +30,11 @@ import { DashboardShell } from './DashboardShell'
 import { FavoritesArrange, FavoritesSortMenu } from './FavoritesOrder'
 import { Greeting } from './Greeting'
 import { LauncherTabs } from './LauncherTabs'
+import { GlobalSearch, useSearchHotkeys } from './GlobalSearch'
 import { type TileActions } from './Tile'
 import { type Tab } from '@/lib/view-url'
 import { PillButton } from '@/components/ui/pill-button'
 import { RestrictedMarker } from '@/components/ui/restricted-marker'
-
-// SearchBox is the service search field with a one-click clear (✕) button that
-// shows while there's a query. Shared by the mobile and desktop layouts.
-function SearchBox({
-  value,
-  onChange,
-  placeholder,
-  label,
-  clearLabel,
-  width,
-}: {
-  value: string
-  onChange: (v: string) => void
-  placeholder: string
-  label: string
-  clearLabel: string
-  width: number | string
-}) {
-  return (
-    <div style={{ position: 'relative', width }}>
-      <input
-        type="search"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        aria-label={label}
-        className="h-11 w-full rounded-md border border-border bg-surface pl-3 pr-12 text-sm text-text placeholder:text-text-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:h-9 md:pr-9 [&::-webkit-search-cancel-button]:appearance-none"
-      />
-      {value !== '' && (
-        <button
-          type="button"
-          aria-label={clearLabel}
-          onClick={() => onChange('')}
-          className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 cursor-pointer place-items-center rounded text-text-muted transition-colors hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:right-1 md:h-7 md:w-7"
-        >
-          <X className="h-4 w-4" aria-hidden="true" />
-        </button>
-      )}
-    </div>
-  )
-}
 
 function useIsMobile(): boolean {
   const [mobile, setMobile] = useState(() => !window.matchMedia(DESKTOP_MEDIA_QUERY).matches)
@@ -104,11 +65,22 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   }, [locale])
   const qc = useQueryClient()
   const [query, setQuery] = useState('')
+  // Phone only: whether the app-bar search field is revealed (issue #171).
+  // A desktop has no such state — the field is simply always in the bar.
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  // Standing down from search: drop the query AND put the phone's field away.
+  // One function, because every caller means both — a tab switch, a popstate,
+  // and the plain-click launch that leaves a stale query behind (issue #27).
+  const clearSearch = useCallback(() => {
+    setQuery('')
+    setSearchOpen(false)
+  }, [])
   // View state (tab, filter, admin) lives in the browser history so Back and
   // Forward walk through views and view URLs are deep-linkable (issue #29).
   // Search stays local and out of the URL; every navigation cancels it, and
   // popstate does the same via onPop.
-  const { view, navigate, replace } = useViewHistory({ onPop: () => setQuery('') })
+  const { view, navigate, replace } = useViewHistory({ onPop: clearSearch })
   const { tab, filter } = view
   const searching = query.trim() !== ''
   const isMobile = useIsMobile()
@@ -196,7 +168,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     onLaunch: (s, target, plainClick) => {
       api.recordClick(s.id, target)
       qc.invalidateQueries({ queryKey: ['favorites'] })
-      if (searching && target === undefined && plainClick) setQuery('')
+      if (searching && target === undefined && plainClick) clearSearch()
     },
   }
 
@@ -216,7 +188,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
 
   // Jump to the Dienste tab showing only services currently in maintenance.
   const showMaintenance = () => {
-    setQuery('')
+    clearSearch()
     navigate({ tab: 'dienste', filter: { kind: 'maintenance' }, admin: false })
   }
 
@@ -316,11 +288,39 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   // clears the filter: filter ≠ all implies the Dienste tab, which is what keeps
   // the view's URL unambiguous.
   const onTab = (next: Tab) => {
-    setQuery('')
+    clearSearch()
     navigate({ tab: next, filter: { kind: 'all' }, admin: false })
   }
 
   const adminOpen = view.admin && me.is_admin
+
+  // Reaching the field. On a desktop it is already in the bar, so this is a
+  // plain focus; on a phone it has to be revealed first — and the reveal is
+  // flushed synchronously so focus() still happens inside the user gesture
+  // that asked for it. iOS only raises the keyboard for a focus it can trace
+  // back to a tap, and a focus scheduled after React's normal async render
+  // no longer counts as one.
+  const openSearch = useCallback(() => {
+    flushSync(() => setSearchOpen(true))
+    searchInputRef.current?.focus()
+    searchInputRef.current?.select()
+  }, [])
+  // ⌘K / Ctrl+K, and "/" when nothing is being typed into. Off in the admin
+  // view, which has no search field to focus (see DashboardShell's `search`).
+  useSearchHotkeys(openSearch, !adminOpen)
+
+  const globalSearch = (
+    <GlobalSearch
+      locale={locale}
+      isMobile={isMobile}
+      value={query}
+      onChange={onSearch}
+      inputRef={searchInputRef}
+      open={searchOpen}
+      onOpen={openSearch}
+      onClose={clearSearch}
+    />
+  )
 
   const shellProps = {
     branding,
@@ -362,7 +362,9 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
 
   return (
     <>
-    <DashboardShell {...shellProps}>
+    {/* `search` only here, not on the admin shell above: the app-bar field
+        searches the catalogue, and the admin surface isn't it. */}
+    <DashboardShell {...shellProps} search={globalSearch}>
       <Greeting
         firstName={firstName}
         locale={locale}
@@ -403,57 +405,32 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         />
       )}
 
-      {/* Section head. The in-content search field stays exactly where it is —
-          #171 is what moves search into the app bar. Mobile is intentionally
-          minimal (search only; no heading, no category chips — discovery relies
-          on search); desktop adds the heading for the views the tab row doesn't
-          already name. */}
-      {!arranging &&
-        (isMobile ? (
-          <div style={{ marginBottom: 16 }}>
-            <SearchBox
-              value={query}
-              onChange={onSearch}
-              placeholder={tr.dash.searchPlaceholder}
-              label={tr.dash.searchLabel}
-              clearLabel={tr.dash.searchClear}
-              width="100%"
-            />
-          </div>
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: showHeading ? 'space-between' : 'flex-end',
-              gap: 20,
-              marginBottom: 18,
-            }}
-          >
-            {showHeading && (
-              <h2
-                style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em', minWidth: 0 }}
-                className="inline-flex items-center gap-1.5"
-              >
-                {heading}
-                {/* Same marker as the pill and the admin lists: this section is
-                    one only its group can see. Desktop only, because a
-                    category filter cannot be active on a phone — the layout
-                    has no pills and resets the filter to "all". */}
-                {activeGroup && <RestrictedMarker srLabel={tr.common.restrictedTo(activeGroup)} />}
-              </h2>
-            )}
-            <SearchBox
-              value={query}
-              onChange={onSearch}
-              placeholder={tr.dash.searchPlaceholder}
-              label={tr.dash.searchLabel}
-              clearLabel={tr.dash.searchClear}
-              width={260}
-            />
-          </div>
-        ))}
+      {/* Section head: the name of the view, for the views the tab row above
+          doesn't already name — a facet (which also carries the restricted
+          marker) or a search. It now renders on a phone too: the in-content
+          search field moved into the app bar (issue #171), so "Suchergebnisse"
+          is what tells a phone reader why neither tab is highlighted and why
+          these services are not the list they were just looking at. */}
+      {!arranging && showHeading && (
+        <h2
+          style={{
+            margin: '0 0 18px',
+            fontSize: 15,
+            fontWeight: 600,
+            color: 'var(--text)',
+            letterSpacing: '-0.01em',
+            minWidth: 0,
+          }}
+          className="inline-flex items-center gap-1.5"
+        >
+          {heading}
+          {/* Same marker as the pill and the admin lists: this section is one
+              only its group can see. Only ever a desktop sight in practice —
+              a category filter cannot be active on a phone, where the layout
+              has no pills and resets the filter to "all". */}
+          {activeGroup && <RestrictedMarker srLabel={tr.common.restrictedTo(activeGroup)} />}
+        </h2>
+      )}
 
       {/* Single-select filters: desktop only (mobile relies on search). Hidden
           while searching, since a search is global and deactivates filters.

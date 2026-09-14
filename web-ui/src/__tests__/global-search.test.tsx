@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { Branding } from '@/lib/branding'
 import type { Me, Service } from '@/lib/api'
@@ -64,6 +65,8 @@ const GITLAB = service('s1', 'GitLab', 'Selbst gehostetes GitLab')
 const PAGES = service('s2', 'GitLab Pages', 'Statische Webseiten aus Repositories')
 const GITKURS = service('s3', 'Digitale Lehre: Git-Kurs', 'Selbstlernkurs im Stud.IP')
 
+const VPN = service('s4', 'VPN', 'Zugang von außerhalb')
+
 const CATEGORIES = [{ slug: 'infra', label: { de: 'Infrastruktur', en: 'Infrastructure' }, sort: 10 }]
 
 function jsonResponse(body: unknown) {
@@ -91,10 +94,19 @@ interface StubOptions {
   results?: Service[]
   /** Services /api/favorites answers with. */
   favorites?: Service[]
+  /** Make /api/search fail, to reach the error state. */
+  searchFails?: boolean
+  /** Holds /api/search open, to reach and hold the pending state. */
+  searchGate?: Promise<void>
 }
+
+/** Every /api/search URL the app asked for — so "search stays server-side" is
+ *  an assertion, not an assumption. */
+let searchCalls: string[] = []
 
 function stubFetch(opts: StubOptions = {}) {
   stubMatchMedia(opts.mobile)
+  searchCalls = []
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
@@ -103,6 +115,9 @@ function stubFetch(opts: StubOptions = {}) {
         return jsonResponse({ services: [GITLAB, PAGES, GITKURS], categories: CATEGORIES })
       }
       if (url.startsWith('/api/search')) {
+        searchCalls.push(url)
+        if (opts.searchGate) await opts.searchGate
+        if (opts.searchFails) return new Response('nope', { status: 503 })
         return jsonResponse({ query: 'git', services: opts.results ?? [GITLAB, PAGES, GITKURS] })
       }
       if (url.startsWith('/api/favorites')) return jsonResponse({ services: opts.favorites ?? [] })
@@ -111,6 +126,15 @@ function stubFetch(opts: StubOptions = {}) {
       return jsonResponse({})
     }),
   )
+}
+
+/** The dashboard's polite result-count region (issue #35). Addressed by
+ *  aria-live rather than by role, because the pending state is a role="status"
+ *  paragraph too. */
+function liveRegion(): HTMLElement {
+  const el = document.querySelector('[aria-live="polite"]')
+  if (!el) throw new Error('no polite live region on the page')
+  return el as HTMLElement
 }
 
 function renderDashboard(me: Me = ME) {
@@ -142,5 +166,207 @@ describe('the search field says it searches everything (issue #171)', () => {
     const search = await screen.findByRole('searchbox')
     expect(search).toHaveAttribute('placeholder', 'Alle Dienste durchsuchen')
     expect(search).toHaveAccessibleName(/Alle Dienste durchsuchen/)
+  })
+})
+
+// ── The entry point moves; the destination does not ─────────────────────────
+
+describe('the entry point lives in the app bar (issue #171)', () => {
+  it('desktop: the field is in the banner, and nothing is left in the content', async () => {
+    stubFetch()
+    renderDashboard()
+
+    const search = await screen.findByRole('searchbox')
+    expect(within(screen.getByRole('banner')).getByRole('searchbox')).toBe(search)
+    expect(within(screen.getByRole('main')).queryByRole('searchbox')).toBeNull()
+  })
+
+  it('mobile: a "Suchen" pill in the bar reveals the field and focuses it', async () => {
+    stubFetch({ mobile: true })
+    const user = userEvent.setup()
+    renderDashboard()
+
+    const bar = within(screen.getByRole('banner'))
+    // Nothing to type into until it is asked for — the phone bar has to hold
+    // the wordmark, the bell and the avatar as well.
+    expect(screen.queryByRole('searchbox')).toBeNull()
+
+    const pill = await bar.findByRole('button', { name: /Alle Dienste durchsuchen/ })
+    expect(pill).toHaveAttribute('aria-expanded', 'false')
+    await user.click(pill)
+
+    const search = bar.getByRole('searchbox')
+    expect(search).toHaveAttribute('placeholder', 'Alle Dienste durchsuchen')
+    expect(search).toHaveFocus()
+  })
+
+  it('mobile: closing the field puts the query away with it', async () => {
+    stubFetch({ mobile: true })
+    const user = userEvent.setup()
+    renderDashboard()
+
+    await user.click(await screen.findByRole('button', { name: /Alle Dienste durchsuchen/ }))
+    await user.type(screen.getByRole('searchbox'), 'git')
+    await waitFor(() => expect(screen.getByRole('link', { name: /GitLab Pages/ })).toBeVisible())
+
+    await user.click(screen.getByRole('button', { name: 'Suche schließen' }))
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    // Back on the tab the search was opened from, not on a stale result set.
+    await waitFor(() => expect(screen.queryByRole('link', { name: /GitLab Pages/ })).toBeNull())
+  })
+
+  it('stays server-side: typing asks /api/search rather than filtering the catalogue', async () => {
+    // The hit is a service whose name and description contain nothing of the
+    // query: only the server sees the admin keywords that match it, so a
+    // browser-side filter could not possibly return this.
+    stubFetch({ results: [VPN] })
+    const user = userEvent.setup()
+    renderDashboard()
+
+    await user.type(await screen.findByRole('searchbox'), 'eduroam')
+    await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
+    expect(searchCalls.length).toBeGreaterThan(0)
+    expect(searchCalls.at(-1)).toContain('eduroam')
+    // …and only the server's answer is on screen, not a catalogue substring match.
+    expect(screen.queryByRole('link', { name: /GitLab/ })).toBeNull()
+  })
+})
+
+// ── What must survive the move ──────────────────────────────────────────────
+//
+// The issue's "do not lose these on the way" list. Search staying a *view* is
+// what makes them cheap to keep — but the entry point moving changes who owns
+// the query, so each one is pinned here rather than assumed.
+
+describe('the results view is unchanged by the move (issue #171)', () => {
+  it('a query heads the content "Suchergebnisse" and leaves both tabs unclaimed', async () => {
+    stubFetch()
+    const user = userEvent.setup()
+    renderDashboard()
+
+    await user.type(await screen.findByRole('searchbox'), 'git')
+    await waitFor(() => expect(screen.getByRole('link', { name: /GitLab Pages/ })).toBeVisible())
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Suchergebnisse' })).toBeVisible()
+    const nav = within(screen.getByRole('navigation', { name: /Hauptnavigation/ }))
+    expect(nav.queryByRole('button', { current: 'page' })).toBeNull()
+  })
+
+  it('the same, on a phone — where the heading is now the only thing naming the view', async () => {
+    stubFetch({ mobile: true })
+    const user = userEvent.setup()
+    renderDashboard()
+
+    await user.click(await screen.findByRole('button', { name: /Alle Dienste durchsuchen/ }))
+    await user.type(screen.getByRole('searchbox'), 'git')
+    await waitFor(() => expect(screen.getByRole('link', { name: /GitLab Pages/ })).toBeVisible())
+    expect(screen.getByRole('heading', { level: 2, name: 'Suchergebnisse' })).toBeVisible()
+  })
+
+  it('a failed /api/search shows an error, never a spinner that hangs', async () => {
+    stubFetch({ searchFails: true })
+    const user = userEvent.setup()
+    renderDashboard()
+
+    await user.type(await screen.findByRole('searchbox'), 'git')
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/Suche momentan nicht verfügbar/))
+    expect(screen.queryByText('Suchen…')).toBeNull()
+  })
+
+  it('shows the pending state for the first results, and announces only the settled count', async () => {
+    let release: (() => void) | undefined
+    const gate = new Promise<void>((r) => (release = r))
+    stubFetch({ searchGate: gate })
+    const user = userEvent.setup()
+    renderDashboard()
+
+    await user.type(await screen.findByRole('searchbox'), 'git')
+    await waitFor(() => expect(screen.getByText('Suchen…')).toBeVisible())
+    // Silent while in flight: an in-flight count is stale, and the live region
+    // must not chatter at every keystroke (issue #35).
+    expect(liveRegion()).toHaveTextContent('')
+
+    release?.()
+    await waitFor(() => expect(screen.getByRole('link', { name: /GitLab Pages/ })).toBeVisible())
+    await waitFor(() => expect(liveRegion()).toHaveTextContent('3 Dienste'))
+  })
+
+  it('keeps the search out of the URL', async () => {
+    stubFetch()
+    const user = userEvent.setup()
+    setURL('/?tab=dienste')
+    renderDashboard()
+
+    await user.type(await screen.findByRole('searchbox'), 'git')
+    await waitFor(() => expect(screen.getByRole('link', { name: /GitLab Pages/ })).toBeVisible())
+    expect(window.location.search).toBe('?tab=dienste')
+  })
+
+  it('a plain click on a result clears the query; a Ctrl-click does not (#26/#27)', async () => {
+    stubFetch()
+    const user = userEvent.setup()
+    renderDashboard()
+
+    const search = await screen.findByRole('searchbox')
+    await user.type(search, 'git')
+    await waitFor(() => expect(screen.getByRole('link', { name: /GitLab Pages/ })).toBeVisible())
+
+    await user.keyboard('{Control>}')
+    await user.click(screen.getByRole('link', { name: /GitLab Pages/ }))
+    await user.keyboard('{/Control}')
+    expect(search).toHaveValue('git')
+
+    await user.click(screen.getByRole('link', { name: /GitLab Pages/ }))
+    await waitFor(() => expect(search).toHaveValue(''))
+  })
+})
+
+// ── ⌘K and "/" ──────────────────────────────────────────────────────────────
+//
+// A global key handler that ignores layering is the bug PR #169 fixed. These
+// pin the two suppressions that keep it from coming back.
+
+describe('the keyboard shortcuts (issue #171)', () => {
+  it('⌘K and "/" focus the field', async () => {
+    stubFetch()
+    const user = userEvent.setup()
+    renderDashboard()
+
+    const search = await screen.findByRole('searchbox')
+    await user.click(document.body)
+    await user.keyboard('{Control>}k{/Control}')
+    expect(search).toHaveFocus()
+
+    search.blur()
+    await user.keyboard('/')
+    expect(search).toHaveFocus()
+    // "/" opened the field, it did not land in it.
+    expect(search).toHaveValue('')
+  })
+
+  it('"/" stays a slash inside a text input', async () => {
+    stubFetch()
+    const user = userEvent.setup()
+    renderDashboard()
+
+    const search = await screen.findByRole('searchbox')
+    await user.type(search, 'a/b')
+    expect(search).toHaveValue('a/b')
+  })
+
+  it('neither fires while another overlay owns the keyboard', async () => {
+    stubFetch()
+    const user = userEvent.setup()
+    renderDashboard()
+
+    const search = await screen.findByRole('searchbox')
+    // The account menu is a role="dialog" that traps Tab and owns Escape.
+    await user.click(screen.getByRole('button', { name: /Konto/ }))
+    expect(await screen.findByRole('dialog')).toBeVisible()
+
+    await user.keyboard('{Control>}k{/Control}')
+    expect(search).not.toHaveFocus()
+    await user.keyboard('/')
+    expect(search).not.toHaveFocus()
   })
 })
