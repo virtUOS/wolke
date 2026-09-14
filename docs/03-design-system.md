@@ -103,7 +103,8 @@ structural device — keep it as the page-title motif.
   field is simply there, with a `⌘K`/`Ctrl K` hint in its trailing slot that the clear ✕ takes
   over while there is a query. `⌘K`/`Ctrl+K` and `/` focus it, and both stand down inside a text
   input and under any open `role="dialog"`. **Results stay a view, not a panel** — a query
-  replaces the content area under "Suchergebnisse".
+  replaces the content area under "Suchergebnisse", grouped "FAVORITEN · n" then
+  "ALLE DIENSTE · n" with the server's rank preserved inside each group.
   The list row is **two lines, not three columns**: the icon chip, the service name and the row's
   controls (documentation, favourite) share the top line, and the description spans the row's
   full width underneath. One line of controls beside the text left the description barely 40% of
