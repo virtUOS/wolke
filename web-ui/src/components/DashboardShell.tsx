@@ -48,6 +48,10 @@ interface DashboardShellProps {
   /** Identifies the current view; when it changes, focus moves to <main> so a
    *  view switch (e.g. opening/closing Admin) isn't lost to <body>. */
   focusKey: string
+  /** The global search entry point for the app bar (issue #171). The launcher
+   *  passes it; the admin surface deliberately doesn't — it has no catalogue
+   *  search, and an app-bar field that searches nothing on screen is a lie. */
+  search?: ReactNode
   children: ReactNode
 }
 
@@ -69,6 +73,7 @@ export function DashboardShell({
   showBeta,
   onSetShowBeta,
   focusKey,
+  search,
   children,
 }: DashboardShellProps) {
   const s = t(locale)
@@ -124,6 +129,7 @@ export function DashboardShell({
         onAdmin={onAdmin}
         onLogout={logout}
         isMobile={isMobile}
+        search={search}
         showBeta={showBeta}
         onSetShowBeta={onSetShowBeta}
       />

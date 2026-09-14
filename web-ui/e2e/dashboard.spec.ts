@@ -2,6 +2,7 @@
 // resolution in the matrix. The layout assertions are not written out here — the
 // fixture in fixtures.ts runs the full viewport health check after every test.
 
+import { openSearch } from './helpers/search'
 import { expect, test } from './fixtures'
 
 test('the favorites tab renders the user’s services', async ({ page }) => {
@@ -27,8 +28,9 @@ test('the services tab renders the whole catalog', async ({ page }) => {
 
 test('search narrows the catalog', async ({ page }) => {
   await page.goto('/?tab=dienste')
-  const search = page.getByRole('searchbox')
-  await expect(search).toBeVisible()
+  // The field is in the app bar now (issue #171) — behind the "Suchen" pill on
+  // a phone; openSearch() is what knows which of the two this viewport is.
+  const search = await openSearch(page)
   await search.fill('Netzspeicher')
   const main = page.getByRole('main')
   await expect(main.getByRole('link', { name: /MyShare/ }).first()).toBeVisible()

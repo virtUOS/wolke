@@ -21,6 +21,7 @@ import { Dialog } from '@/components/ui/dialog'
 import { Popover } from '@/components/ui/popover'
 import { Greeting } from '@/components/Greeting'
 import { LauncherTabs } from '@/components/LauncherTabs'
+import { GlobalSearch } from '@/components/GlobalSearch'
 import { CatalogView } from '@/components/CatalogView'
 import { TopBar } from '@/components/TopBar'
 
@@ -201,8 +202,39 @@ describe('a11y (axe) — prop-driven views', () => {
           onAdmin={() => {}}
           onLogout={() => {}}
           isMobile={false}
+          search={
+            <GlobalSearch
+              locale="de"
+              isMobile={false}
+              value=""
+              onChange={() => {}}
+              inputRef={{ current: null }}
+              open={false}
+              onOpen={() => {}}
+              onClose={() => {}}
+            />
+          }
         />
       </QueryClientProvider>,
+    )
+    await a11y(baseElement)
+  })
+
+  // The phone entry point: the pill, and the field it reveals over the bar row.
+  // Both states, because the pill's accessible name has to contain its visible
+  // text ("label in name") and the revealed field carries its own label.
+  it.each([false, true])('GlobalSearch on a phone (open=%s)', async (open) => {
+    const { baseElement } = render(
+      <GlobalSearch
+        locale="de"
+        isMobile
+        value={open ? 'git' : ''}
+        onChange={() => {}}
+        inputRef={{ current: null }}
+        open={open}
+        onOpen={() => {}}
+        onClose={() => {}}
+      />,
     )
     await a11y(baseElement)
   })
