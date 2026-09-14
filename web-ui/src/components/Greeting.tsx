@@ -5,16 +5,17 @@ interface GreetingProps {
   firstName: string
   locale: string
   isMobile: boolean
-  favCount: number
   maintenanceCount: number
-  onShowFavorites: () => void
   onShowMaintenance: () => void
 }
 
-// Editorial greeting header: time-of-day salutation, the date, and at-a-glance
-// counts — both the favorites and "in maintenance" counts are clickable
-// shortcuts to their respective views.
-export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCount, onShowFavorites, onShowMaintenance }: GreetingProps) {
+// Editorial greeting header: time-of-day salutation, the date, and the
+// "in maintenance" count as a clickable shortcut to that view.
+//
+// The favorites count used to sit here too; the tab row above the list carries
+// it now (issue #170), so repeating it in the meta line was the same number
+// twice, 24px apart.
+export function Greeting({ firstName, locale, isMobile, maintenanceCount, onShowMaintenance }: GreetingProps) {
   const s = t(locale)
   return (
     // Plain <div>, not <header>: this sits inside <main>, and the salutation is
@@ -33,7 +34,7 @@ export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCou
       >
         {s.greeting.salutation()}, {firstName}.
       </h1>
-      {/* Meta row (date + favorites/maintenance shortcuts) is desktop-only; the
+      {/* Meta row (date + the maintenance shortcut) is desktop-only; the
           mobile layout is kept minimal — just the salutation. */}
       {!isMobile && (
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12, flexWrap: 'wrap' }}>
@@ -46,22 +47,6 @@ export function Greeting({ firstName, locale, isMobile, favCount, maintenanceCou
         >
           {s.greeting.today()}
         </span>
-        {favCount > 0 && (
-          <>
-            <Dot />
-            <button
-              type="button"
-              onClick={onShowFavorites}
-              className="rounded hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-              style={{
-                fontSize: 14, color: 'var(--text-muted)', cursor: 'pointer',
-                background: 'none', border: 'none', padding: 0,
-              }}
-            >
-              {s.greeting.favCount(favCount)}
-            </button>
-          </>
-        )}
         {maintenanceCount > 0 && (
           <>
             <Dot />

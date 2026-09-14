@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import type { Me } from '@/lib/api'
 import { feedbackHref, type Branding } from '@/lib/branding'
 import { t, type Lang } from '@/lib/i18n'
-import { TopBar, type Tab } from './TopBar'
+import { TopBar } from './TopBar'
 import { UpdateNotice } from './UpdateNotice'
 
 // The centered content column: <main> and the footer share this width, and the
@@ -32,9 +32,6 @@ interface DashboardShellProps {
   me: Me
   /** The active locale, resolved once in Dashboard and threaded down. */
   locale: Lang
-  /** The active section; null while a search is active (no tab highlighted). */
-  tab: Tab | null
-  onTab: (t: Tab) => void
   /** Derived, effective dark-mode state — still needed for the canvas
    *  background and the assistant widget even though the top bar now takes
    *  the raw `theme` pref (issue #28). */
@@ -55,14 +52,14 @@ interface DashboardShellProps {
 }
 
 // The warm-canvas + sticky TopBar + centered <main> chrome shared by every
-// dashboard view (the catalog tabs and the admin surface), so the shell — and
-// the logout handler — live in one place instead of being duplicated per branch.
+// dashboard view (the launcher and the admin surface), so the shell — and the
+// logout handler — live in one place instead of being duplicated per branch.
+// The view switch is not part of it: since issue #170 it sits above the list,
+// inside the launcher's own content (LauncherTabs).
 export function DashboardShell({
   branding,
   me,
   locale,
-  tab,
-  onTab,
   isDark,
   theme,
   onSetTheme,
@@ -117,8 +114,6 @@ export function DashboardShell({
         branding={branding}
         locale={locale}
         currentLocalePref={me.locale}
-        tab={tab}
-        onTab={onTab}
         theme={theme}
         onSetTheme={onSetTheme}
         onSetLocale={onSetLocale}

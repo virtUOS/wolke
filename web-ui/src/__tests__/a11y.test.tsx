@@ -20,6 +20,7 @@ import { PillButton } from '@/components/ui/pill-button'
 import { Dialog } from '@/components/ui/dialog'
 import { Popover } from '@/components/ui/popover'
 import { Greeting } from '@/components/Greeting'
+import { LauncherTabs } from '@/components/LauncherTabs'
 import { CatalogView } from '@/components/CatalogView'
 import { TopBar } from '@/components/TopBar'
 
@@ -136,9 +137,17 @@ describe('a11y (axe) — UI primitives', () => {
 describe('a11y (axe) — prop-driven views', () => {
   it('Greeting renders the salutation as the page h1', async () => {
     const { baseElement } = render(
-      <Greeting firstName="Tim" locale="de" isMobile={false} favCount={3} maintenanceCount={2} onShowFavorites={() => {}} onShowMaintenance={() => {}} />,
+      <Greeting firstName="Tim" locale="de" isMobile={false} maintenanceCount={2} onShowMaintenance={() => {}} />,
     )
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Tim')
+    await a11y(baseElement)
+  })
+
+  it('LauncherTabs — a labelled nav of buttons, the active one aria-current', async () => {
+    const { baseElement } = render(
+      <LauncherTabs locale="de" tab="favoriten" onTab={() => {}} favCount={4} allCount={38} isMobile={false} />,
+    )
+    expect(screen.getByRole('button', { name: /^Favoriten/ })).toHaveAttribute('aria-current', 'page')
     await a11y(baseElement)
   })
 
@@ -182,8 +191,6 @@ describe('a11y (axe) — prop-driven views', () => {
           branding={branding}
           locale="de"
           currentLocalePref="auto"
-          tab="dienste"
-          onTab={() => {}}
           theme="system"
           onSetTheme={() => {}}
           onSetLocale={() => {}}
