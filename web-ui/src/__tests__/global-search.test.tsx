@@ -370,3 +370,109 @@ describe('the keyboard shortcuts (issue #171)', () => {
     expect(search).not.toHaveFocus()
   })
 })
+
+// ── Results grouped by set (design option 4c) ───────────────────────────────
+//
+// Shipped as its own commit on top of the entry-point move, so it can be
+// reverted alone. The split is by favorite id and nothing else: each group
+// keeps the order /api/search ranked its hits in.
+
+describe('search results are grouped by Favoriten / Alle Dienste (issue #171)', () => {
+  /** The visible headings inside the results, in document order. */
+  function groupHeadings(): string[] {
+    return screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent ?? '')
+  }
+
+  /** The service links under a group heading, up to the next one. */
+  function namesUnder(heading: HTMLElement): string[] {
+    const section = heading.closest('section')!
+    return within(section)
+      .getAllByRole('link')
+      .map((a) => a.getAttribute('aria-label') ?? '')
+      .filter((n) => !/Doku/.test(n))
+  }
+
+  it('heads each group with its set and count, favorites first', async () => {
+    // Server rank: GitLab, GitLab Pages, Git-Kurs. GitLab Pages is a favorite.
+    stubFetch({ results: [GITLAB, PAGES, GITKURS], favorites: [PAGES] })
+    const user = userEvent.setup()
+    renderDashboard()
+
+    await user.type(await screen.findByRole('searchbox'), 'git')
+    await waitFor(() => expect(screen.getByRole('link', { name: /GitLab Pages/ })).toBeVisible())
+
+    expect(groupHeadings()).toEqual(['Favoriten · 1', 'Alle Dienste · 2'])
+    const [favHead, allHead] = screen.getAllByRole('heading', { level: 3 })
+    expect(namesUnder(favHead).join()).toMatch(/GitLab Pages/)
+    // The server's rank survives inside the group: GitLab before Git-Kurs.
+    const rest = namesUnder(allHead).join('|')
+    expect(rest.indexOf('GitLab')).toBeLessThan(rest.indexOf('Git-Kurs'))
+  })
+
+  it('omits a group that matched nothing rather than heading it "· 0"', async () => {
+    stubFetch({ results: [GITLAB, PAGES], favorites: [] })
+    const user = userEvent.setup()
+    renderDashboard()
+
+    await user.type(await screen.findByRole('searchbox'), 'git')
+    await waitFor(() => expect(screen.getByRole('link', { name: /GitLab Pages/ })).toBeVisible())
+    expect(groupHeadings()).toEqual(['Alle Dienste · 2'])
+  })
+
+  it('a star toggled inside the results moves the hit and updates the tab count', async () => {
+    let favorites: Service[] = []
+    stubMatchMedia(false)
+    searchCalls = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.startsWith('/api/catalog')) {
+          return jsonResponse({ services: [GITLAB, PAGES, GITKURS], categories: CATEGORIES })
+        }
+        if (url.startsWith('/api/search')) {
+          searchCalls.push(url)
+          return jsonResponse({ query: 'git', services: [GITLAB, PAGES, GITKURS] })
+        }
+        if (url.startsWith('/api/favorites/items')) {
+          const { service_id: id } = JSON.parse(String(init?.body ?? '{}')) as { service_id: string }
+          favorites =
+            init?.method === 'DELETE'
+              ? favorites.filter((s) => s.id !== id)
+              : [...favorites, [GITLAB, PAGES, GITKURS].find((s) => s.id === id)!]
+          return jsonResponse({})
+        }
+        if (url.startsWith('/api/favorites')) return jsonResponse({ services: favorites })
+        if (url.startsWith('/api/announcements')) return jsonResponse({ announcements: [] })
+        if (url.startsWith('/api/usage/frequent')) return jsonResponse({ services: [] })
+        return jsonResponse({})
+      }),
+    )
+
+    const user = userEvent.setup()
+    renderDashboard()
+
+    const nav = () => within(screen.getByRole('navigation', { name: /Hauptnavigation/ }))
+    await waitFor(() => expect(nav().getByRole('button', { name: /^Favoriten/ })).toHaveTextContent('Favoriten 0'))
+
+    await user.type(await screen.findByRole('searchbox'), 'git')
+    await waitFor(() => expect(screen.getByRole('link', { name: /GitLab Pages/ })).toBeVisible())
+    expect(groupHeadings()).toEqual(['Alle Dienste · 3'])
+
+    await user.click(screen.getByRole('button', { name: 'GitLab Pages zu Favoriten hinzufügen' }))
+
+    // Both the grouping and the tab row read from the same favorite ids.
+    await waitFor(() => expect(groupHeadings()).toEqual(['Favoriten · 1', 'Alle Dienste · 2']))
+    expect(nav().getByRole('button', { name: /^Favoriten/ })).toHaveTextContent('Favoriten 1')
+  })
+
+  it('leaves the zero-result empty state ungrouped', async () => {
+    stubFetch({ results: [] })
+    const user = userEvent.setup()
+    renderDashboard()
+
+    await user.type(await screen.findByRole('searchbox'), 'xyzzy')
+    await waitFor(() => expect(screen.getByText(/Keine Dienste für/)).toBeVisible())
+    expect(screen.queryAllByRole('heading', { level: 3 })).toEqual([])
+  })
+})

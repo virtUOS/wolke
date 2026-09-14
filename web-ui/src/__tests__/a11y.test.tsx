@@ -23,6 +23,7 @@ import { Greeting } from '@/components/Greeting'
 import { LauncherTabs } from '@/components/LauncherTabs'
 import { GlobalSearch } from '@/components/GlobalSearch'
 import { CatalogView } from '@/components/CatalogView'
+import { SearchResults } from '@/components/SearchResults'
 import { TopBar } from '@/components/TopBar'
 
 // axe runs with color-contrast disabled (jsdom can't compute layout/colors;
@@ -216,6 +217,24 @@ describe('a11y (axe) — prop-driven views', () => {
           }
         />
       </QueryClientProvider>,
+    )
+    await a11y(baseElement)
+  })
+
+  // The grouped search results (issue #171): two section headings above the
+  // same tiles the ungrouped view renders.
+  it('SearchResults grouped by set', async () => {
+    const other: Service = { ...SERVICE, id: 's2', name: 'Stud.IP', tag: undefined }
+    const { baseElement } = render(
+      <SearchResults
+        services={[SERVICE, other]}
+        favoritedIDs={new Set([SERVICE.id])}
+        categories={CATS}
+        locale="de"
+        layout="list"
+        actions={{ favoritedIDs: new Set([SERVICE.id]), onToggleFavorite: () => {}, onLaunch: () => {} }}
+        emptyMessage="Keine Dienste gefunden"
+      />,
     )
     await a11y(baseElement)
   })

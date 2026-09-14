@@ -140,6 +140,32 @@ test('a favorite can be starred from the results, and the tab count follows', as
   await expectViewportHealthy(page, { isMobile, label: 'star toggled inside the results' })
 })
 
+test('the results say which set each hit belongs to', async ({ page }, testInfo) => {
+  const isMobile = testInfo.project.use.isMobile === true
+  await stubFavorites(page)
+  await gotoApp(page, '/?tab=dienste')
+
+  const search = await openSearch(page)
+  // A query wide enough to cross the line: seeded favorites and non-favorites.
+  await search.fill('e')
+  const main = page.getByRole('main')
+  await expect(main.getByRole('link').first()).toBeVisible()
+
+  const heads = main.getByRole('heading', { level: 3 })
+  await expect(heads).toHaveText([/Favoriten · \d+/, /Alle Dienste · \d+/])
+  // Favorites first, and each heading's count is the number of hits under it.
+  for (const head of await heads.all()) {
+    const claimed = Number((await head.textContent())!.match(/(\d+)$/)![1])
+    const shown = await head
+      .locator('xpath=..')
+      .getByRole('link', { name: /öffnen|open/i })
+      .count()
+    expect(shown, `${await head.textContent()} lists what it counts`).toBe(claimed)
+  }
+
+  await expectViewportHealthy(page, { isMobile, label: 'grouped search results' })
+})
+
 test('launching a result by a plain click clears the search and stands the field down', async ({ page }, testInfo) => {
   const isMobile = testInfo.project.use.isMobile === true
   await gotoApp(page, '/?tab=dienste')
