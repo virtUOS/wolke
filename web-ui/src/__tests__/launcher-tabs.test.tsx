@@ -305,7 +305,7 @@ describe('Dashboard launcher tab row (issue #170)', () => {
   it('keeps the in-content search field', async () => {
     stubApi([CATALOG.services[0]])
     renderDashboard()
-    expect(await screen.findByRole('searchbox', { name: 'Dienste suchen' })).toBeVisible()
+    expect(await screen.findByRole('searchbox', { name: 'Alle Dienste durchsuchen' })).toBeVisible()
   })
 })
 
