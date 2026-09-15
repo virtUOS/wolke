@@ -122,7 +122,7 @@ export function DashboardShell({
       >
         {s.common.skipToContent}
       </a>
-      {watermark && <Watermark src={branding.watermark} />}
+      {watermark && <Watermark src={branding.watermark} isDark={isDark} />}
       <TopBar
         branding={branding}
         locale={locale}
