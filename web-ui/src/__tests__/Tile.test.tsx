@@ -254,3 +254,28 @@ describe('Tile', () => {
     await expectNoAxeViolations(container)
   })
 })
+
+// Issue #187: the desktop grid card is opaque, the mobile list row is not.
+//
+// Every version of the watermark design assumed the cards sit on an opaque
+// surface, so that on a desktop the mark shows only in the canvas gaps; ours
+// were a border plus content with no fill, so the mark's strokes ran straight
+// through the cards and their text (the reason #181 had to pull the dark
+// opacity down). The split is the point: the mobile reference shows the mark
+// crossing the transparent list rows, and that stays.
+describe('Tile surfaces (issue #187)', () => {
+  it('the grid card is filled with the surface token', () => {
+    const { container } = render(<Tile service={service} categories={categories} locale="de" layout="grid" />)
+    const card = container.querySelector<HTMLElement>('.tile-grid')!
+    expect(card).not.toBeNull()
+    expect(card.style.background).toBe('var(--surface)')
+  })
+
+  it('the list row stays transparent', () => {
+    const { container } = render(<Tile service={service} categories={categories} locale="de" layout="list" />)
+    const row = container.querySelector<HTMLElement>('.tile-list-item')!
+    expect(row).not.toBeNull()
+    expect(row.style.background).toBe('')
+    expect(row.style.backgroundColor).toBe('')
+  })
+})
