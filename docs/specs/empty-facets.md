@@ -79,9 +79,10 @@ not the deployment's.
 
 ### 3.1 Stale filters self-correct
 
-A filter whose control just disappeared must not leave the page headed by a
-facet with no tiles and no active pill — the correction the Beta facet already
-makes when `show_beta` goes off. The render-time guards in `Dashboard.tsx` are
+A filter whose control just disappeared must not leave the page on a facet
+with no tiles and no active pill — an unlabelled empty view, since the pill is
+what names a facet — the correction the Beta facet already makes when
+`show_beta` goes off. The render-time guards in `Dashboard.tsx` are
 therefore extended to the counts, in the same adjust-during-render style and
 with the same `replace()` (no history entry):
 

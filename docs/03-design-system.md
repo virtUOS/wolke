@@ -104,7 +104,11 @@ structural device — keep it as the page-title motif.
   over while there is a query. `⌘K`/`Ctrl+K` and `/` focus it, and both stand down inside a text
   input and under any open `role="dialog"`. **Results stay a view, not a panel** — a query
   replaces the content area under "Suchergebnisse", grouped "FAVORITEN · n" then
-  "ALLE DIENSTE · n" with the server's rank preserved inside each group.
+  "ALLE DIENSTE · n" with the server's rank preserved inside each group. That is the **only
+  section heading the launcher has**: the unfiltered views are named by the active tab, and on a
+  desktop every facet — "In Wartung", "Beta", a category — by its own highlighted pill directly
+  above the list, so selecting a category never moves the pills or the cards (issue #182). The
+  restricted-category marker lives on that pill.
   The list row is **two lines, not three columns**: the icon chip, the service name and the row's
   controls (documentation, favourite) share the top line, and the description spans the row's
   full width underneath. One line of controls beside the text left the description barely 40% of

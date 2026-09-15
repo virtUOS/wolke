@@ -212,35 +212,15 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   // marker names the group, not the category. Only ever populated for a
   // category this user holds: /api/catalog drops the ones they don't
   // (docs/specs/service-visibility.md §2.2).
-  const groupLabels = useMemo(() => {
-    const out: Record<string, string> = {}
-    for (const e of me.visibility.entries) out[e.slug] = localized(e.label, locale)
-    return out
-  }, [me.visibility.entries, locale])
+  // A handful of entries, so a plain derivation: the React Compiler memoizes
+  // it, and a manual useMemo here is what it refused to preserve once the
+  // facet heading's own memo (issue #182) no longer sat beside it.
+  const groupLabels: Record<string, string> = {}
+  for (const e of me.visibility.entries) groupLabels[e.slug] = localized(e.label, locale)
   const restrictedBy = (slug: string): string | undefined => {
     const group = allCategories.find((c) => c.slug === slug)?.visibility
     return group ? groupLabels[group] ?? group : undefined
   }
-
-  // The group restricting the section currently on screen, if any.
-  const activeGroup = filter.kind === 'category' ? restrictedBy(filter.slug) : undefined
-
-  // Section heading for the current view. Only rendered where it adds
-  // something the tab row above the list doesn't already say (issue #170): the
-  // unfiltered Favoriten / Alle Dienste views are the tabs' own labels, so the
-  // heading there was the same word twice. A facet ("In Wartung", a category —
-  // which also carries the restricted marker) and the search results are not.
-  const heading = useMemo(() => {
-    if (searching) return tr.dash.searchResults
-    if (tab === 'favoriten') return tr.dash.favorites
-    if (filter.kind === 'maintenance') return tr.dash.inMaintenance
-    if (filter.kind === 'beta') return tr.dash.betaServices
-    if (filter.kind === 'category') {
-      const c = allCategories.find((x) => x.slug === filter.slug)
-      return c ? localized(c.label, locale) : filter.slug
-    }
-    return tr.dash.allServices
-  }, [searching, tab, filter, allCategories, locale, tr])
 
   // Announce only settled numbers: see useResultAnnouncement. The key names
   // *what* produced the count (search text, or the active tab/filter) so a
@@ -261,7 +241,17 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     settleKey,
   )
 
-  const showHeading = searching || filter.kind !== 'all'
+  // Section heading for the current view — a search, and only a search. Every
+  // other view is already named on screen: the unfiltered Favoriten / Alle
+  // Dienste views by the active tab (issue #170), and every facet — "In
+  // Wartung", "Beta", a category — by its own highlighted pill directly above
+  // the list (issue #182). A heading over a facet was the same name twice, and
+  // because the unfiltered view had none, selecting a category pushed the
+  // pills and every card down by the heading's height and back again on
+  // "Alle". A search has no pill, so "Suchergebnisse" stays: it is what tells
+  // the reader why neither tab is highlighted and why these services are not
+  // the list they were just looking at.
+  const showHeading = searching
 
   const favCount = favoriteServices.length
   const arranging = arrangeRequested && me.favorites_order === 'manual' && favCount > 0
@@ -406,12 +396,10 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         />
       )}
 
-      {/* Section head: the name of the view, for the views the tab row above
-          doesn't already name — a facet (which also carries the restricted
-          marker) or a search. It now renders on a phone too: the in-content
-          search field moved into the app bar (issue #171), so "Suchergebnisse"
-          is what tells a phone reader why neither tab is highlighted and why
-          these services are not the list they were just looking at. */}
+      {/* Section head: "Suchergebnisse", for the one view nothing else names
+          (see showHeading). It renders on a phone too: the in-content search
+          field moved into the app bar (issue #171), so this is what a phone
+          reader has. */}
       {!arranging && showHeading && (
         <h2
           style={{
@@ -422,14 +410,8 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
             letterSpacing: '-0.01em',
             minWidth: 0,
           }}
-          className="inline-flex items-center gap-1.5"
         >
-          {heading}
-          {/* Same marker as the pill and the admin lists: this section is one
-              only its group can see. Only ever a desktop sight in practice —
-              a category filter cannot be active on a phone, where the layout
-              has no pills and resets the filter to "all". */}
-          {activeGroup && <RestrictedMarker srLabel={tr.common.restrictedTo(activeGroup)} />}
+          {tr.dash.searchResults}
         </h2>
       )}
 
