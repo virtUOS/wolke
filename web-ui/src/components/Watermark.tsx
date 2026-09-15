@@ -15,23 +15,48 @@ import type { CSSProperties } from 'react'
  *  texture and becomes a readable object competing with the content. */
 export const WATERMARK_MAX_OPACITY = 0.08
 
-/** What we actually ship. Tuned on the real canvas, which is itself already
- *  accent-tinted (DashboardShell: 5% light / 7% dark), not on the flat mockup. */
-export const WATERMARK_OPACITY = 0.07
+/**
+ * What we actually ship, per theme — tuned on the real canvas, which is itself
+ * already accent-tinted (DashboardShell: 5% light / 7% dark), not on the flat
+ * mockup the handoff was drawn against.
+ *
+ * The two differ because the mark is *line art*, not a solid silhouette. A
+ * filled shape at 7% averages out to a wash at either theme; 2–3px strokes at
+ * 7% stay legible as lines, and a light stroke on the dark canvas has far more
+ * contrast headroom than the same stroke has on the light one. At a single
+ * value the light theme reads as texture while the dark theme reads as a
+ * drawing competing with the content — so the value is split rather than the
+ * canvas tint or the tokens being touched.
+ *
+ * The dark value was picked off a ladder rendered on the real canvas
+ * (0.07 → 0.03) rather than derived: at 0.05 and above the mark is still a
+ * traceable arch crossing the card row at 1280×720, 0.04 is borderline, and
+ * 0.035 is where the strokes stop resolving into a drawing while the shape is
+ * still there as texture. Peak stroke contrast against the dark canvas falls
+ * from 14/255 at 0.07 to 7/255 at 0.035.
+ */
+export const WATERMARK_OPACITY = { light: 0.07, dark: 0.035 } as const
 
 interface WatermarkProps {
   /** `branding.watermark` — a mounted asset path, or '' to render nothing. */
   src: string
+  /** The effective dark-mode state, which picks the opacity (see above). */
+  isDark?: boolean
 }
 
-export function Watermark({ src }: WatermarkProps) {
+export function Watermark({ src, isDark = false }: WatermarkProps) {
   const url = src.trim()
-  // The config gate, and the only defence that actually holds: a mask-image
-  // that fails to load (a branding mount without the file, or an installed PWA
-  // offline — /branding/ is on the service worker's navigateFallbackDenylist
-  // and has no runtime cache) leaves the box *unmasked* in Chromium, which here
-  // would be a 640px accent rectangle in the corner. So the element only ever
-  // exists when a deployment has said it does.
+  // The config gate: no configured mark, no element. A deployment that mounts
+  // its own branding dir replaces the bundled set wholesale, so a watermark.svg
+  // it does not provide simply 404s — and this is what keeps that from
+  // depending on how a browser handles a mask it could not load.
+  //
+  // Measured (Chromium 151), since the reasonable worry is the opposite: a
+  // failed mask renders *nothing*. The box is not left unmasked — a mask image
+  // that fails to load is treated as fully transparent, which masks the element
+  // out entirely. Offline the question cannot arise at all: /api/branding is
+  // network-only, so the app never reaches the launcher and there is no element
+  // to mask. Hence no runtime cache entry and no <img> preflight here.
   if (!url) return null
 
   // CSS.escape-free quoting: url("…") with the quotes doubled, so a path with a
@@ -55,7 +80,7 @@ export function Watermark({ src }: WatermarkProps) {
     // the app bar, the tab row, the widget or any portalled dialog.
     zIndex: -1,
     pointerEvents: 'none',
-    opacity: WATERMARK_OPACITY,
+    opacity: isDark ? WATERMARK_OPACITY.dark : WATERMARK_OPACITY.light,
     backgroundColor: 'var(--accent)',
     WebkitMaskImage: mask,
     maskImage: mask,
