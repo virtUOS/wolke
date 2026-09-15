@@ -83,11 +83,21 @@ type AdminMapping struct {
 // The json tags below are deliberate: Branding carries no secrets, so the
 // config struct is also the exact GET /api/branding response shape (docs/02 §12).
 type Branding struct {
-	ProductName   string `yaml:"product_name" json:"product_name"`
-	OrgName       string `yaml:"org_name" json:"org_name"`
-	LogoLight     string `yaml:"logo_light" json:"logo_light"`
-	LogoDark      string `yaml:"logo_dark" json:"logo_dark"`
-	Favicon       string `yaml:"favicon" json:"favicon"`
+	ProductName string `yaml:"product_name" json:"product_name"`
+	OrgName     string `yaml:"org_name" json:"org_name"`
+	LogoLight   string `yaml:"logo_light" json:"logo_light"`
+	LogoDark    string `yaml:"logo_dark" json:"logo_dark"`
+	Favicon     string `yaml:"favicon" json:"favicon"`
+	// Decorative institution mark in the launcher background (issue #174): a
+	// mounted asset path, masked and accent-tinted by the SPA. Unlike every
+	// other asset here it defaults to EMPTY, i.e. off, and the SPA renders no
+	// element at all while it is — a CSS mask-image that fails to load does not
+	// reliably hide its own box, so a deployment that mounts its own branding
+	// dir without a watermark.svg would get a tinted rectangle in the corner
+	// rather than nothing. Opting in means dropping the file in and setting
+	// this. The mark is institution branding, never a shipped asset
+	// (CLAUDE.md golden rule 8).
+	Watermark     string `yaml:"watermark" json:"watermark"`
 	DefaultLocale string `yaml:"default_locale" json:"default_locale"`
 	// Legal footer links. Institution-specific, so they live in config (never
 	// hardcoded). An empty value hides that link.
