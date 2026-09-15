@@ -6,7 +6,7 @@
 // the row clipped its content.
 //
 // Issue #185 moved the docs control out of the footer: it is now the guide
-// (help) button in the header cluster beside the star, and the footer holds
+// (help) link in the header cluster beside the star, and the footer holds
 // only the label. The invariant that remains is the one that mattered: the
 // label wraps inside its own box instead of clipping, and the footer stays
 // label-only at every viewport that renders the grid — nothing can be pushed
@@ -43,19 +43,19 @@ async function box(locator: Locator): Promise<{ x: number; y: number; width: num
 }
 
 test.describe('issue #97 — a long category name keeps the footer intact', () => {
-  test('the footer is label-only and the guide button lives in the header cluster', async ({ page }, testInfo) => {
+  test('the footer is label-only and the guide link lives in the header cluster', async ({ page }, testInfo) => {
     test.skip(testInfo.project.use.isMobile === true, 'the footer is grid-layout only (>= 768px)')
 
     await stubLongCategoryLabels(page)
     await gotoApp(page, '/?tab=dienste')
 
     // MyShare is seeded with both a service_url and a doc_url, so its card is
-    // the one that renders the guide button beside the star.
+    // the one that renders the guide link beside the star.
     const card = page.locator('.tile-grid', { has: page.getByRole('link', { name: /MyShare/ }) }).first()
     await expect(card).toBeVisible()
 
     const label = card.getByText(LONG_CATEGORY_DE)
-    const help = card.getByRole('button', { name: /^Anleitung öffnen/ })
+    const help = card.getByRole('link', { name: /^Anleitung öffnen/ })
     const star = card.getByRole('button', { name: /Favoriten/ })
     await expect(label).toBeVisible()
     await expect(help).toBeVisible()
@@ -70,12 +70,12 @@ test.describe('issue #97 — a long category name keeps the footer intact', () =
     // The label owns the footer's width and stays inside the card.
     expect(labelBox.x + labelBox.width, 'label right edge vs. card').toBeLessThanOrEqual(cardBox.x + cardBox.width + 1)
 
-    // The guide button sits directly left of the star, on the star's row.
-    expect(helpBox.x + helpBox.width, 'guide button right edge vs. star left edge').toBeLessThanOrEqual(starBox.x + 1)
-    expect(starBox.x - (helpBox.x + helpBox.width), 'gap between guide button and star').toBeLessThanOrEqual(8)
-    expect(Math.abs(helpBox.y - starBox.y), 'guide button and star top-aligned').toBeLessThanOrEqual(1)
+    // The guide link sits directly left of the star, on the star's row.
+    expect(helpBox.x + helpBox.width, 'guide link right edge vs. star left edge').toBeLessThanOrEqual(starBox.x + 1)
+    expect(starBox.x - (helpBox.x + helpBox.width), 'gap between guide link and star').toBeLessThanOrEqual(8)
+    expect(Math.abs(helpBox.y - starBox.y), 'guide link and star top-aligned').toBeLessThanOrEqual(1)
     // …and above the label, not in its row.
-    expect(helpBox.y + helpBox.height, 'guide button sits above the footer').toBeLessThanOrEqual(labelBox.y)
+    expect(helpBox.y + helpBox.height, 'guide link sits above the footer').toBeLessThanOrEqual(labelBox.y)
   })
 
   test('the long label wraps inside the card instead of clipping', async ({ page }, testInfo) => {

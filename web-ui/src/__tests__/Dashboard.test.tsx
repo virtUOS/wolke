@@ -247,17 +247,13 @@ describe('Dashboard clears search on launch from a result (issue #27)', () => {
     expect(search).toHaveValue('MyShare')
   })
 
-  it('the guide button leaves the search alone', async () => {
-    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
-    try {
-      const { user, search } = await searchAndGetLink()
-      await user.click(screen.getByRole('button', { name: /Anleitung öffnen/ }))
-      await waitFor(() => expect(recordClickCalls.length).toBe(1))
-      expect(open).toHaveBeenCalledWith('https://docs.example.edu/myshare', '_blank', 'noopener,noreferrer')
-      expect(search).toHaveValue('MyShare')
-    } finally {
-      open.mockRestore()
-    }
+  it('the guide link leaves the search alone', async () => {
+    const { user, search } = await searchAndGetLink()
+    const guide = screen.getByRole('link', { name: /Anleitung öffnen/ })
+    expect(guide).toHaveAttribute('href', 'https://docs.example.edu/myshare')
+    await user.click(guide)
+    await waitFor(() => expect(recordClickCalls.length).toBe(1))
+    expect(search).toHaveValue('MyShare')
   })
 })
 

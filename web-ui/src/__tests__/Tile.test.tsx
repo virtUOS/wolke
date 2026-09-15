@@ -1,6 +1,5 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { MockInstance } from 'vitest'
 import { Tile } from '@/components/Tile'
 import type { Category, Service } from '@/lib/api'
 import { expectNoAxeViolations } from '@/test/axe'
@@ -126,63 +125,62 @@ describe('Tile', () => {
     expect(onLaunch).toHaveBeenCalledWith(service, undefined, false)
   })
 
-  // Issue #185: the footer "Doku" chip became an icon-only help button in the
-  // action cluster beside the star, in both layouts. It is a real <button>
-  // that opens the guide in a new tab; the tile's own link is a sibling
-  // underneath it, so activating help must never launch the service.
-  describe('the guide (help) button', () => {
+  // Issue #185: the footer "Doku" chip became an icon-only help control in the
+  // action cluster beside the star, in both layouts. It is a real link (it
+  // navigates to a URL) styled like the IconButton, opening the guide in a new
+  // tab; the tile's own link is a sibling underneath it, so activating help
+  // must never launch the service.
+  describe('the guide (help) link', () => {
     const GUIDE_NAME_DE = 'Anleitung öffnen (öffnet in neuem Tab)'
     const GUIDE_NAME_EN = 'Open guide (opens in new tab)'
-    let open: MockInstance
-
-    beforeEach(() => {
-      // jsdom has no window.open; the button must call it with the guide URL.
-      open = vi.spyOn(window, 'open').mockImplementation(() => null)
-    })
-    afterEach(() => {
-      open.mockRestore()
-    })
+    const GUIDE_URL = 'https://docs.example.edu/myshare'
 
     it.each(['grid', 'list'] as const)('renders (%s) only for a service with a guide that is not doc-only', (layout) => {
       render(<Tile service={service} categories={categories} locale="de" layout={layout} onToggleFavorite={() => {}} />)
-      const help = screen.getByRole('button', { name: GUIDE_NAME_DE })
-      expect(help.tagName).toBe('BUTTON')
+      // Exposed as a link with an href — the review's guard against this
+      // quietly regressing to a <button> that opens the URL by script.
+      const help = screen.getByRole('link', { name: GUIDE_NAME_DE })
+      expect(help.tagName).toBe('A')
+      expect(help).toHaveAttribute('href', GUIDE_URL)
+      expect(help).toHaveAttribute('target', '_blank')
+      expect(help).toHaveAttribute('rel', 'noopener noreferrer')
       expect(help).toHaveAttribute('title', 'Anleitung')
+      expect(screen.queryByRole('button', { name: GUIDE_NAME_DE })).not.toBeInTheDocument()
       // The visible copy is "Anleitung" everywhere; "Doku" is gone for good.
       expect(screen.queryByText(/Doku/)).not.toBeInTheDocument()
       expect(screen.queryByLabelText(/Doku/)).not.toBeInTheDocument()
-      // Still exactly one link — the launch overlay. The guide is no longer an <a>.
-      expect(screen.getAllByRole('link')).toHaveLength(1)
+      // Two links: the launch overlay and the guide.
+      expect(screen.getAllByRole('link')).toHaveLength(2)
 
       cleanup()
       render(<Tile service={noGuide} categories={categories} locale="de" layout={layout} onToggleFavorite={() => {}} />)
-      expect(screen.queryByRole('button', { name: GUIDE_NAME_DE })).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: GUIDE_NAME_DE })).not.toBeInTheDocument()
 
       cleanup()
       // Settled decision 1: a doc-only entry's own link already opens the
       // documentation, so no second control to the same URL.
       render(<Tile service={docOnly} categories={categories} locale="de" layout={layout} onToggleFavorite={() => {}} />)
-      expect(screen.queryByRole('button', { name: GUIDE_NAME_DE })).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: GUIDE_NAME_DE })).not.toBeInTheDocument()
+      expect(screen.getAllByRole('link')).toHaveLength(1)
     })
 
     it.each(['grid', 'list'] as const)('carries the English name and tooltip (%s)', (layout) => {
       render(<Tile service={service} categories={categories} locale="en" layout={layout} />)
-      expect(screen.getByRole('button', { name: GUIDE_NAME_EN })).toHaveAttribute('title', 'Guide')
+      expect(screen.getByRole('link', { name: GUIDE_NAME_EN })).toHaveAttribute('title', 'Guide')
     })
 
-    it.each(['grid', 'list'] as const)('opens the guide in a new tab without launching the tile (%s)', async (layout) => {
+    it.each(['grid', 'list'] as const)('records a guide click without launching the tile (%s)', async (layout) => {
       const user = userEvent.setup()
       const onLaunch = vi.fn()
       render(<Tile service={service} categories={categories} locale="de" layout={layout} onLaunch={onLaunch} />)
-      await user.click(screen.getByRole('button', { name: GUIDE_NAME_DE }))
-      expect(open).toHaveBeenCalledTimes(1)
-      expect(open).toHaveBeenCalledWith('https://docs.example.edu/myshare', '_blank', 'noopener,noreferrer')
-      // Settled decision 4: the metrics target keeps its value.
+      await user.click(screen.getByRole('link', { name: GUIDE_NAME_DE }))
+      // Settled decision 4: the metrics target keeps its value — and the
+      // tile's own launch handler (target undefined) is not reached.
       expect(onLaunch).toHaveBeenCalledTimes(1)
       expect(onLaunch).toHaveBeenCalledWith(service, 'documentation', false)
     })
 
-    it.each(['grid', 'list'] as const)('sits in the tab order after the tile link and before the star, and takes Enter and Space (%s)', async (layout) => {
+    it.each(['grid', 'list'] as const)('sits in the tab order after the tile link and before the star, and takes Enter (%s)', async (layout) => {
       const user = userEvent.setup()
       const onLaunch = vi.fn()
       const onToggle = vi.fn()
@@ -200,7 +198,7 @@ describe('Tile', () => {
       await user.tab()
       expect(screen.getByRole('link', { name: /MyShare/ })).toHaveFocus()
       await user.tab()
-      const help = screen.getByRole('button', { name: GUIDE_NAME_DE })
+      const help = screen.getByRole('link', { name: GUIDE_NAME_DE })
       expect(help).toHaveFocus()
       // The focus ring is the shared IconButton one (docs/03 §8).
       expect(help.className).toContain('focus-visible:ring-2')
@@ -209,16 +207,14 @@ describe('Tile', () => {
 
       help.focus()
       await user.keyboard('{Enter}')
-      await user.keyboard(' ')
-      expect(open).toHaveBeenCalledTimes(2)
-      expect(onLaunch).toHaveBeenCalledTimes(2)
-      expect(onLaunch).not.toHaveBeenCalledWith(service, undefined, expect.anything())
+      expect(onLaunch).toHaveBeenCalledTimes(1)
+      expect(onLaunch).toHaveBeenCalledWith(service, 'documentation', false)
       expect(onToggle).not.toHaveBeenCalled()
     })
 
     it.each(['grid', 'list'] as const)('is immediately left of the star in the DOM (%s)', (layout) => {
       render(<Tile service={service} categories={categories} locale="de" layout={layout} onToggleFavorite={() => {}} />)
-      const help = screen.getByRole('button', { name: GUIDE_NAME_DE })
+      const help = screen.getByRole('link', { name: GUIDE_NAME_DE })
       const star = screen.getByRole('button', { name: /Favoriten/ })
       expect(help.parentElement).toBe(star.parentElement)
       expect(help.nextElementSibling).toBe(star)

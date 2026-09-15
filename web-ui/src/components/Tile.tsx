@@ -5,7 +5,7 @@ import { t } from '@/lib/i18n'
 import { ServiceIcon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { IconButton } from '@/components/ui/icon-button'
+import { IconButton, iconButtonVariants } from '@/components/ui/icon-button'
 
 // TileActions bundles the favorite/launch handlers shared by every tile grid,
 // so views pass one object instead of drilling several props.
@@ -124,27 +124,30 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
   // A doc-only entry gets none: its own link already opens the documentation,
   // and a second control to the identical URL beside the first would be noise.
   //
-  // It is a <button>, not a link, per the handoff: it opens the guide in a new
-  // tab itself (noopener, like the tile's link) and must never launch the tile
-  // underneath — the click is stopped here. The metrics target stays
+  // It is a link, not a <button>: it navigates to a URL, so it keeps every
+  // link affordance (middle-click, copy link, "link" for a screen reader) and
+  // the same new-tab/noopener contract as the tile's own link. The look is the
+  // IconButton's, via iconButtonVariants() on an anchor — the pattern the top
+  // bar's bot/help links already use. The click is stopped so the tile
+  // underneath does not launch as well. The metrics target stays
   // 'documentation'; that is a label in wolke_service_clicks_total, not copy.
   const helpBtn =
     !docsOnly && service.doc_url ? (
-      <IconButton
-        variant="ghost"
-        size="sm"
-        className="h-11 w-11 md:h-7 md:w-7"
+      <a
+        href={service.doc_url}
+        target="_blank"
+        rel="noopener noreferrer"
         aria-label={s.tile.guideOpen + s.tile.newTab}
         title={s.tile.guide}
+        className={cn(iconButtonVariants({ variant: 'ghost', size: 'sm' }), 'h-11 w-11 md:h-7 md:w-7')}
         style={{ pointerEvents: 'auto', flexShrink: 0 }}
         onClick={(e) => {
           e.stopPropagation()
-          window.open(service.doc_url, '_blank', 'noopener,noreferrer')
           onLaunch?.(service, 'documentation', false)
         }}
       >
         <CircleHelp className="h-5 w-5" aria-hidden="true" />
-      </IconButton>
+      </a>
     ) : null
 
   // ── Mobile list row ────────────────────────────────────────────────────────

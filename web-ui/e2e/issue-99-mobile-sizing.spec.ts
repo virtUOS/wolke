@@ -36,7 +36,7 @@ const MIN_DESCRIPTION_SHARE = 0.85
 
 /** The row's own controls, by their real accessible names (src/lib/i18n.ts). */
 const ROW_CONTROLS = [
-  { what: 'guide button', name: 'Anleitung öffnen (öffnet in neuem Tab)' },
+  { what: 'guide link', name: 'Anleitung öffnen (öffnet in neuem Tab)' },
   { what: 'favourite star', name: /zu Favoriten hinzufügen$|aus Favoriten entfernen$/ },
 ]
 
