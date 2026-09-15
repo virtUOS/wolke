@@ -23,6 +23,10 @@ var brandingAssetAllowlist = map[string]bool{
 	"icon-512.png":          true,
 	"icon-maskable-512.png": true,
 	"apple-touch-icon.png":  true,
+	// Optional, opt-in (issue #174): served when a deployment provides it, and
+	// rendered only when branding.watermark points at it. The bundled set is
+	// still the seven above — we ship no institution mark of our own.
+	"watermark.svg": true,
 }
 
 // branding serves the active skin (product name, org, logo URLs, theme tokens,
