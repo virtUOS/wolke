@@ -80,8 +80,9 @@ branding:
   logo_light: /branding/logo-light.svg
   logo_dark: /branding/logo-dark.svg
   favicon: /branding/favicon.svg
-  # Decorative institution mark in the launcher background (issue #174): a
-  # large, faint, accent-tinted silhouette in the bottom-right corner. OFF by
+  # Decorative institution mark in the launcher background (issues #174, #187):
+  # a large, faint, accent-tinted backdrop scaled to the viewport height and
+  # cropped by the canvas edges, behind the opaque tiles. OFF by
   # default, and deliberately so — the SPA renders no element at all while this
   # is empty, which is what keeps a missing or unreachable file (a branding
   # mount without it, or an installed PWA offline) from leaving an unmasked

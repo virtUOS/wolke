@@ -1,12 +1,13 @@
 // Viewport + a11y spec for https://github.com/virtUOS/wolke/issues/174
-// "Launcher: configurable institution-mark watermark in the app background".
+// "Launcher: configurable institution-mark watermark in the app background",
+// with the geometry of issue #187 ("rebuild as a full-bleed backdrop").
 //
-// The mark is a fixed, aria-hidden, pointer-transparent box anchored to the
-// bottom-right of the content column (issue #181; the viewport's corner below
-// ~1180px) and hanging a third off both edges — which is to say it is
-// *deliberately* partly outside the viewport, in a suite whose whole job is
-// failing things that stick out past the viewport. Two properties of the
-// harness keep those from colliding:
+// The mark is a fixed, aria-hidden, pointer-transparent box scaled from the
+// viewport height, anchored to the right edge of the content column (issue
+// #181; the viewport's edge below ~1180px) and cropped by the canvas edges —
+// which is to say it is *deliberately* mostly outside the viewport, in a suite
+// whose whole job is failing things that stick out past the viewport. Two
+// properties of the harness keep those from colliding:
 //
 //   1. the DOM walk skips `[aria-hidden="true"]` subtrees (helpers/viewport.ts,
 //      §5.1), so the mark is never probed for overflow;
@@ -70,17 +71,29 @@ const catalogTab = (page: Page) =>
 const COLUMN_WIDTH = 1180
 
 /**
- * The geometry rule since issue #181: the mark hangs a third off the bottom
- * edge of the viewport and a third off the RIGHT EDGE OF THE CONTENT COLUMN —
- * which is the viewport's right edge only while the column fills the viewport
- * (below ~1180px), and the column's own edge, (100vw + 1180) / 2, above that.
- * So the relationship between the mark and the cards is identical at 1280,
- * 1920 and 3440, instead of the mark drifting into the empty canvas as the
- * screen widens.
+ * The geometry rule since issue #187, derived by overlaying the mark on the
+ * two design references (see Watermark.tsx for the measurements):
+ *
+ *  - Desktop: the mark is 1.63× the viewport height, its top 28vh above the
+ *    viewport, so it bleeds off the top AND the bottom; its right edge sits
+ *    34% of its own width past the RIGHT EDGE OF THE CONTENT COLUMN — which is
+ *    the viewport's right edge only while the column fills the viewport
+ *    (below ~1180px), and the column's own edge, (100vw + 1180) / 2, above
+ *    that (issue #181). So the relationship between the mark and the cards is
+ *    identical at 1280, 1920 and 3440, instead of the mark drifting into the
+ *    empty canvas as the screen widens.
+ *  - Phone: 0.86× the viewport height, anchored at the bottom, bleeding 22% of
+ *    its height off the bottom and 36% of its width off the right — and NOT
+ *    off the top: it starts under the tab row, as on the mobile reference.
  *
  * Asserted at every matrix size and returned for the ultra-wide check below.
  */
-async function expectAnchoredToColumn(page: Page): Promise<{ overlapsColumn: boolean }> {
+const GEOMETRY = {
+  desktop: { heightOverVh: 1.63, topOverVh: -0.28, overRight: 0.34 },
+  mobile: { heightOverVh: 0.86, overBottom: 0.22, overRight: 0.36 },
+} as const
+
+async function expectBackdropGeometry(page: Page, isMobile: boolean): Promise<{ overlapsColumn: boolean }> {
   const g = await watermark(page).evaluate((node, column) => {
     const r = node.getBoundingClientRect()
     const vw = document.documentElement.clientWidth
@@ -88,8 +101,11 @@ async function expectAnchoredToColumn(page: Page): Promise<{ overlapsColumn: boo
     const columnRight = Math.min(vw, (vw + column) / 2)
     const columnLeft = Math.max(0, (vw - column) / 2)
     return {
-      width: r.width,
-      height: r.height,
+      vh,
+      top: r.top,
+      bottom: r.bottom,
+      heightOverVh: r.height / vh,
+      topOverVh: r.top / vh,
       // How far the box reaches past the anchor edge, as a share of its own size.
       overRight: (r.right - columnRight) / r.width,
       overBottom: (r.bottom - vh) / r.height,
@@ -97,12 +113,21 @@ async function expectAnchoredToColumn(page: Page): Promise<{ overlapsColumn: boo
     }
   }, COLUMN_WIDTH)
 
-  // "A third off both edges" has to hold at 324px, 1920px and 3440px alike —
-  // that is the whole reason the offset is a transform on the element's own
-  // box rather than a percentage right/bottom, which would resolve against the
-  // viewport and drift with every screen size.
-  expect(g.overRight, 'a third past the column\'s right edge').toBeCloseTo(0.33, 2)
-  expect(g.overBottom, 'a third past the bottom edge').toBeCloseTo(0.33, 2)
+  // The overhangs are transforms on the element's own box rather than
+  // percentage right/bottom offsets, which would resolve against the viewport
+  // and drift with every screen size — so they hold at 324px, 1920px and
+  // 3440px alike.
+  if (isMobile) {
+    expect(g.heightOverVh, '0.86× the viewport height').toBeCloseTo(GEOMETRY.mobile.heightOverVh, 2)
+    expect(g.overBottom, '22% of its height past the bottom edge').toBeCloseTo(GEOMETRY.mobile.overBottom, 2)
+    expect(g.overRight, '36% of its width past the right edge').toBeCloseTo(GEOMETRY.mobile.overRight, 2)
+    expect(g.top, 'on a phone the mark does not bleed off the top').toBeGreaterThan(0)
+  } else {
+    expect(g.heightOverVh, '1.63× the viewport height').toBeCloseTo(GEOMETRY.desktop.heightOverVh, 2)
+    expect(g.topOverVh, '28vh above the top edge').toBeCloseTo(GEOMETRY.desktop.topOverVh, 2)
+    expect(g.bottom, 'bleeds off the bottom edge').toBeGreaterThan(g.vh)
+    expect(g.overRight, '34% of its width past the column\'s right edge').toBeCloseTo(GEOMETRY.desktop.overRight, 2)
+  }
   return { overlapsColumn: g.overlapsColumn }
 }
 
@@ -129,29 +154,14 @@ test.describe('watermark enabled', () => {
     await enableWatermark(page)
   })
 
-  test('hangs a third off the bottom-right of the content column without scrolling the document', async ({
+  test('is a backdrop scaled from the viewport height, cropped by the canvas edges, without scrolling the document', async ({
     page,
   }, testInfo) => {
     await gotoApp(page)
     await expect(watermark(page)).toHaveCount(1)
-    await expectAnchoredToColumn(page)
+    await expectBackdropGeometry(page, testInfo.project.use.isMobile === true)
 
-    // On a phone the mark is a corner accent, not a backdrop (issue #181):
-    // 60vw wide, so the two thirds of it that are on screen take roughly a
-    // quarter of the height — min(90vw, …) with the 35:47 aspect owned the
-    // whole empty lower half of a tall phone under a short favourites list.
-    if (testInfo.project.use.isMobile) {
-      const m = await watermark(page).evaluate((node) => {
-        const r = node.getBoundingClientRect()
-        const vw = document.documentElement.clientWidth
-        const vh = document.documentElement.clientHeight
-        return { widthShare: r.width / vw, visibleHeightShare: (vh - r.top) / vh }
-      })
-      expect(m.widthShare).toBeCloseTo(0.6, 2)
-      expect(m.visibleHeightShare, 'the on-screen part of the mark stays a corner accent').toBeLessThanOrEqual(0.3)
-    }
-
-    // …and hanging off the edge must not give the user anything to scroll.
+    // …and bleeding off the edges must not give the user anything to scroll.
     expect(await documentOverflow(page)).toBeLessThanOrEqual(0)
   })
 
@@ -165,7 +175,7 @@ test.describe('watermark enabled', () => {
     await page.setViewportSize({ width: 3440, height: 1440 })
     await gotoApp(page)
     await expect(watermark(page)).toHaveCount(1)
-    const { overlapsColumn } = await expectAnchoredToColumn(page)
+    const { overlapsColumn } = await expectBackdropGeometry(page, false)
     // The point of anchoring to the column: on a wide screen the mark is back
     // under the cards, not floating alone in the empty canvas beside them.
     expect(overlapsColumn, 'the mark sits behind the content column, not beside it').toBe(true)
@@ -206,29 +216,15 @@ test.describe('watermark enabled', () => {
 
   test('never paints over the app bar or the tab row', async ({ page }) => {
     await gotoApp(page)
-    const markBox = await watermark(page).boundingBox()
-    expect(markBox).not.toBeNull()
+    await expect(watermark(page)).toHaveCount(1)
 
-    // The app bar is clear at every matrix size by geometry: the mark's top
-    // edge sits below it, because two thirds of an 859px mark on the shortest
-    // desktop viewport still starts well under a 61px bar. (859px is the
-    // mark's height at its 640px cap; the anchor moved to the column in
-    // issue #181, which changes where the mark sits horizontally, not how
-    // tall it is on a desktop.)
-    const barBox = await page.getByRole('banner').boundingBox()
-    expect(markBox!.y).toBeGreaterThanOrEqual(barBox!.y + barBox!.height)
-
-    // The tab row is a different story, and the issue's "bottom-right
-    // anchoring guarantees it" does NOT hold for it: at 1280×720 — the
-    // shortest desktop in the matrix — the mark's *box* is 859px tall on a
-    // 720px viewport, so its top edge lands at y≈144, inside the tab row's
-    // band (y 183–220). At every other matrix size it is clear. Measured, not
-    // assumed; see the geometry note in the PR.
-    //
-    // What actually matters is therefore asserted directly rather than via the
-    // box: the mark is painted BEHIND the chrome (z-index -1 inside the
-    // canvas's isolated stacking context), so it can never obscure or
-    // intercept either of them, at any size.
+    // Since issue #187 the mark's *box* deliberately reaches behind the app bar
+    // and the tab row — on a desktop it bleeds off the top edge — so there is
+    // no geometric "clear of the chrome" to assert any more, and there never
+    // reliably was one (at 1280×720 the old box already reached the tab row).
+    // What actually matters is asserted directly: the mark is painted BEHIND
+    // the chrome (z-index -1 inside the canvas's isolated stacking context),
+    // so it can never obscure or intercept either of them, at any size.
     const painted = await page.evaluate(() => {
       const at = (el: Element | null | undefined) => {
         if (!el) return null
@@ -248,18 +244,189 @@ test.describe('watermark enabled', () => {
     expect(painted.overTabs).toBe(false)
   })
 
-  // The dark canvas is already 7% accent of the same token the mark is filled
-  // with, and the mark is line art, so the value that reads as texture in light
-  // reads as a drawing here. The split is asserted against the *rendered*
-  // opacity, not just the constant, so a theme wired up wrongly fails.
+  // Issue #187: with the desktop cards opaque, the mark crosses no card text on
+  // a desktop — and on a phone, where the list rows stay transparent and the
+  // mark shows through them, 7% of the accent over the canvas must leave the
+  // row text at AA.
+  test.describe('text contrast', () => {
+    test('desktop: the fill of a card the mark passes behind is pixel-identical with the mark on and off', async ({
+      page,
+    }, testInfo) => {
+      testInfo.skip(testInfo.project.use.isMobile === true, 'the grid card is the desktop layout')
+      await gotoApp(page)
+      await expect(watermark(page)).toHaveCount(1)
+
+      // A card that the mark's box actually reaches — otherwise the comparison
+      // proves nothing. On the desktop sizes that is the right-hand end of the
+      // favourites row.
+      const markBox = (await watermark(page).boundingBox())!
+      const cards = page.locator('.tile-grid')
+      const n = await cards.count()
+      let index = -1
+      for (let i = 0; i < n; i++) {
+        const b = (await cards.nth(i).boundingBox())!
+        if (b.x + b.width > markBox.x && b.x < markBox.x + markBox.width) {
+          index = i
+          break
+        }
+      }
+      expect(index, 'no grid card lies under the mark').toBeGreaterThanOrEqual(0)
+      const card = cards.nth(index)
+
+      // The card interior, inset past the rounded corners (the canvas — and
+      // the mark — show in the corner pixels outside the border radius), and
+      // the boxes of everything drawn ON the fill: glyphs and icons are
+      // re-rasterised when a composited layer toggles and can differ by a few
+      // levels for reasons that have nothing to do with the mark, so the
+      // comparison is of the bare fill between them. A stroke showing through
+      // would cross that fill.
+      const { clip, exclude } = await card.evaluate((node) => {
+        const r = node.getBoundingClientRect()
+        const flat = (b: DOMRect) => ({ left: b.left, right: b.right, top: b.top, bottom: b.bottom })
+        const boxes = Array.from(node.querySelectorAll('svg, span, p, a, button, div[aria-hidden]'))
+          .map((el) => el.getBoundingClientRect())
+          // …but not the full-coverage launch link, which is the whole card.
+          .filter((b) => b.width * b.height < 0.5 * r.width * r.height)
+          .map(flat)
+        return {
+          clip: { x: r.left + 6, y: r.top + 6, width: r.width - 12, height: r.height - 12 },
+          exclude: boxes,
+        }
+      })
+
+      // Both captures come from the same page load — the mark is switched off
+      // in place — so the only thing that can differ between them is the mark.
+      // A comparison across two loads would also pick up whatever a parallel
+      // worker's clicks did to the layout in between.
+      const withMark = await page.screenshot({ clip })
+      const wholeWithMark = await page.screenshot()
+      await watermark(page).evaluate((node) => {
+        node.style.display = 'none'
+      })
+      const withoutMark = await page.screenshot({ clip })
+      const wholeWithoutMark = await page.screenshot()
+
+      // Sanity: the mark does paint *somewhere* on this page, or the identity
+      // below would prove nothing.
+      expect(wholeWithMark.equals(wholeWithoutMark), 'the mark paints nothing at all').toBe(false)
+
+      // Decode and compare in the page (no PNG library on the Node side).
+      const result = await page.evaluate(
+        async ({ on, off, clip, exclude }) => {
+          const load = (b64: string) =>
+            new Promise<HTMLImageElement>((resolve, reject) => {
+              const img = new Image()
+              img.onload = () => resolve(img)
+              img.onerror = reject
+              img.src = `data:image/png;base64,${b64}`
+            })
+          const [a, b] = await Promise.all([load(on), load(off)])
+          const w = a.width
+          const h = a.height
+          const scale = w / clip.width
+          const pixels = (img: HTMLImageElement) => {
+            const c = document.createElement('canvas')
+            c.width = w
+            c.height = h
+            const ctx = c.getContext('2d')!
+            ctx.drawImage(img, 0, 0)
+            return ctx.getImageData(0, 0, w, h).data
+          }
+          const da = pixels(a)
+          const db = pixels(b)
+          const margin = 2
+          let compared = 0
+          let differing = 0
+          let maxDelta = 0
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const cx = clip.x + x / scale
+              const cy = clip.y + y / scale
+              if (exclude.some((r) => cx >= r.left - margin && cx <= r.right + margin && cy >= r.top - margin && cy <= r.bottom + margin)) continue
+              compared++
+              const k = (y * w + x) * 4
+              const d = Math.max(Math.abs(da[k] - db[k]), Math.abs(da[k + 1] - db[k + 1]), Math.abs(da[k + 2] - db[k + 2]))
+              if (d > 0) {
+                differing++
+                maxDelta = Math.max(maxDelta, d)
+              }
+            }
+          }
+          return { compared, differing, maxDelta }
+        },
+        { on: withMark.toString('base64'), off: withoutMark.toString('base64'), clip, exclude },
+      )
+      expect(result.compared, 'nothing left to compare').toBeGreaterThan(1000)
+      expect(
+        result.differing,
+        `the mark changed ${result.differing} fill pixels of ${result.compared} (max delta ${result.maxDelta})`,
+      ).toBe(0)
+    })
+
+    test('phone: the row text stays at AA against the canvas with the mark composited over it', async ({
+      page,
+    }, testInfo) => {
+      testInfo.skip(testInfo.project.use.isMobile !== true, 'the transparent list row is the phone layout')
+      await gotoApp(page)
+      await expect(watermark(page)).toHaveCount(1)
+      await expect(page.locator('.tile-list-item').first()).toBeVisible()
+
+      const ratios = await page.evaluate(() => {
+        // sRGB channel parsing for the two forms Chromium hands back:
+        // rgb(a)(…) and color(srgb r g b [/ a]).
+        const parse = (css: string): [number, number, number, number] => {
+          let m = /^rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)$/.exec(css)
+          if (m) return [Number(m[1]) / 255, Number(m[2]) / 255, Number(m[3]) / 255, m[4] === undefined ? 1 : Number(m[4])]
+          m = /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)$/.exec(css)
+          if (m) return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 1 : Number(m[4])]
+          throw new Error(`unparsed colour: ${css}`)
+        }
+        const lum = ([r, g, b]: number[]) => {
+          const f = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+          return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+        }
+        const contrast = (a: number[], b: number[]) => {
+          const [l1, l2] = [lum(a), lum(b)].sort((x, y) => y - x)
+          return (l1 + 0.05) / (l2 + 0.05)
+        }
+        const canvas = parse(getComputedStyle(document.querySelector('.app-canvas')!).backgroundColor)
+        const mark = document.querySelector<HTMLElement>('.app-watermark')!
+        const accent = parse(getComputedStyle(mark).backgroundColor)
+        const o = Number(getComputedStyle(mark).opacity)
+        // The worst case behind a row's text: a stroke of the mark, i.e. the
+        // accent at its opacity composited over the canvas.
+        const composited = canvas.map((c, i) => (i === 3 ? 1 : c * (1 - o) + accent[i] * o))
+        const row = document.querySelector('.tile-list-item')!
+        const rowBg = parse(getComputedStyle(row).backgroundColor)
+        const texts = [
+          row.querySelector<HTMLElement>('.hyphenate-compound')!,
+          row.querySelector<HTMLElement>('p')!,
+        ].map((el) => parse(getComputedStyle(el).color))
+        return {
+          rowAlpha: rowBg[3],
+          onCanvas: texts.map((t) => contrast(t, canvas)),
+          onMark: texts.map((t) => contrast(t, composited)),
+        }
+      })
+      // The row really is transparent — the mark does show through it.
+      expect(ratios.rowAlpha).toBe(0)
+      for (const r of ratios.onCanvas) expect(r).toBeGreaterThanOrEqual(4.5)
+      for (const r of ratios.onMark) expect(r).toBeGreaterThanOrEqual(4.5)
+    })
+  })
+
+  // The rendered opacity is asserted in a dark browser context, not just the
+  // constant, so a theme wired up wrongly fails. Issue #187 put both themes
+  // back on the references' 7%: the dark compensation of #181 existed to stop
+  // the mark competing with card text it crossed, and the opaque cards mean it
+  // crosses none.
   test.describe('in the dark theme', () => {
     test.use({ colorScheme: 'dark' })
 
-    test('goes fainter than light, and still under the ceiling', async ({ page }) => {
+    test('renders at the same 0.07 as light, under the ceiling', async ({ page }) => {
       await gotoApp(page)
       const dark = await watermark(page).evaluate((n) => Number(getComputedStyle(n).opacity))
-      expect(dark).toBeGreaterThan(0)
-      expect(dark).toBeLessThan(0.07)
+      expect(dark).toBeCloseTo(0.07, 3)
       expect(dark).toBeLessThanOrEqual(0.08)
     })
   })
