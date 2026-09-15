@@ -5,7 +5,6 @@ import { localized, type Announcement, type Severity } from '@/lib/api'
 import { t, type Lang } from '@/lib/i18n'
 import { LinkedText, plainText } from '@/lib/rich-text'
 import { useAnnouncements, useAnnouncementHistory } from '@/lib/admin-hooks'
-import { useDismissAnnouncement } from '@/lib/hooks'
 import { Alert, type alertVariants } from '@/components/ui/alert'
 import { Dialog } from '@/components/ui/dialog'
 import { IconButton } from '@/components/ui/icon-button'
@@ -13,16 +12,28 @@ import { focusFirst, trapTab } from '@/lib/focus'
 
 // NotificationBell is the top-bar notification center (docs/01 §4.7): a bell that
 // shows a dot while there are active, undismissed notices, and opens a panel
-// listing the active ones (dismissible inline) above the user's history of past
-// notices. History loads lazily — only when the panel first opens. The panel is a
-// focus-trapped dialog (Escape / outside-click dismiss), mirroring the account
-// menu so the chrome stays consistent.
+// listing the active ones above the user's history of past notices. History loads
+// lazily — only when the panel first opens. The panel is a focus-trapped dialog
+// (Escape / outside-click dismiss), mirroring the account menu so the chrome
+// stays consistent.
+//
+// Both groups render as the same compact row, opening the same notice dialog
+// (issue #179): an active notice used to be a full Alert with its whole body
+// expanded, so one long announcement filled the panel and pushed the rest out of
+// sight — while the same notice a week later was a tidy two-line row.
+//
+// The panel carries no dismiss control at all — not on a row, not in the dialog.
+// Dismissal is the banner's job (#179, settled 2026-09-15); because the history
+// query selects notices that are expired *or* dismissed, dismissing on the banner
+// moves a notice from the active group into the history group in one step, so
+// nothing becomes unreachable and no second dismiss path is needed. It also keeps
+// the rows free of nested interactive elements (the trap #168 hit with links).
 export function NotificationBell({ locale }: { locale: Lang }) {
   const s = t(locale)
   const [open, setOpen] = useState(false)
-  // The notice a history row opened, if any (issue #115) — a separate Dialog
-  // layered over the panel; the row that opened it is only the compact
-  // truncated/clamped preview, so this is where the full text lives.
+  // The notice a row opened, if any (issue #115) — a separate Dialog layered
+  // over the panel; the row itself is only the compact truncated/clamped
+  // preview, so this is where the full text lives.
   const [selected, setSelected] = useState<Announcement | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -31,7 +42,6 @@ export function NotificationBell({ locale }: { locale: Lang }) {
 
   const active = useAnnouncements()
   const history = useAnnouncementHistory(open)
-  const dismiss = useDismissAnnouncement()
 
   const activeList = active.data?.announcements ?? []
   const pastList = history.data?.announcements ?? []
@@ -39,8 +49,8 @@ export function NotificationBell({ locale }: { locale: Lang }) {
   const unread = activeList.length
 
   // role="dialog" promises focus containment: move focus in on open. Its own
-  // effect, keyed on `open` alone — re-running it when a history row is
-  // selected would pull focus out of the notice dialog just opened.
+  // effect, keyed on `open` alone — re-running it when a row is selected would
+  // pull focus out of the notice dialog just opened.
   useEffect(() => {
     if (open) focusFirst(panelRef.current)
   }, [open])
@@ -81,14 +91,47 @@ export function NotificationBell({ locale }: { locale: Lang }) {
     return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(iso))
   }
 
-  // The validity window shown in the history dialog: whichever bounds the
-  // notice actually has (a notice can be open-ended on either side).
+  // The validity window shown in the notice dialog: whichever bounds the notice
+  // actually has (a notice can be open-ended on either side).
   const validity = (a: Announcement) => {
     if (a.starts_at && a.ends_at) return s.announce.validRange(fmtDate(a.starts_at), fmtDate(a.ends_at))
     if (a.starts_at) return s.announce.validFrom(fmtDate(a.starts_at))
     if (a.ends_at) return s.announce.validUntil(fmtDate(a.ends_at))
     return null
   }
+
+  // One row shape for both groups. The whole row is the only interactive element
+  // in it; the full notice, with its links, is in the dialog it opens.
+  const noticeRow = (a: Announcement) => (
+    <li key={a.id}>
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        onClick={() => setSelected(a)}
+        // 44px touch target on a phone; the row shrinks back to its compact
+        // height from `md` up, same convention as the bell.
+        className="flex min-h-11 w-full items-start gap-2 rounded px-1 py-2 text-left hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] md:min-h-0"
+      >
+        <span className={`mt-0.5 shrink-0 ${iconColorClass(a.severity)}`} aria-hidden="true">
+          {severityIcon(a.severity, 'h-4 w-4')}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="hyphenate-compound truncate text-sm font-medium text-text">{localized(a.title, locale)}</p>
+          {/* Inside the row <button>: the body's text projection, never an
+              anchor — a nested link is invalid HTML and an a11y bug (issue
+              #168). */}
+          <p className="hyphenate-compound line-clamp-2 text-xs text-text-muted">
+            {plainText(localized(a.body, locale))}
+          </p>
+        </div>
+        {a.created_at && (
+          <time className="shrink-0 text-xs text-text-muted" dateTime={a.created_at}>
+            {fmtDate(a.created_at)}
+          </time>
+        )}
+      </button>
+    </li>
+  )
 
   return (
     // Not positioned: the panel anchors to the top bar's actions row, which is
@@ -129,24 +172,16 @@ export function NotificationBell({ locale }: { locale: Lang }) {
             <p className="px-1 py-3 text-sm text-text-muted">{s.announce.empty}</p>
           ) : (
             <div className="max-h-[min(70vh,520px)] space-y-3 overflow-y-auto">
+              {/* Both groups are labelled: with dismissal gone they are identical
+                  in appearance and in available actions, so the heading carries
+                  the only difference left — what the group means. */}
               {activeList.length > 0 && (
-                <ul className="space-y-2">
-                  {activeList.map((a) => (
-                    <li key={a.id}>
-                      <Alert
-                        variant={severityVariant(a.severity)}
-                        icon={severityIcon(a.severity)}
-                        title={localized(a.title, locale)}
-                        dismissLabel={s.announce.dismiss}
-                        onDismiss={
-                          a.dismissible && a.severity !== 'critical' ? () => dismiss.mutate(a.id) : undefined
-                        }
-                      >
-                        <LinkedText text={localized(a.body, locale)} />
-                      </Alert>
-                    </li>
-                  ))}
-                </ul>
+                <section aria-label={s.announce.current}>
+                  <h3 className="px-1 pb-1 text-xs font-medium uppercase tracking-wide text-text-muted">
+                    {s.announce.current}
+                  </h3>
+                  <ul>{activeList.map(noticeRow)}</ul>
+                </section>
               )}
 
               {pastList.length > 0 && (
@@ -154,38 +189,7 @@ export function NotificationBell({ locale }: { locale: Lang }) {
                   <h3 className="border-t border-border px-1 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-text-muted">
                     {s.announce.history}
                   </h3>
-                  <ul>
-                    {pastList.map((a) => (
-                      <li key={a.id}>
-                        <button
-                          type="button"
-                          aria-haspopup="dialog"
-                          onClick={() => setSelected(a)}
-                          // 44px touch target on a phone; the row shrinks back to its
-                          // compact height from `md` up, same convention as the bell.
-                          className="flex min-h-11 w-full items-start gap-2 rounded px-1 py-2 text-left hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] md:min-h-0"
-                        >
-                          <span className={`mt-0.5 shrink-0 ${iconColorClass(a.severity)}`} aria-hidden="true">
-                            {severityIcon(a.severity, 'h-4 w-4')}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="hyphenate-compound truncate text-sm font-medium text-text">
-                              {localized(a.title, locale)}
-                            </p>
-                            {/* Inside the row <button>: the body's text projection, never an
-                                anchor — a nested link is invalid HTML and an a11y bug (issue
-                                #168). The full notice, with its links, is in the dialog. */}
-                            <p className="hyphenate-compound line-clamp-2 text-xs text-text-muted">
-                              {plainText(localized(a.body, locale))}
-                            </p>
-                          </div>
-                          <time className="shrink-0 text-xs text-text-muted" dateTime={a.created_at}>
-                            {fmtDate(a.created_at)}
-                          </time>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                  <ul>{pastList.map(noticeRow)}</ul>
                 </section>
               )}
             </div>

@@ -28,7 +28,11 @@ export function AnnouncementBanner({ announcements, locale }: { announcements: A
       dismissLabel={s.announce.dismiss}
       onDismiss={a.dismissible && a.severity !== 'critical' ? () => dismiss.mutate(a.id) : undefined}
     >
-      <LinkedText text={localized(a.body, locale)} />
+      {/* Long German compounds must hyphenate rather than push the Alert past a
+          324px viewport (CLAUDE.md, "Responsive & viewport discipline"). */}
+      <p className="hyphenate-compound">
+        <LinkedText text={localized(a.body, locale)} />
+      </p>
     </Alert>
   )
 
