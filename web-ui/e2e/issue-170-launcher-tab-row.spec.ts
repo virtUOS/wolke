@@ -21,6 +21,7 @@
 import type { Locator, Page } from '@playwright/test'
 import { MIN_TOUCH_TARGET } from './helpers/rules'
 import { expectViewportHealthy } from './helpers/viewport'
+import { openSearch } from './helpers/search'
 import { gotoApp } from './helpers/session'
 import { expect, test } from './fixtures'
 
@@ -167,13 +168,13 @@ test('the sort control rides on the row for favorites only, without moving the t
 })
 
 // A search is a global view of its own, so neither tab is current while one is
-// active — and the in-content search field stays where it is until #171.
-test('a search leaves neither tab current and keeps the in-content field', async ({ page }, testInfo) => {
+// active. (The field itself moved into the app bar in #171; what this spec is
+// about is the row's reaction to a query, which is unchanged.)
+test('a search leaves neither tab current', async ({ page }, testInfo) => {
   const isMobile = testInfo.project.use.isMobile === true
   await gotoApp(page)
 
-  const search = page.getByRole('searchbox')
-  await expect(search).toBeVisible()
+  const search = await openSearch(page)
   await search.fill('Stud')
   await expect(page.getByRole('main').getByRole('link', { name: /Stud\.IP/ }).first()).toBeVisible()
 

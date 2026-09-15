@@ -100,14 +100,32 @@ const de = {
     // Liste, nicht mehr in der Kopfzeile — der Name bleibt derselbe.
     viewNav: 'Hauptnavigation',
     favorites: 'Favoriten',
-    searchPlaceholder: 'Dienste durchsuchen…',
-    searchLabel: 'Dienste suchen',
+    // „Alle Dienste", nicht „Dienste": die Suche war immer global, das Feld
+    // hat es nur nicht gesagt — und lieferte aus der Favoriten-Ansicht heraus
+    // Treffer, die gar nicht in ihr liegen (Issue #171).
+    searchPlaceholder: 'Alle Dienste durchsuchen',
+    searchLabel: 'Alle Dienste durchsuchen',
     searchClear: 'Suche löschen',
+    // Der Einstiegspunkt in der Kopfzeile (Issue #171). Auf dem Telefon ist er
+    // eine Pille mit sichtbarem „Suchen"; der zugängliche Name nennt zusätzlich
+    // den Umfang und enthält den sichtbaren Text („label in name", WCAG 2.5.3).
+    searchPill: 'Suchen',
+    searchPillLabel: 'Suchen: Alle Dienste durchsuchen',
+    searchClose: 'Suche schließen',
+    // Der Tastenkürzel-Hinweis rechts im Feld. Sichtbar ist nur „⌘K"/„Strg K";
+    // vorgelesen wird dieser Satz, über aria-describedby am Feld.
+    searchShortcut: (keys: string) => `Tastenkürzel: ${keys}`,
+    searchShortcutMeta: 'Befehlstaste',
+    searchShortcutCtrl: 'Strg',
     all: 'Alle',
     inMaintenance: 'In Wartung',
     betaServices: 'Beta',
     allServices: 'Alle Dienste',
     searchResults: 'Suchergebnisse',
+    // Gruppenkopf in den Suchergebnissen (Issue #171): „FAVORITEN · 3".
+    // Groß geschrieben wird per CSS, nicht hier — sonst liest ein Screenreader
+    // Buchstaben einzeln vor.
+    searchGroup: (label: string, n: number) => `${label} · ${n}`,
     categoriesCount: (n: number) => `${n} Kategorien`,
     filterCategories: 'Kategorien filtern',
     favEmpty: 'Noch keine Favoriten — markiere Dienste mit dem Stern.',
@@ -360,14 +378,21 @@ const en: Strings = {
   dash: {
     viewNav: 'Main navigation',
     favorites: 'Favorites',
-    searchPlaceholder: 'Search services…',
-    searchLabel: 'Search services',
+    searchPlaceholder: 'Search all services',
+    searchLabel: 'Search all services',
     searchClear: 'Clear search',
+    searchPill: 'Search',
+    searchPillLabel: 'Search: search all services',
+    searchClose: 'Close search',
+    searchShortcut: (keys: string) => `Keyboard shortcut: ${keys}`,
+    searchShortcutMeta: 'Command',
+    searchShortcutCtrl: 'Ctrl',
     all: 'All',
     inMaintenance: 'In maintenance',
     betaServices: 'Beta',
     allServices: 'All services',
     searchResults: 'Search results',
+    searchGroup: (label: string, n: number) => `${label} · ${n}`,
     categoriesCount: (n: number) => `${n} categories`,
     filterCategories: 'Filter by category',
     favEmpty: 'No favorites yet — mark services with the star.',

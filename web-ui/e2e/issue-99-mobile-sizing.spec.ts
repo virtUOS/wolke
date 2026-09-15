@@ -19,6 +19,7 @@
 import type { Page } from '@playwright/test'
 import { MIN_TOUCH_TARGET } from './helpers/rules'
 import { gotoApp } from './helpers/session'
+import { closeSearch, openSearch, searchPill } from './helpers/search'
 import { expect, test } from './fixtures'
 
 /** The row's floor: a 44px icon chip/controls line plus its vertical padding. */
@@ -136,8 +137,13 @@ test.describe('issue #99 — the phone layout is comfortably sized', () => {
     test.skip(testInfo.project.use.isMobile !== true, 'touch targets are a phone concern')
 
     await gotoApp(page, '/?tab=dienste')
-    const search = page.getByRole('searchbox')
+    // The phone's entry point is the app-bar pill; the field it reveals is the
+    // thing that has to be tappable, so both are measured (issue #171).
+    const pill = searchPill(page)
+    expect((await pill.boundingBox())!.height, 'search pill height').toBeGreaterThanOrEqual(MIN_TOUCH_TARGET)
+    const search = await openSearch(page)
     expect((await search.boundingBox())!.height, 'search field height').toBeGreaterThanOrEqual(MIN_TOUCH_TARGET)
+    await closeSearch(page)
 
     const nav = page.getByRole('navigation', { name: /Hauptnavigation|Main navigation/i })
     for (const label of ['Favoriten', 'Dienste']) {

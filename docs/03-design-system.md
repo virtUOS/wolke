@@ -95,7 +95,16 @@ structural device — keep it as the page-title motif.
   favorites sort control on the row's right (icon-only on a phone). It is *navigation*, not an
   ARIA tablist: switching changes the URL and pushes a history entry, so the controls are buttons
   carrying `aria-current`, never `role="tab"`. The row steps aside while the favorites arrange
-  mode is open, which brings its own bar.
+  mode is open, which brings its own bar. **Search** is the one launcher control that *is* in
+  the bar (issue #171): it is global — it searches every service regardless of the active tab —
+  so it sits above both tabs rather than inside the content one of them fills. On a phone it is
+  a fully-rounded "Suchen" pill whose tap lays a full-width field over the bar row (below 360px
+  the label gives way to the magnifier alone, so the wordmark keeps its width); on a desktop the
+  field is simply there, with a `⌘K`/`Ctrl K` hint in its trailing slot that the clear ✕ takes
+  over while there is a query. `⌘K`/`Ctrl+K` and `/` focus it, and both stand down inside a text
+  input and under any open `role="dialog"`. **Results stay a view, not a panel** — a query
+  replaces the content area under "Suchergebnisse", grouped "FAVORITEN · n" then
+  "ALLE DIENSTE · n" with the server's rank preserved inside each group.
   The list row is **two lines, not three columns**: the icon chip, the service name and the row's
   controls (documentation, favourite) share the top line, and the description spans the row's
   full width underneath. One line of controls beside the text left the description barely 40% of

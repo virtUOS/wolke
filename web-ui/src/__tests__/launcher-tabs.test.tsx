@@ -301,11 +301,14 @@ describe('Dashboard launcher tab row (issue #170)', () => {
     expect(screen.queryByRole('heading', { level: 2, name: 'Favoriten' })).toBeNull()
   })
 
-  // #171 moves the search field; #170 must leave it exactly where it is.
-  it('keeps the in-content search field', async () => {
+  // The search field left the content area in #171 — for the app bar, not for
+  // nowhere. Its own behaviour lives in global-search.test.tsx; what matters
+  // here is that the tab row is not what swallowed it.
+  it('leaves the search field to the app bar', async () => {
     stubApi([CATALOG.services[0]])
     renderDashboard()
-    expect(await screen.findByRole('searchbox', { name: 'Dienste suchen' })).toBeVisible()
+    const search = await screen.findByRole('searchbox', { name: 'Alle Dienste durchsuchen' })
+    expect(within(screen.getByRole('banner')).getByRole('searchbox')).toBe(search)
   })
 })
 

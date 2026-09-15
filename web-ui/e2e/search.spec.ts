@@ -6,6 +6,7 @@
 
 import { expectViewportHealthy } from './helpers/viewport'
 import { gotoApp } from './helpers/session'
+import { openSearch } from './helpers/search'
 import { expect, test } from './fixtures'
 
 test('typing a query opens the results panel, and launching a result clears the search', async ({ page }, testInfo) => {
@@ -13,7 +14,7 @@ test('typing a query opens the results panel, and launching a result clears the 
 
   await gotoApp(page, '/?tab=dienste')
 
-  const search = page.getByRole('searchbox')
+  const search = await openSearch(page)
   await search.fill('Netzspeicher')
   const result = page.getByRole('main').getByRole('link', { name: /MyShare/ }).first()
   await expect(result).toBeVisible()
@@ -22,7 +23,14 @@ test('typing a query opens the results panel, and launching a result clears the 
   const [popup] = await Promise.all([page.context().waitForEvent('page'), result.click()])
   await popup.close()
 
-  await expect(search).toHaveValue('')
+  // Since issue #171 the phone's field is revealed from the app bar, so
+  // clearing the search puts the field away with the query; on a desktop the
+  // field stays and simply empties.
+  if (isMobile) {
+    await expect(page.getByRole('searchbox')).toHaveCount(0)
+  } else {
+    await expect(search).toHaveValue('')
+  }
   // Back on the view the search was opened from — the whole catalog, not a
   // narrowed result set.
   await expect(page.getByRole('main').getByRole('link', { name: /BigBlueButton/ }).first()).toBeVisible()
@@ -30,7 +38,7 @@ test('typing a query opens the results panel, and launching a result clears the 
 
 test('Ctrl-clicking a result leaves the search open', async ({ page }) => {
   await page.goto('/?tab=dienste')
-  const search = page.getByRole('searchbox')
+  const search = await openSearch(page)
   await search.fill('Netzspeicher')
   const result = page.getByRole('main').getByRole('link', { name: /MyShare/ }).first()
   await expect(result).toBeVisible()
@@ -48,7 +56,7 @@ test('a zero-result query renders the empty state', async ({ page }, testInfo) =
   const isMobile = testInfo.project.use.isMobile === true
 
   await page.goto('/?tab=dienste')
-  const search = page.getByRole('searchbox')
+  const search = await openSearch(page)
   await search.fill('xyznonexistentservicexyz')
 
   await expect(page.getByText(/Keine Dienste für|No services found for/)).toBeVisible()

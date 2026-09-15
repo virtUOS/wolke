@@ -21,6 +21,7 @@ import type { Page } from '@playwright/test'
 import { withCrossWorkerLock } from './helpers/lock'
 import { expectViewportHealthy } from './helpers/viewport'
 import { gotoApp } from './helpers/session'
+import { closeSearch, openSearch } from './helpers/search'
 import { expect, test } from './fixtures'
 
 const BETA_SERVICE = /Zettelkasten Labor/
@@ -100,10 +101,13 @@ test('turning on beta reveals the beta service, badged, with its filter; turning
       await expectViewportHealthy(page, { isMobile, label: 'beta service visible' })
 
       // Search resolves it too — search is a read surface like any other.
-      const search = page.getByRole('searchbox')
+      const search = await openSearch(page)
       await search.fill('Zettelkasten')
       await expect(main.getByRole('link', { name: BETA_SERVICE }).first()).toBeVisible()
-      await search.fill('')
+      // On a phone the revealed field covers the app bar, and the account menu
+      // is the next thing this test opens — so it has to stand down, not just
+      // empty out (issue #171).
+      await closeSearch(page)
 
       // Turning it off is immediate: no dialog, and the service is gone.
       menu = await openAccountMenu(page)
