@@ -1,8 +1,10 @@
 import type { CSSProperties } from 'react'
 
-// The decorative institution mark in the launcher background (issue #174): one
-// element, anchored bottom-right of the *content column* (issue #181) and
-// hanging about a third off both edges, tinted with --accent at 7%.
+// The decorative institution mark in the launcher background (issue #174): a
+// large backdrop scaled from the viewport height, anchored to the *content
+// column* (issue #181) and cropped by the canvas edges (issue #187), tinted
+// with --accent at 7%. It reads as a large-format print behind the content,
+// not as an ornament with a visible, arbitrary position.
 //
 // Rendered as a CSS-masked, token-filled box rather than an <img>: an external
 // SVG in an <img> cannot take the CSS color, so the tint would not re-skin with
@@ -16,38 +18,66 @@ import type { CSSProperties } from 'react'
 export const WATERMARK_MAX_OPACITY = 0.08
 
 /**
- * What we actually ship, per theme — tuned on the real canvas, which is itself
- * already accent-tinted (DashboardShell: 5% light / 7% dark), not on the flat
- * mockup the handoff was drawn against.
+ * What we ship, per theme: the design references' 7% in both.
  *
- * The two differ because the mark is *line art*, not a solid silhouette. A
- * filled shape at 7% averages out to a wash at either theme; 2–3px strokes at
- * 7% stay legible as lines, and a light stroke on the dark canvas has far more
- * contrast headroom than the same stroke has on the light one. At a single
- * value the light theme reads as texture while the dark theme reads as a
- * drawing competing with the content — so the value is split rather than the
- * canvas tint or the tokens being touched.
+ * The dark value was 0.035 for a while (issue #181, picked off a ladder on the
+ * real canvas). That compensation existed for one reason: the desktop cards
+ * were transparent, so the mark's strokes ran straight through them and their
+ * text, and at 7% a 2–3px light stroke on the dark canvas stayed legible as a
+ * drawing across the card row. Issue #187 made the grid card opaque, so on a
+ * desktop the mark no longer crosses any card text — the strokes show only in
+ * the canvas gaps — and the value goes back to what the references specify.
+ * On a phone the list rows stay transparent by design (the mobile reference
+ * shows the mark crossing them); the e2e spec asserts the row text stays at
+ * AA against the accent composited over the canvas at this opacity.
  *
- * The dark value was picked off a ladder rendered on the real canvas
- * (0.07 → 0.03) rather than derived: at 0.05 and above the mark is still a
- * traceable arch crossing the card row at 1280×720, 0.04 is borderline, and
- * 0.035 is where the strokes stop resolving into a drawing while the shape is
- * still there as texture. Peak stroke contrast against the dark canvas falls
- * from 14/255 at 0.07 to 7/255 at 0.035.
+ * Kept per theme so a future re-judgement can split them again without
+ * re-plumbing; the shell passes the `isDark` it already derives for the canvas.
  */
-export const WATERMARK_OPACITY = { light: 0.07, dark: 0.035 } as const
+export const WATERMARK_OPACITY = { light: 0.07, dark: 0.07 } as const
+
+/**
+ * The geometry, derived by overlaying the mark's SVG on the two design
+ * references (local-archive/design_handoff_watermark/reference-v2/, options
+ * 7d desktop / 7f mobile) and fitting scale and offset — not from the earlier
+ * handoff's `640px` / `right: -220px; bottom: -190px`, which are the numbers
+ * that produced the corner ornament this replaces.
+ *
+ * Measured on the desktop reference (760×520 canvas, mark fitted at 640×849,
+ * F1 0.94 against the stroke pixels): the mark is 1.63× the canvas height,
+ * bleeds 17% of its height off the top and 22% off the bottom, and 34% of its
+ * width off the right edge; its left edge lands at 45% of the canvas width.
+ * On the mobile reference (300×560 canvas, mark 361×479, F1 0.95): 0.86× the
+ * canvas height, bleeding 22% of its height off the bottom and 36% of its
+ * width off the right — and NOT off the top: it starts right under the tab
+ * row, at a third of the height.
+ *
+ * Expressed as: a height in vh (so the mark scales with the canvas, never a
+ * fixed pixel width), a vertical anchor, and overhangs as transform
+ * percentages of the element's own box — percentage right/bottom offsets on a
+ * fixed element would resolve against the viewport and drift with every
+ * screen size (issue #174, decision 3). The desktop top of −28vh is the 17%
+ * top overhang of a 163vh box.
+ */
+export const WATERMARK_GEOMETRY = {
+  desktop: { height: '163vh', top: '-28vh', overhang: 'translateX(34%)' },
+  mobile: { height: '86vh', overhang: 'translate(36%, 22%)' },
+} as const
 
 interface WatermarkProps {
   /** `branding.watermark` — a mounted asset path, or '' to render nothing. */
   src: string
   /** The effective dark-mode state, which picks the opacity (see above). */
   isDark?: boolean
+  /** The phone layout (the shell's `isMobile`, the same 768px switch that
+   *  turns the grid into the list): picks the mobile geometry. */
+  isMobile?: boolean
   /** The centred content column's max width (DashboardShell's
    *  SHELL_MAX_WIDTH), which is what the mark is anchored to. */
   columnWidth?: number
 }
 
-export function Watermark({ src, isDark = false, columnWidth = 1180 }: WatermarkProps) {
+export function Watermark({ src, isDark = false, isMobile = false, columnWidth = 1180 }: WatermarkProps) {
   const url = src.trim()
   // The config gate: no configured mark, no element. A deployment that mounts
   // its own branding dir replaces the bundled set wholesale, so a watermark.svg
@@ -66,34 +96,43 @@ export function Watermark({ src, isDark = false, columnWidth = 1180 }: Watermark
   // parenthesis or a space can't break out of the function.
   const mask = `url("${url.replace(/["\\]/g, '\\$&')}")`
 
+  const geometry: CSSProperties = isMobile
+    ? {
+        // Bottom-anchored, 86% of the viewport height, pushed 22% of its
+        // height off the bottom and 36% of its width off the right. The top
+        // therefore sits at about a third of the screen height — under the
+        // tab row, over the transparent list rows, as on the mobile reference.
+        bottom: 0,
+        height: WATERMARK_GEOMETRY.mobile.height,
+        transform: WATERMARK_GEOMETRY.mobile.overhang,
+      }
+    : {
+        // 163% of the viewport height with its top 28vh above the edge: it
+        // bleeds off the top and the bottom at every desktop height, and its
+        // right edge sits 34% of its width past the column edge.
+        top: WATERMARK_GEOMETRY.desktop.top,
+        height: WATERMARK_GEOMETRY.desktop.height,
+        transform: WATERMARK_GEOMETRY.desktop.overhang,
+      }
+
   const style: CSSProperties = {
     position: 'fixed',
-    // Anchored to the CONTENT COLUMN, not the viewport (issue #181). The
-    // content the mark sits behind is a centred column of at most
-    // `columnWidth`; a mark welded to the viewport's corner agrees with it
-    // only while the column fills the viewport, and at 3440px it floats alone
-    // in the empty canvas, hundreds of pixels from the cards. `right` is
+    // Anchored to the CONTENT COLUMN, not the viewport (issue #181, kept by
+    // #187). The content the mark sits behind is a centred column of at most
+    // `columnWidth`; a mark welded to the viewport's edge agrees with it only
+    // while the column fills the viewport, and at 3440px it floats alone in
+    // the empty canvas, hundreds of pixels from the cards. `right` is
     // therefore the gap between the viewport edge and the column's right
     // edge, (100vw − column) / 2, clamped at 0 — below ~1180px this is the
-    // viewport anchoring the phone tuning was done against, and above it the
-    // mark keeps the same relationship to the cards at 1280, 1920 and 3440.
-    // `fixed` is kept: it stays put while the list scrolls, and the same
-    // arithmetic is what an absolutely positioned wrapper would resolve to.
+    // viewport edge, and above it the mark keeps the same relationship to the
+    // cards at 1280, 1920 and 3440. `fixed` is kept: it stays put while the
+    // list scrolls, and the same arithmetic is what an absolutely positioned
+    // wrapper would resolve to.
     right: `max(0px, calc(50vw - ${columnWidth / 2}px))`,
-    // Anchor at the edge and push out with a transform, NOT with negative
-    // percentage offsets: percentage right/bottom on a fixed element resolve
-    // against the *viewport*, so the framing would drift with every screen
-    // height. Transform percentages resolve against the element's own box, so
-    // "a third off both edges" is exactly true at 324px and at 3440px alike.
-    bottom: 0,
-    transform: 'translate(33%, 33%)',
-    // 640px on a desktop (60vw exceeds the cap from ~1067px up, so nothing the
-    // #174 tuning was judged on changes there). On a phone 60vw, not 90vw: with
-    // the 35:47 aspect a 90vw mark was taller than it was wide, and the two
-    // thirds of it on screen owned the empty lower half of a tall phone under
-    // a short favourites list — a drawing, not a texture (issue #181). At 60vw
-    // the visible part is roughly a quarter of the height: a corner accent.
-    width: 'min(60vw, 640px)',
+    ...geometry,
+    // The box is the mark's own portrait ratio; the mask is fitted inside it
+    // (contain), so a deployment's mark of a different ratio is letterboxed
+    // rather than stretched.
     aspectRatio: '35 / 47',
     // Behind everything. .app-canvas isolates, so -1 lands above the canvas's
     // own background but below all of its content — no z-index bookkeeping on

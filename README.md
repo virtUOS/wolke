@@ -168,7 +168,10 @@ it is **off unless you both provide the file and set `branding.watermark:
 which is what stops a missing or unreachable file leaving an unmasked block on the
 page. It is used as a CSS mask, so only its alpha matters: ship a single-colour
 silhouette on a transparent background and the app tints it with the `accent`
-theme token at 7%. **These eight names are served publicly** (unauthenticated, at
+theme token at 7%. It is drawn as a full-height backdrop — scaled to the viewport
+height, cropped by the canvas edges, behind the opaque desktop tiles and through
+the transparent phone list rows — so a portrait mark with a fair amount of
+open space (an outline rather than a solid block) works best. **These eight names are served publicly** (unauthenticated, at
 `/branding/`) — only they are; any other filename in the directory, and
 `/branding/` itself, 404 rather than being listed or served. Keep only these assets in it anyway, never drafts, working files, or
 secrets — the allowlist is a floor, not a reason to get careless with the mount.

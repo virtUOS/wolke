@@ -575,7 +575,8 @@ branding:
   watermark:  ""   # decorative institution mark in the launcher background; EMPTY = off (issue #174).
                    # A CSS mask (alpha only; tinted with the `accent` token at 7%), so a missing or
                    # unreachable file must never reach the DOM — hence off by default and gated on
-                   # this value being non-empty. Opt in with /branding/watermark.svg.
+                   # this value being non-empty. Opt in with /branding/watermark.svg. Drawn as a
+                   # full-height backdrop behind the opaque desktop tiles (issue #187).
   imprint_url: "https://www.uni-osnabrueck.de/impressum/"   # legal footer links
   privacy_url: "https://www.uni-osnabrueck.de/datenschutz/" # (empty hides the link)
   feedback_url: ""  # right-aligned footer feedback link (env FEEDBACK_URL): URL or email/mailto:
