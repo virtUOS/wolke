@@ -2,8 +2,9 @@
 // "Launcher: configurable institution-mark watermark in the app background".
 //
 // The mark is a fixed, aria-hidden, pointer-transparent box anchored to the
-// bottom-right corner and hanging a third off both edges — which is to say it
-// is *deliberately* partly outside the viewport, in a suite whose whole job is
+// bottom-right of the content column (issue #181; the viewport's corner below
+// ~1180px) and hanging a third off both edges — which is to say it is
+// *deliberately* partly outside the viewport, in a suite whose whole job is
 // failing things that stick out past the viewport. Two properties of the
 // harness keep those from colliding:
 //
@@ -63,6 +64,48 @@ const tabRow = (page: Page) =>
 const catalogTab = (page: Page) =>
   tabRow(page).getByRole('button', { name: /Alle Dienste|Services/i })
 
+/** The content column's width — SHELL_MAX_WIDTH in DashboardShell.tsx. The
+ *  number is restated here on purpose: the spec asserts the shipped geometry
+ *  against the contract, not against whatever the bundle happens to export. */
+const COLUMN_WIDTH = 1180
+
+/**
+ * The geometry rule since issue #181: the mark hangs a third off the bottom
+ * edge of the viewport and a third off the RIGHT EDGE OF THE CONTENT COLUMN —
+ * which is the viewport's right edge only while the column fills the viewport
+ * (below ~1180px), and the column's own edge, (100vw + 1180) / 2, above that.
+ * So the relationship between the mark and the cards is identical at 1280,
+ * 1920 and 3440, instead of the mark drifting into the empty canvas as the
+ * screen widens.
+ *
+ * Asserted at every matrix size and returned for the ultra-wide check below.
+ */
+async function expectAnchoredToColumn(page: Page): Promise<{ overlapsColumn: boolean }> {
+  const g = await watermark(page).evaluate((node, column) => {
+    const r = node.getBoundingClientRect()
+    const vw = document.documentElement.clientWidth
+    const vh = document.documentElement.clientHeight
+    const columnRight = Math.min(vw, (vw + column) / 2)
+    const columnLeft = Math.max(0, (vw - column) / 2)
+    return {
+      width: r.width,
+      height: r.height,
+      // How far the box reaches past the anchor edge, as a share of its own size.
+      overRight: (r.right - columnRight) / r.width,
+      overBottom: (r.bottom - vh) / r.height,
+      overlapsColumn: r.left < columnRight && r.right > columnLeft,
+    }
+  }, COLUMN_WIDTH)
+
+  // "A third off both edges" has to hold at 324px, 1920px and 3440px alike —
+  // that is the whole reason the offset is a transform on the element's own
+  // box rather than a percentage right/bottom, which would resolve against the
+  // viewport and drift with every screen size.
+  expect(g.overRight, 'a third past the column\'s right edge').toBeCloseTo(0.33, 2)
+  expect(g.overBottom, 'a third past the bottom edge').toBeCloseTo(0.33, 2)
+  return { overlapsColumn: g.overlapsColumn }
+}
+
 /** The document's own horizontal overflow — what a user would scroll. */
 async function documentOverflow(page: Page): Promise<number> {
   return page.evaluate(
@@ -86,31 +129,46 @@ test.describe('watermark enabled', () => {
     await enableWatermark(page)
   })
 
-  test('hangs a third off the bottom-right corner without scrolling the document', async ({
+  test('hangs a third off the bottom-right of the content column without scrolling the document', async ({
     page,
-  }) => {
+  }, testInfo) => {
     await gotoApp(page)
-    const el = watermark(page)
-    await expect(el).toHaveCount(1)
+    await expect(watermark(page)).toHaveCount(1)
+    await expectAnchoredToColumn(page)
 
-    const geometry = await el.evaluate((node) => {
-      const r = node.getBoundingClientRect()
-      return {
-        width: r.width,
-        height: r.height,
-        overRight: r.right - document.documentElement.clientWidth,
-        overBottom: r.bottom - document.documentElement.clientHeight,
-      }
-    })
-
-    // "A third off both edges" has to hold at 324px and at 1920px alike — that
-    // is the whole reason the offset is a transform on the element's own box
-    // rather than a percentage right/bottom, which would resolve against the
-    // viewport and drift with every screen size.
-    expect(geometry.overRight / geometry.width).toBeCloseTo(0.33, 2)
-    expect(geometry.overBottom / geometry.height).toBeCloseTo(0.33, 2)
+    // On a phone the mark is a corner accent, not a backdrop (issue #181):
+    // 60vw wide, so the two thirds of it that are on screen take roughly a
+    // quarter of the height — min(90vw, …) with the 35:47 aspect owned the
+    // whole empty lower half of a tall phone under a short favourites list.
+    if (testInfo.project.use.isMobile) {
+      const m = await watermark(page).evaluate((node) => {
+        const r = node.getBoundingClientRect()
+        const vw = document.documentElement.clientWidth
+        const vh = document.documentElement.clientHeight
+        return { widthShare: r.width / vw, visibleHeightShare: (vh - r.top) / vh }
+      })
+      expect(m.widthShare).toBeCloseTo(0.6, 2)
+      expect(m.visibleHeightShare, 'the on-screen part of the mark stays a corner accent').toBeLessThanOrEqual(0.3)
+    }
 
     // …and hanging off the edge must not give the user anything to scroll.
+    expect(await documentOverflow(page)).toBeLessThanOrEqual(0)
+  })
+
+  // Issue #181: the matrix tops out at 1920, which is why a mark welded to the
+  // viewport corner — hundreds of pixels from a 1180px column — went unnoticed
+  // until a 3440px monitor. The geometry rule is therefore also checked well
+  // above the matrix, once (one project, not six: the viewport is resized
+  // inside the test, so the project's own size is irrelevant to it).
+  test('keeps the same relationship to the column on an ultra-wide screen', async ({ page }, testInfo) => {
+    testInfo.skip(testInfo.project.name !== 'desktop-1920', 'one ultra-wide check is enough')
+    await page.setViewportSize({ width: 3440, height: 1440 })
+    await gotoApp(page)
+    await expect(watermark(page)).toHaveCount(1)
+    const { overlapsColumn } = await expectAnchoredToColumn(page)
+    // The point of anchoring to the column: on a wide screen the mark is back
+    // under the cards, not floating alone in the empty canvas beside them.
+    expect(overlapsColumn, 'the mark sits behind the content column, not beside it').toBe(true)
     expect(await documentOverflow(page)).toBeLessThanOrEqual(0)
   })
 
@@ -153,7 +211,10 @@ test.describe('watermark enabled', () => {
 
     // The app bar is clear at every matrix size by geometry: the mark's top
     // edge sits below it, because two thirds of an 859px mark on the shortest
-    // desktop viewport still starts well under a 61px bar.
+    // desktop viewport still starts well under a 61px bar. (859px is the
+    // mark's height at its 640px cap; the anchor moved to the column in
+    // issue #181, which changes where the mark sits horizontally, not how
+    // tall it is on a desktop.)
     const barBox = await page.getByRole('banner').boundingBox()
     expect(markBox!.y).toBeGreaterThanOrEqual(barBox!.y + barBox!.height)
 
