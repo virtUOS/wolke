@@ -112,8 +112,10 @@ const de = {
     searchPill: 'Suchen',
     searchPillLabel: 'Suchen: Alle Dienste durchsuchen',
     searchClose: 'Suche schließen',
-    // Der Tastenkürzel-Hinweis rechts im Feld. Sichtbar ist nur „⌘K"/„Strg K";
-    // vorgelesen wird dieser Satz, über aria-describedby am Feld.
+    // Der Tastenkürzel-Hinweis rechts im Feld. Sichtbar ist nur „⌘K"/„Strg K"
+    // (das kbd-Chip ist aria-hidden). Dieser Satz ist der `title` des Feldes:
+    // Tooltip für die Maus, Beschreibung für den Screenreader. Das Kürzel selbst
+    // wird über `aria-keyshortcuts` angesagt, das der Screenreader lokalisiert.
     searchShortcut: (keys: string) => `Tastenkürzel: ${keys}`,
     searchShortcutMeta: 'Befehlstaste',
     searchShortcutCtrl: 'Strg',

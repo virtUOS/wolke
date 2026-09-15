@@ -365,7 +365,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     <>
     {/* `search` only here, not on the admin shell above: the app-bar field
         searches the catalogue, and the admin surface isn't it. */}
-    <DashboardShell {...shellProps} search={globalSearch}>
+    <DashboardShell {...shellProps} search={globalSearch} watermark>
       <Greeting
         firstName={firstName}
         locale={locale}

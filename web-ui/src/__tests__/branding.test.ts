@@ -6,6 +6,7 @@ const branding: Branding = {
   logo_light: '/branding/logo-light.svg',
   logo_dark: '/branding/logo-dark.svg',
   favicon: '/branding/favicon.svg',
+  watermark: '',
   default_locale: 'de',
   imprint_url: 'https://example.edu/impressum',
   privacy_url: 'https://example.edu/datenschutz',

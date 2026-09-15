@@ -3,6 +3,7 @@ import type { Me } from '@/lib/api'
 import { feedbackHref, type Branding } from '@/lib/branding'
 import { t, type Lang } from '@/lib/i18n'
 import { TopBar } from './TopBar'
+import { Watermark } from './Watermark'
 import { UpdateNotice } from './UpdateNotice'
 
 // The centered content column: <main> and the footer share this width, and the
@@ -52,6 +53,11 @@ interface DashboardShellProps {
    *  passes it; the admin surface deliberately doesn't — it has no catalogue
    *  search, and an app-bar field that searches nothing on screen is a lie. */
   search?: ReactNode
+  /** Whether to paint the decorative institution mark behind the canvas
+   *  (issue #174). Like `search`, the admin shell deliberately doesn't ask for
+   *  it: it is launcher decoration, not chrome. Even when true it renders
+   *  nothing unless `branding.watermark` is configured. */
+  watermark?: boolean
   children: ReactNode
 }
 
@@ -74,6 +80,7 @@ export function DashboardShell({
   onSetShowBeta,
   focusKey,
   search,
+  watermark = false,
   children,
 }: DashboardShellProps) {
   const s = t(locale)
@@ -115,6 +122,7 @@ export function DashboardShell({
       >
         {s.common.skipToContent}
       </a>
+      {watermark && <Watermark src={branding.watermark} isDark={isDark} />}
       <TopBar
         branding={branding}
         locale={locale}
