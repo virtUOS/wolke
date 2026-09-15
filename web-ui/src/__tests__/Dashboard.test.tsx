@@ -24,6 +24,7 @@ const BRANDING: Branding = {
   logo_light: '',
   logo_dark: '',
   favicon: '',
+  watermark: '',
   default_locale: 'de',
   imprint_url: '',
   privacy_url: '',
