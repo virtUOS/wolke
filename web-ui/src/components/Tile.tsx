@@ -223,11 +223,19 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
   }
 
   // ── Desktop grid card ──────────────────────────────────────────────────────
+  //
+  // Opaque (issue #187): the card is filled with --surface, so anything painted
+  // behind the canvas — the institution-mark watermark — shows only in the
+  // gaps between cards and never through their text. The mobile list row above
+  // deliberately stays transparent; the mark is meant to cross the rows there.
+  // The hover wash in index.css mixes the accent into --surface for the same
+  // reason, so the card does not turn see-through under the pointer.
   return (
     <div
       className="tile-grid"
       style={{
         position: 'relative',
+        background: 'var(--surface)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-md)',
         height: '100%',

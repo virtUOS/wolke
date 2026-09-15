@@ -1,13 +1,15 @@
 import { render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Watermark, WATERMARK_MAX_OPACITY, WATERMARK_OPACITY } from '@/components/Watermark'
+import { Watermark, WATERMARK_GEOMETRY, WATERMARK_MAX_OPACITY, WATERMARK_OPACITY } from '@/components/Watermark'
 import { DashboardShell, SHELL_MAX_WIDTH } from '@/components/DashboardShell'
 import type { Branding } from '@/lib/branding'
 import type { Me } from '@/lib/api'
 import { expectNoAxeViolations } from '@/test/axe'
 
-// Issue #174: a single decorative institution mark in the launcher background,
-// anchored bottom-right and hanging a third off both viewport edges.
+// Issue #174: a single decorative institution mark in the launcher background.
+// Issue #187 rebuilt it as a full-bleed backdrop: scaled from the viewport
+// height, anchored to the content column (issue #181) and cropped by the
+// canvas edges, per the design references — no longer a corner ornament.
 //
 // The two things these tests exist to pin down are the two that would hurt if
 // they drifted:
@@ -71,17 +73,17 @@ describe('Watermark', () => {
     expect(WATERMARK_OPACITY.dark).toBeLessThanOrEqual(WATERMARK_MAX_OPACITY)
   })
 
-  it('goes fainter in dark, where the same value reads as a drawing', () => {
-    // The mark is line art, so a stroke that averages into the light canvas
-    // stays legible against the dark one. Same mark, same token, lower value —
-    // no canvas tint or token is touched to get there.
+  it('is 0.07 in both themes — the references\' value, no per-theme compensation (issue #187)', () => {
+    // #181 pulled dark down to 0.035 because the mark's strokes ran through
+    // transparent cards and competed with their text. #187 made the desktop
+    // cards opaque, so the mark crosses no card text any more and the
+    // compensation goes with it: both themes start from the references' 7%.
     const light = render(<Watermark src={MARK} isDark={false} />)
     const dark = render(<Watermark src={MARK} isDark />)
-    const lightOpacity = Number(mark(light.container)!.style.opacity)
-    const darkOpacity = Number(mark(dark.container)!.style.opacity)
-    expect(darkOpacity).toBeLessThan(lightOpacity)
-    expect(lightOpacity).toBe(WATERMARK_OPACITY.light)
-    expect(darkOpacity).toBe(WATERMARK_OPACITY.dark)
+    expect(Number(mark(light.container)!.style.opacity)).toBe(WATERMARK_OPACITY.light)
+    expect(Number(mark(dark.container)!.style.opacity)).toBe(WATERMARK_OPACITY.dark)
+    expect(WATERMARK_OPACITY.light).toBe(0.07)
+    expect(WATERMARK_OPACITY.dark).toBe(0.07)
   })
 
   it('defaults to the light value when no theme is given', () => {
@@ -96,46 +98,69 @@ describe('Watermark', () => {
     expect(el.getAttribute('style')).not.toMatch(/#[0-9a-f]{3,8}\b/i)
   })
 
-  it('hangs a third off both edges via a transform, not viewport percentages', () => {
-    const { container } = render(<Watermark src={MARK} />)
-    const el = mark(container)!
-    expect(el.style.position).toBe('fixed')
-    // Percentage right/bottom on a fixed element resolve against the viewport,
-    // so the framing would drift with every screen size. Transform percentages
-    // resolve against the element's own box, which is what "a third off" means.
-    expect(el.style.bottom).toBe('0px')
-    expect(el.style.transform).toBe('translate(33%, 33%)')
-  })
+  // Issue #187 geometry, derived by overlaying the mark on the two design
+  // references (local-archive/design_handoff_watermark/reference-v2/), not
+  // from the old handoff's pixel values — those produced the corner ornament
+  // this replaces. Measured on the desktop reference: the mark is 1.63× the
+  // canvas height, bleeds 17% of its height off the top and 22% off the
+  // bottom, and 34% of its width off the right edge. On the mobile reference
+  // it is 0.86× the canvas height, bleeds 22% off the bottom and 36% off the
+  // right, and does NOT bleed off the top — it starts under the tab row.
+  describe('geometry (issue #187): a backdrop scaled from the viewport height', () => {
+    it('on a desktop is 1.63× the viewport height and bleeds off the top and the bottom', () => {
+      const { container } = render(<Watermark src={MARK} isMobile={false} />)
+      const el = mark(container)!
+      expect(el.style.position).toBe('fixed')
+      expect(el.style.height).toBe(WATERMARK_GEOMETRY.desktop.height)
+      expect(el.style.top).toBe(WATERMARK_GEOMETRY.desktop.top)
+      expect(el.style.height).toBe('163vh')
+      expect(el.style.top).toBe('-28vh')
+      // No fixed pixel width any more: the box follows its height.
+      expect(el.style.width).toBe('')
+      expect(el.style.aspectRatio).toBe('35 / 47')
+      // The right overhang is a transform on the element's own box, as in
+      // #174 decision 3 — percentage offsets would resolve against the
+      // viewport and drift with every screen size.
+      expect(el.style.transform).toBe('translateX(34%)')
+    })
 
-  // Issue #181: the mark is anchored to the *content column*, not the viewport.
-  // The two agree only while the column fills the viewport; on a wide screen
-  // a viewport-anchored mark floats alone in the empty canvas, hundreds of
-  // pixels from the cards it was designed to sit behind.
-  it('anchors to the right edge of the content column, falling back to the viewport edge below it', () => {
-    const { container } = render(<Watermark src={MARK} columnWidth={1180} />)
-    const el = mark(container)!
-    // `right` is the gap between the viewport edge and the column edge —
-    // (100vw − 1180px) / 2 — clamped at 0 where the column fills the viewport,
-    // so below ~1180px the behaviour is exactly the viewport anchoring that the
-    // phone tuning was done against. jsdom re-serialises the calc(), so the
-    // assertion is on its parts rather than its spelling.
-    expect(el.style.right).toMatch(/^max\(0px, /)
-    expect(el.style.right).toContain('50vw')
-    expect(el.style.right).toContain('590px')
-  })
+    it('on a phone is 0.86× the viewport height, anchored at the bottom, bleeding off the bottom and the right only', () => {
+      const { container } = render(<Watermark src={MARK} isMobile />)
+      const el = mark(container)!
+      expect(el.style.position).toBe('fixed')
+      expect(el.style.height).toBe(WATERMARK_GEOMETRY.mobile.height)
+      expect(el.style.height).toBe('86vh')
+      expect(el.style.bottom).toBe('0px')
+      expect(el.style.top).toBe('')
+      expect(el.style.width).toBe('')
+      expect(el.style.transform).toBe('translate(36%, 22%)')
+    })
 
-  it('takes the column width from the shell rather than restating 1180', () => {
-    const { container } = render(<Watermark src={MARK} columnWidth={1000} />)
-    expect(mark(container)!.style.right).toContain('500px')
-  })
+    it('defaults to the desktop geometry', () => {
+      const { container } = render(<Watermark src={MARK} />)
+      expect(mark(container)!.style.height).toBe('163vh')
+    })
 
-  it('is a corner accent on a phone, not a backdrop: 60vw, capped at 640px', () => {
-    // min(90vw, 640px) with a 35:47 aspect made the mark taller than the empty
-    // lower half of a tall phone (issue #181). 60vw keeps two thirds of it —
-    // the part that is on screen — to roughly a quarter of the viewport height
-    // at 390×844, while a desktop, where 60vw exceeds the cap, is unchanged.
-    const { container } = render(<Watermark src={MARK} />)
-    expect(mark(container)!.style.width).toBe('min(60vw, 640px)')
+    // Issue #181's decision, carried over by #187: anchored to the *content
+    // column*, not the viewport. The two agree only while the column fills the
+    // viewport; on a wide screen a viewport-anchored mark floats alone in the
+    // empty canvas, hundreds of pixels from the cards it is meant to sit behind.
+    it('anchors to the right edge of the content column, falling back to the viewport edge below it', () => {
+      const { container } = render(<Watermark src={MARK} columnWidth={1180} />)
+      const el = mark(container)!
+      // `right` is the gap between the viewport edge and the column edge —
+      // (100vw − 1180px) / 2 — clamped at 0 where the column fills the
+      // viewport. jsdom re-serialises the calc(), so the assertion is on its
+      // parts rather than its spelling.
+      expect(el.style.right).toMatch(/^max\(0px, /)
+      expect(el.style.right).toContain('50vw')
+      expect(el.style.right).toContain('590px')
+    })
+
+    it('takes the column width from the shell rather than restating 1180', () => {
+      const { container } = render(<Watermark src={MARK} columnWidth={1000} />)
+      expect(mark(container)!.style.right).toContain('500px')
+    })
   })
 
   it('sits behind content in the canvas stacking context', () => {
@@ -185,7 +210,7 @@ const ME = {
   visibility: { held: [], entries: [] },
 } as unknown as Me
 
-function renderShell(props: { watermark?: boolean; branding?: Branding; isDark?: boolean }) {
+function renderShell(props: { watermark?: boolean; branding?: Branding; isDark?: boolean; isMobile?: boolean }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
@@ -198,7 +223,7 @@ function renderShell(props: { watermark?: boolean; branding?: Branding; isDark?:
         onSetTheme={() => {}}
         onSetLocale={() => {}}
         onAdmin={() => {}}
-        isMobile={false}
+        isMobile={props.isMobile ?? false}
         showBeta={false}
         onSetShowBeta={() => {}}
         focusKey="dashboard"
@@ -244,6 +269,13 @@ describe('DashboardShell watermark placement', () => {
     // value rather than reading the theme a second way.
     const { container } = renderShell({ watermark: true, isDark: true })
     expect(Number(mark(container)!.style.opacity)).toBe(WATERMARK_OPACITY.dark)
+  })
+
+  it('threads the shell\'s layout through to the mark, so the phone geometry follows the same 768px switch as the tiles', () => {
+    const desktop = renderShell({ watermark: true, isMobile: false })
+    const phone = renderShell({ watermark: true, isMobile: true })
+    expect(mark(desktop.container)!.style.height).toBe(WATERMARK_GEOMETRY.desktop.height)
+    expect(mark(phone.container)!.style.height).toBe(WATERMARK_GEOMETRY.mobile.height)
   })
 
   it('renders nothing even on the launcher when branding has no mark', () => {
