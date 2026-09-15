@@ -96,7 +96,7 @@ describe('TopBar quick links', () => {
   it('passes news_url through to the notification panel', async () => {
     const user = userEvent.setup()
     vi.spyOn(api, 'announcementHistory').mockResolvedValue({ announcements: [] })
-    renderTopBar('favoriten', () => {}, { branding: { ...linked, news_url: 'https://news.example.edu' } })
+    renderTopBar({ branding: { ...linked, news_url: 'https://news.example.edu' } })
 
     await user.click(await screen.findByRole('button', { name: /Mitteilungen/ }))
     const panel = await screen.findByRole('dialog', { name: 'Mitteilungen' })
