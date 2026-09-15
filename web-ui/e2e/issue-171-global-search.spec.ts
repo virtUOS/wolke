@@ -154,12 +154,13 @@ test('the results say which set each hit belongs to', async ({ page }, testInfo)
   const heads = main.getByRole('heading', { level: 3 })
   await expect(heads).toHaveText([/Favoriten · \d+/, /Alle Dienste · \d+/])
   // Favorites first, and each heading's count is the number of hits under it.
+  // Count the tiles themselves (one root per hit in either layout), not links
+  // by accessible name: a tile carries several links (launch, guide, …) whose
+  // names all share words, so a name regex counts some hits twice and breaks
+  // again whenever a control is added inside a tile (#185 did exactly that).
   for (const head of await heads.all()) {
     const claimed = Number((await head.textContent())!.match(/(\d+)$/)![1])
-    const shown = await head
-      .locator('xpath=..')
-      .getByRole('link', { name: /öffnen|open/i })
-      .count()
+    const shown = await head.locator('xpath=..').locator('.tile-grid, .tile-list-item').count()
     expect(shown, `${await head.textContent()} lists what it counts`).toBe(claimed)
   }
 
