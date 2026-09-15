@@ -100,6 +100,13 @@ body {
 .app-canvas {
   min-height: 100vh;
   min-height: 100dvh;
+  /* Make the canvas its own stacking context so the decorative watermark
+     (issue #174) can sit at z-index -1: that lands it above the canvas's own
+     background but below every child, which is exactly "behind all content"
+     without giving the app bar, the tab row, the assistant widget or any
+     portalled dialog a z-index to maintain. Without the isolation the -1 would
+     escape to the root context and hide *under* this element's background. */
+  isolation: isolate;
 }
 
 /* Improved text-wrap for all paragraphs — matches reference. */
