@@ -187,6 +187,22 @@ test.describe('watermark enabled', () => {
     expect(painted.overTabs).toBe(false)
   })
 
+  // The dark canvas is already 7% accent of the same token the mark is filled
+  // with, and the mark is line art, so the value that reads as texture in light
+  // reads as a drawing here. The split is asserted against the *rendered*
+  // opacity, not just the constant, so a theme wired up wrongly fails.
+  test.describe('in the dark theme', () => {
+    test.use({ colorScheme: 'dark' })
+
+    test('goes fainter than light, and still under the ceiling', async ({ page }) => {
+      await gotoApp(page)
+      const dark = await watermark(page).evaluate((n) => Number(getComputedStyle(n).opacity))
+      expect(dark).toBeGreaterThan(0)
+      expect(dark).toBeLessThan(0.07)
+      expect(dark).toBeLessThanOrEqual(0.08)
+    })
+  })
+
   test('the full viewport matrix stays healthy on every launcher view', async ({
     page,
   }, testInfo) => {

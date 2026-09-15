@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Watermark, WATERMARK_MAX_OPACITY } from '@/components/Watermark'
+import { Watermark, WATERMARK_MAX_OPACITY, WATERMARK_OPACITY } from '@/components/Watermark'
 import { DashboardShell } from '@/components/DashboardShell'
 import type { Branding } from '@/lib/branding'
 import type { Me } from '@/lib/api'
@@ -59,12 +59,34 @@ describe('Watermark', () => {
     expect(el).toBeEmptyDOMElement()
   })
 
-  it('stays at or below the 0.08 opacity ceiling', () => {
-    const { container } = render(<Watermark src={MARK} />)
-    const opacity = Number(mark(container)!.style.opacity)
-    expect(opacity).toBeGreaterThan(0)
-    expect(opacity).toBeLessThanOrEqual(WATERMARK_MAX_OPACITY)
+  it('stays at or below the 0.08 opacity ceiling in both themes', () => {
+    for (const isDark of [false, true]) {
+      const { container } = render(<Watermark src={MARK} isDark={isDark} />)
+      const opacity = Number(mark(container)!.style.opacity)
+      expect(opacity).toBeGreaterThan(0)
+      expect(opacity).toBeLessThanOrEqual(WATERMARK_MAX_OPACITY)
+    }
     expect(WATERMARK_MAX_OPACITY).toBeLessThanOrEqual(0.08)
+    expect(WATERMARK_OPACITY.light).toBeLessThanOrEqual(WATERMARK_MAX_OPACITY)
+    expect(WATERMARK_OPACITY.dark).toBeLessThanOrEqual(WATERMARK_MAX_OPACITY)
+  })
+
+  it('goes fainter in dark, where the same value reads as a drawing', () => {
+    // The mark is line art, so a stroke that averages into the light canvas
+    // stays legible against the dark one. Same mark, same token, lower value —
+    // no canvas tint or token is touched to get there.
+    const light = render(<Watermark src={MARK} isDark={false} />)
+    const dark = render(<Watermark src={MARK} isDark />)
+    const lightOpacity = Number(mark(light.container)!.style.opacity)
+    const darkOpacity = Number(mark(dark.container)!.style.opacity)
+    expect(darkOpacity).toBeLessThan(lightOpacity)
+    expect(lightOpacity).toBe(WATERMARK_OPACITY.light)
+    expect(darkOpacity).toBe(WATERMARK_OPACITY.dark)
+  })
+
+  it('defaults to the light value when no theme is given', () => {
+    const { container } = render(<Watermark src={MARK} />)
+    expect(Number(mark(container)!.style.opacity)).toBe(WATERMARK_OPACITY.light)
   })
 
   it('tints with the accent token, never a hex', () => {
@@ -132,7 +154,7 @@ const ME = {
   visibility: { held: [], entries: [] },
 } as unknown as Me
 
-function renderShell(props: { watermark?: boolean; branding?: Branding }) {
+function renderShell(props: { watermark?: boolean; branding?: Branding; isDark?: boolean }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
@@ -140,7 +162,7 @@ function renderShell(props: { watermark?: boolean; branding?: Branding }) {
         branding={props.branding ?? BRANDING}
         me={ME}
         locale="de"
-        isDark={false}
+        isDark={props.isDark ?? false}
         theme="light"
         onSetTheme={() => {}}
         onSetLocale={() => {}}
@@ -176,6 +198,13 @@ describe('DashboardShell watermark placement', () => {
     // `region` is a page-level rule this isolated render can't satisfy; see
     // a11y.test.tsx for the same exclusion.
     await expectNoAxeViolations(baseElement, ['region'])
+  })
+
+  it('threads the shell\'s theme through to the mark', () => {
+    // The shell already derives isDark for the canvas; the mark takes the same
+    // value rather than reading the theme a second way.
+    const { container } = renderShell({ watermark: true, isDark: true })
+    expect(Number(mark(container)!.style.opacity)).toBe(WATERMARK_OPACITY.dark)
   })
 
   it('renders nothing even on the launcher when branding has no mark', () => {
