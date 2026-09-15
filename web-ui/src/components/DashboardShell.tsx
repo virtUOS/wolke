@@ -105,12 +105,19 @@ export function DashboardShell({
   // dead band between the last tile and a footer pinned to the bottom edge —
   // issue #33. There the footer simply follows the content. The canvas height
   // itself comes from .app-canvas (dvh, see index.css).
+  //
+  // Canvas tone, per theme (issue #187): light is --bg warmed with 5% of the
+  // accent; dark is plain --bg. Dark used to carry a 7% tint too, which put the
+  // canvas at (37,34,31) — *lighter* than the opaque --surface card (30,30,33),
+  // so the card read as a recess. Raised surfaces in dark UI are conventionally
+  // lighter than their ground, and the design references draw a lighter card on
+  // a plain (22,22,24) canvas. Light keeps the tint on purpose: there a card a
+  // touch darker than the canvas reads as a delineated surface. The watermark
+  // (accent at 7%) composites over whatever the canvas is.
   const canvasStyle: CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
-    background: isDark
-      ? 'color-mix(in srgb, var(--accent) 7%, var(--bg))'
-      : 'color-mix(in srgb, var(--accent) 5%, var(--bg))',
+    background: isDark ? 'var(--bg)' : 'color-mix(in srgb, var(--accent) 5%, var(--bg))',
     color: 'var(--text)',
   }
 
