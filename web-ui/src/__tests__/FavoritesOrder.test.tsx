@@ -101,6 +101,23 @@ function Arrange({
 }
 
 describe('FavoritesSortMenu', () => {
+  // Issue #182: the trigger sits at the END of the launcher's tab row, on the
+  // content column's right edge. A start-aligned popover has to reserve its
+  // panel width on the anchor so the panel doesn't stick out past the column
+  // — which parked the trigger 96px short of the edge at 1280px. Opening the
+  // panel leftwards from the trigger's own right edge needs no reservation,
+  // so the trigger can sit flush.
+  it('opens its panel leftwards from the trigger, reserving no width on the row', async () => {
+    render(<Menu />)
+    const trigger = screen.getByRole('button', { name: 'Reihenfolge: Häufig genutzt' })
+    expect(trigger.parentElement).not.toHaveStyle({ minWidth: '236px' })
+    expect(trigger.parentElement?.style.minWidth).toBe('')
+
+    const panel = await openMenu()
+    expect(panel).toHaveClass('right-0')
+    expect(panel).not.toHaveClass('left-0')
+  })
+
   // The trigger's visible text is the active order; its accessible name has to
   // say what that text *is* while still containing it ("label in name").
   it('labels the trigger with the active order', async () => {
