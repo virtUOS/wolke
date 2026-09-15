@@ -1,7 +1,9 @@
-// Issue #168 — the four surfaces that render an announcement body, and the one
-// rule that differs between them: three render real anchors, the notification
-// history row renders none, because it lives inside a <button> and a nested
-// link is invalid HTML and an a11y bug.
+// Issue #168 — the surfaces that render an announcement body, and the one rule
+// that differs between them: the banner, the notice dialog and the admin editor
+// render real anchors; a notification-panel row renders none, because it lives
+// inside a <button> and a nested link is invalid HTML and an a11y bug. Since
+// #179 both panel groups — active and history — are that same row, so neither
+// links.
 //
 // The parser itself is covered in rich-text.test.ts; what is asserted here is
 // the wiring — which surface links, with which rel/target, and that a denied
@@ -96,14 +98,19 @@ describe('the notification center (NotificationBell)', () => {
     return user
   }
 
-  it('renders the active notice in the panel with anchors', async () => {
-    await openPanel()
+  // Since #179 the active notice is the same compact row as a history entry, so
+  // its links live in the dialog the row opens, not in the panel.
+  it('renders the active notice\u2019s links in the dialog it opens', async () => {
+    const user = await openPanel()
     const panel = await screen.findByRole('dialog', { name: 'Mitteilungen' })
-    const active = within(panel).getByText('Wartungsfenster').closest('div[class*="rounded-md"]')!
-    expectTheThreeLinks(active as HTMLElement)
+    const row = within(panel).getByRole('button', { name: /Wartungsfenster/ })
+    expect(row.querySelectorAll('a')).toHaveLength(0)
+
+    await user.click(row)
+    expectTheThreeLinks(await screen.findByRole('dialog', { name: 'Wartungsfenster' }))
   })
 
-  it('renders NO anchor in the history row — it is inside a <button>', async () => {
+  it('renders NO anchor in a panel row — it is inside a <button>', async () => {
     await openPanel()
     const row = await screen.findByRole('button', { name: /VPN-Störung/ })
     expect(within(row).queryAllByRole('link')).toHaveLength(0)

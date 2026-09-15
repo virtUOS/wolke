@@ -92,6 +92,11 @@ branding:
   # a new tab, or a phone number / tel: link (opens the dialer on a phone).
   bot_url: ""
   help_url: ""
+  # Link to the institution's news site, shown at the foot of the notification
+  # panel behind the bell (env: NEWS_URL). Empty hides it. http(s) only — news
+  # is a website, so a mailto:/tel:/relative value fails at startup rather than
+  # rendering a dead link.
+  news_url: ""
   # Embedded assistant chat widget (launcher mode), e.g. eule
   # (github.com/virtUOS/eule). Active only when BOTH are set; supersedes the
   # bot_url top-bar link. The widget URL's origin doubles as the widget's

@@ -11,7 +11,7 @@ const branding: Branding = {
   privacy_url: 'https://example.edu/datenschutz',
   feedback_url: '',
   bot_url: '',
-  help_url: '',
+  help_url: '', news_url: '',
   assistant_widget_url: '',
   assistant_bot_id: '',
   theme: {

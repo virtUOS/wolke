@@ -18,6 +18,9 @@ export interface Branding {
   feedback_url: string
   bot_url: string
   help_url: string
+  // The institution's news site, linked at the foot of the notification panel.
+  // Empty hides the link; the server accepts only http(s) here.
+  news_url: string
   // Embedded assistant chat widget (launcher mode); active only when both are
   // set, in which case it supersedes the bot_url top-bar link.
   assistant_widget_url: string

@@ -165,6 +165,7 @@ const de = {
     current: 'Aktuell',
     history: 'Verlauf',
     empty: 'Keine Mitteilungen.',
+    allNews: 'Alle Neuigkeiten',
   },
   pwa: {
     region: 'App-Installation',
@@ -416,6 +417,7 @@ const en: Strings = {
     current: 'Current',
     history: 'History',
     empty: 'No announcements.',
+    allNews: 'All news',
   },
   pwa: {
     region: 'App installation',
