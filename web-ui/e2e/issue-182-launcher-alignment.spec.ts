@@ -97,3 +97,59 @@ test.describe('the sort control is optically flush with the content column', () 
     await page.keyboard.press('Escape')
   })
 })
+
+test.describe('selecting a category does not move the layout', () => {
+  const pillStrip = (page: Page) => page.getByRole('group', { name: /Kategorien filtern|Filter by category/i })
+
+  /** Where the pill row and the first card sit — the two things that jumped. */
+  async function layout(page: Page): Promise<{ pills: number; firstCard: number }> {
+    const pills = await pillStrip(page).boundingBox()
+    const firstCard = await page.getByRole('main').getByRole('link').first().boundingBox()
+    return { pills: pills!.y, firstCard: firstCard!.y }
+  }
+
+  test('the pill row and the first card stay put from "Alle" to a category and back', async ({ page }, testInfo) => {
+    testInfo.skip(testInfo.project.use.isMobile === true, 'a phone has no pill strip — discovery is search-only')
+    await gotoApp(page, '/?tab=dienste')
+    const main = page.getByRole('main')
+    await expect(main.getByRole('link').first()).toBeVisible()
+    const onAll = await layout(page)
+    // Neither the unfiltered view nor a facet has a section heading; the
+    // highlighted pill is what names the view.
+    await expect(main.getByRole('heading', { level: 2 })).toHaveCount(0)
+
+    // Any real category will do — the first pill after "Alle" that is not a
+    // tag facet. The seeded catalog has several.
+    const category = pillStrip(page).getByRole('button').filter({ hasNotText: /^Alle$|^All$|Wartung|maintenance|^Beta$/ }).first()
+    const name = await category.textContent()
+    await category.click()
+    await expect(page).toHaveURL(/cat=/)
+    await expect(category).toHaveAttribute('aria-pressed', 'true')
+    await expect(main.getByRole('heading', { level: 2 })).toHaveCount(0)
+    const onCategory = await layout(page)
+    expect(onCategory.pills, `the pill row does not move when "${name}" is selected`).toBeCloseTo(onAll.pills, 0)
+    expect(onCategory.firstCard, 'the first card does not move either').toBeCloseTo(onAll.firstCard, 0)
+    await expectViewportHealthy(page, { label: `category "${name}" selected` })
+
+    await pillStrip(page).getByRole('button', { name: /^Alle$|^All$/ }).click()
+    await expect(page).not.toHaveURL(/cat=/)
+    const backOnAll = await layout(page)
+    expect(backOnAll.pills, 'and comes back to the same place on "Alle"').toBeCloseTo(onAll.pills, 0)
+    expect(backOnAll.firstCard).toBeCloseTo(onAll.firstCard, 0)
+  })
+
+  test('the restricted marker is still on screen for a restricted category, on its pill', async ({ page }, testInfo) => {
+    testInfo.skip(testInfo.project.use.isMobile === true, 'a phone has no pill strip')
+    // The e2e user holds `dash-team` (dev/config.e2e.yaml), so the seeded
+    // restricted category renders for them, marked. The heading used to carry
+    // the same marker a second time; the pill is now its only — sufficient —
+    // home, and the marker's meaning stays in the pill's accessible name.
+    await gotoApp(page, '/?tab=dienste')
+    const restricted = pillStrip(page).getByRole('button', { name: /Nur für .* sichtbar|Only visible to/ })
+    await expect(restricted).toHaveCount(1)
+    await restricted.click()
+    await expect(restricted).toHaveAttribute('aria-pressed', 'true')
+    await expect(restricted.getByText(/Nur für .* sichtbar|Only visible to/)).toBeAttached()
+    await expect(page.getByRole('main').getByRole('heading', { level: 2 })).toHaveCount(0)
+  })
+})

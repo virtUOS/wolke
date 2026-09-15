@@ -76,24 +76,26 @@ test('re-clicking the active Dienste tab resets the category filter', async ({ p
   await expect(main.getByRole('link', { name: /VPN/ }).first()).toBeVisible()
 })
 
-// Same regression, driven through the actual category pills and the heading
-// they filter down to — desktop only, since both are desktop-only chrome
-// (mobile has no filter controls or section heading; discovery is search-only).
-// The unfiltered view it lands back on is named by the active tab, not by a
-// heading: a section heading there would only repeat the tab (issue #170).
+// Same regression, driven through the actual category pills — desktop only,
+// since they are desktop-only chrome (mobile has no filter controls; discovery
+// is search-only). No view here has a section heading: the unfiltered one is
+// named by the active tab (issue #170) and a facet by its highlighted pill
+// (issue #182), so the active view is read off the pill's pressed state.
 test('picking a category pill then leaving Dienste resets it (desktop pills)', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.use.isMobile === true, 'category pills and the section heading are desktop-only')
+  test.skip(testInfo.project.use.isMobile === true, 'category pills are desktop-only')
   await page.goto('/?tab=dienste')
   const filterGroup = page.getByRole('group', { name: /Kategorien filtern|Filter by category/i })
-  await filterGroup.getByRole('button', { name: 'Netz & Daten' }).click()
+  const categoryPill = filterGroup.getByRole('button', { name: 'Netz & Daten' })
+  await categoryPill.click()
   await expect(page).toHaveURL(/cat=data/)
-  await expect(page.getByRole('heading', { level: 2, name: 'Netz & Daten' })).toBeVisible()
+  await expect(categoryPill).toHaveAttribute('aria-pressed', 'true')
 
   const nav = page.getByRole('navigation', { name: /Hauptnavigation|Main navigation/i })
   await nav.getByRole('button', { name: 'Favoriten' }).click()
   await nav.getByRole('button', { name: 'Dienste' }).click()
 
   await expect(nav.getByRole('button', { name: /^Alle Dienste/ })).toHaveAttribute('aria-current', 'page')
-  await expect(page.getByRole('heading', { level: 2, name: 'Netz & Daten' })).toHaveCount(0)
+  await expect(categoryPill).toHaveAttribute('aria-pressed', 'false')
+  await expect(filterGroup.getByRole('button', { name: /^Alle$|^All$/ })).toHaveAttribute('aria-pressed', 'true')
   await expect(page).not.toHaveURL(/cat=/)
 })
