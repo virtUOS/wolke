@@ -136,6 +136,8 @@ const de = {
       `${name} an Position ${position} von ${total}`,
   },
   tile: {
+    // `docsOnly` has no visible counterpart since issue #177 removed the
+    // status badge; the cue lives on in the accessible name, like newTab below.
     open: (name: string, docsOnly: boolean) => (docsOnly ? `${name} – Dokumentation öffnen` : `${name} öffnen`),
     // Status + new-tab suffixes folded into the link's accessible name so a
     // screen-reader user hears what a sighted user sees (the badge) and is warned
@@ -147,7 +149,6 @@ const de = {
     removeFav: (name: string) => `${name} aus Favoriten entfernen`,
     beta: 'Beta',
     maintenance: 'Wartung',
-    docs: 'Dokumentation', // the docs-only status badge
     docsLink: 'Doku', // the link to external documentation (short)
   },
   catalog: {
@@ -399,7 +400,6 @@ const en: Strings = {
     removeFav: (name: string) => `Remove ${name} from favorites`,
     beta: 'Beta',
     maintenance: 'Maintenance',
-    docs: 'Documentation', // the docs-only status badge
     docsLink: 'docs', // the link to external documentation (short)
   },
   catalog: {
