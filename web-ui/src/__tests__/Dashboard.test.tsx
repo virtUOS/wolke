@@ -247,10 +247,11 @@ describe('Dashboard clears search on launch from a result (issue #27)', () => {
     expect(search).toHaveValue('MyShare')
   })
 
-  it('the documentation link leaves the search alone', async () => {
+  it('the guide link leaves the search alone', async () => {
     const { user, search } = await searchAndGetLink()
-    const docLink = screen.getByRole('link', { name: /Doku/ })
-    await user.click(docLink)
+    const guide = screen.getByRole('link', { name: /Anleitung öffnen/ })
+    expect(guide).toHaveAttribute('href', 'https://docs.example.edu/myshare')
+    await user.click(guide)
     await waitFor(() => expect(recordClickCalls.length).toBe(1))
     expect(search).toHaveValue('MyShare')
   })

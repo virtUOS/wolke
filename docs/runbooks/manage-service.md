@@ -28,7 +28,9 @@ effectively permanent when deciding whether to use it.
    - **Service URL** — the launch link. At least one of Service URL / Doc URL
      is required; a service with only a Doc URL is a documentation-only
      "service" (no launch button).
-   - **Doc URL** — optional documentation link.
+   - **Doc URL** — optional link to the guide. On the tile it renders as the
+     "Anleitung" help icon beside the favourite star (omitted for a
+     documentation-only service, whose main link already opens it).
    - **Categories** — pick at least one (checkboxes); required.
    - **Keywords** — optional search terms, comma/Enter-separated chips. Max
      32 keywords, 50 characters each (enforced both client- and server-side).

@@ -5,9 +5,12 @@
 // the label pushed the pill out of its corner, and at the narrowest grid column
 // the row clipped its content.
 //
-// The invariant the fix has to hold, at every viewport that renders the grid:
-// the docs pill stays anchored in the footer's trailing corner, at its full
-// size, and the label never overlaps it — it wraps instead.
+// Issue #185 moved the docs control out of the footer: it is now the guide
+// (help) link in the header cluster beside the star, and the footer holds
+// only the label. The invariant that remains is the one that mattered: the
+// label wraps inside its own box instead of clipping, and the footer stays
+// label-only at every viewport that renders the grid — nothing can be pushed
+// out of a corner that no longer has a control in it.
 //
 // The footer only exists in the grid layout (>= 768px; a phone renders the list
 // row, which has no footer), so the geometry assertions skip the phone
@@ -39,43 +42,40 @@ async function box(locator: Locator): Promise<{ x: number; y: number; width: num
   return b!
 }
 
-test.describe('issue #97 — a long category name keeps the docs pill anchored', () => {
-  test('the docs pill holds the footer corner at its full size', async ({ page }, testInfo) => {
+test.describe('issue #97 — a long category name keeps the footer intact', () => {
+  test('the footer is label-only and the guide link lives in the header cluster', async ({ page }, testInfo) => {
     test.skip(testInfo.project.use.isMobile === true, 'the footer is grid-layout only (>= 768px)')
 
     await stubLongCategoryLabels(page)
     await gotoApp(page, '/?tab=dienste')
 
     // MyShare is seeded with both a service_url and a doc_url, so its card is
-    // the one that renders label + pill side by side.
+    // the one that renders the guide link beside the star.
     const card = page.locator('.tile-grid', { has: page.getByRole('link', { name: /MyShare/ }) }).first()
     await expect(card).toBeVisible()
 
     const label = card.getByText(LONG_CATEGORY_DE)
-    const pill = card.getByRole('link', { name: /Doku/ })
+    const help = card.getByRole('link', { name: /^Anleitung öffnen/ })
+    const star = card.getByRole('button', { name: /Favoriten/ })
     await expect(label).toBeVisible()
-    await expect(pill).toBeVisible()
+    await expect(help).toBeVisible()
+    await expect(star).toBeVisible()
 
-    const [cardBox, labelBox, pillBox] = await Promise.all([box(card), box(label), box(pill)])
+    // The footer (the label's row) carries no control any more.
+    const footer = label.locator('xpath=..')
+    await expect(footer.locator('a, button')).toHaveCount(0)
 
-    // The pill keeps its own width — squeezed to a sliver is the defect, not a fix.
-    const pillTextWidth = await pill.evaluate((el) => el.scrollWidth)
-    expect(pillBox.width, 'docs pill width vs. its content').toBeGreaterThanOrEqual(pillTextWidth - 1)
+    const [cardBox, labelBox, helpBox, starBox] = await Promise.all([box(card), box(label), box(help), box(star)])
 
-    // Anchored in the trailing corner: flush with the card's content edge
-    // (20px card padding), not shoved off it by the label.
-    const cardRight = cardBox.x + cardBox.width
-    const pillRight = pillBox.x + pillBox.width
-    expect(
-      cardRight - pillRight,
-      `docs pill inset from the card's right edge (card ${cardBox.width}px wide)`,
-    ).toBeLessThanOrEqual(21)
-    expect(pillRight, 'docs pill must stay inside the card').toBeLessThanOrEqual(cardRight + 1)
+    // The label owns the footer's width and stays inside the card.
+    expect(labelBox.x + labelBox.width, 'label right edge vs. card').toBeLessThanOrEqual(cardBox.x + cardBox.width + 1)
 
-    // …and the label gives way rather than running under it.
-    expect(labelBox.x + labelBox.width, 'category label right edge vs. pill left edge').toBeLessThanOrEqual(
-      pillBox.x + 1,
-    )
+    // The guide link sits directly left of the star, on the star's row.
+    expect(helpBox.x + helpBox.width, 'guide link right edge vs. star left edge').toBeLessThanOrEqual(starBox.x + 1)
+    expect(starBox.x - (helpBox.x + helpBox.width), 'gap between guide link and star').toBeLessThanOrEqual(8)
+    expect(Math.abs(helpBox.y - starBox.y), 'guide link and star top-aligned').toBeLessThanOrEqual(1)
+    // …and above the label, not in its row.
+    expect(helpBox.y + helpBox.height, 'guide link sits above the footer').toBeLessThanOrEqual(labelBox.y)
   })
 
   test('the long label wraps inside the card instead of clipping', async ({ page }, testInfo) => {

@@ -149,7 +149,10 @@ const de = {
     removeFav: (name: string) => `${name} aus Favoriten entfernen`,
     beta: 'Beta',
     maintenance: 'Wartung',
-    docsLink: 'Doku', // the link to external documentation (short)
+    // The icon-only help button beside the star (#185): `guide` is the tooltip,
+    // `guideOpen` the accessible name (the new-tab suffix is appended in place).
+    guide: 'Anleitung',
+    guideOpen: 'Anleitung öffnen',
   },
   catalog: {
     empty: 'Keine Dienste gefunden.',
@@ -401,7 +404,8 @@ const en: Strings = {
     removeFav: (name: string) => `Remove ${name} from favorites`,
     beta: 'Beta',
     maintenance: 'Maintenance',
-    docsLink: 'docs', // the link to external documentation (short)
+    guide: 'Guide',
+    guideOpen: 'Open guide',
   },
   catalog: {
     empty: 'No services found.',
