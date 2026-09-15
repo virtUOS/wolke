@@ -247,12 +247,17 @@ describe('Dashboard clears search on launch from a result (issue #27)', () => {
     expect(search).toHaveValue('MyShare')
   })
 
-  it('the documentation link leaves the search alone', async () => {
-    const { user, search } = await searchAndGetLink()
-    const docLink = screen.getByRole('link', { name: /Doku/ })
-    await user.click(docLink)
-    await waitFor(() => expect(recordClickCalls.length).toBe(1))
-    expect(search).toHaveValue('MyShare')
+  it('the guide button leaves the search alone', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    try {
+      const { user, search } = await searchAndGetLink()
+      await user.click(screen.getByRole('button', { name: /Anleitung öffnen/ }))
+      await waitFor(() => expect(recordClickCalls.length).toBe(1))
+      expect(open).toHaveBeenCalledWith('https://docs.example.edu/myshare', '_blank', 'noopener,noreferrer')
+      expect(search).toHaveValue('MyShare')
+    } finally {
+      open.mockRestore()
+    }
   })
 })
 

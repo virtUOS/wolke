@@ -101,15 +101,16 @@ test.describe('the admin surface at every viewport', () => {
     await page.getByRole('button', { name: 'Abbrechen' }).click()
 
     // The *edit* form of a service that has a doc_url: its live preview renders
-    // the grid card, whose documentation chip is the one control only reachable
-    // at phone widths through this screen (issue #101).
+    // the grid card, whose guide button is the one control only reachable at
+    // phone widths through this screen (issue #101) — which is why it keeps
+    // the 44px floor like the star (issue #185, settled decision 2).
     await page
       .getByRole('listitem')
       .filter({ hasText: 'MyShare' })
       .getByRole('button', { name: 'Bearbeiten' })
       .click()
     await expect(page.getByRole('heading', { level: 3, name: /bearbeiten/i })).toBeVisible()
-    await expect(page.getByRole('link', { name: /^Doku/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Anleitung öffnen/ })).toBeVisible()
     // The edit form arrives with an empty icon search, i.e. the full curated
     // list — the state that actually overflows the picker's box.
     await expect(page.getByRole('button', { name: 'hard-drive' })).toBeVisible()

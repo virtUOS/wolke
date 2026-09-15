@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react'
-import { FileText, Star } from 'lucide-react'
+import { CircleHelp, Star } from 'lucide-react'
 import { localized, type Category, type ClickTarget, type Service } from '@/lib/api'
 import { t } from '@/lib/i18n'
 import { ServiceIcon } from '@/lib/icons'
@@ -78,9 +78,10 @@ interface TileProps {
 }
 
 // Editorial tile (docs/03 §5). The main tile area is a full-coverage <a> that
-// opens the service. The star and "Dokumentation" footer link are separate
-// interactive elements layered above it via pointer-events. Description is
-// always visible — no expand/collapse in the Editorial direction.
+// opens the service. The guide (help) button and the star are separate
+// interactive elements layered above it via pointer-events, side by side in
+// one action cluster (issue #185). Description is always visible — no
+// expand/collapse in the Editorial direction.
 export function Tile({ service, locale, categories, favorited, onToggleFavorite, onLaunch, layout = 'grid' }: TileProps) {
   const s = t(locale)
   const launchHref = service.service_url || service.doc_url || '#'
@@ -114,6 +115,37 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
       <Star className={cn('h-5 w-5', favorited && 'fill-[var(--accent)]')} aria-hidden="true" />
     </IconButton>
   ) : null
+
+  // The guide button (issue #185): icon-only help, directly left of the star
+  // in both layouts. Same IconButton as the star, so it carries the same 44px
+  // phone floor and collapses to the same box from `md:` up — the grid card is
+  // reachable at phone widths through the admin form's live preview (#101).
+  //
+  // A doc-only entry gets none: its own link already opens the documentation,
+  // and a second control to the identical URL beside the first would be noise.
+  //
+  // It is a <button>, not a link, per the handoff: it opens the guide in a new
+  // tab itself (noopener, like the tile's link) and must never launch the tile
+  // underneath — the click is stopped here. The metrics target stays
+  // 'documentation'; that is a label in wolke_service_clicks_total, not copy.
+  const helpBtn =
+    !docsOnly && service.doc_url ? (
+      <IconButton
+        variant="ghost"
+        size="sm"
+        className="h-11 w-11 md:h-7 md:w-7"
+        aria-label={s.tile.guideOpen + s.tile.newTab}
+        title={s.tile.guide}
+        style={{ pointerEvents: 'auto', flexShrink: 0 }}
+        onClick={(e) => {
+          e.stopPropagation()
+          window.open(service.doc_url, '_blank', 'noopener,noreferrer')
+          onLaunch?.(service, 'documentation', false)
+        }}
+      >
+        <CircleHelp className="h-5 w-5" aria-hidden="true" />
+      </IconButton>
+    ) : null
 
   // ── Mobile list row ────────────────────────────────────────────────────────
   if (layout === 'list') {
@@ -171,22 +203,12 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
               {service.tag === 'wartung' && <Badge variant="warning">{s.tile.maintenance}</Badge>}
             </div>
 
+            {/* No gap between the two 44px boxes: their own padding already
+                keeps the icons apart, and every pixel here is title width —
+                4px was the difference between "Identitätsmanagement" on one
+                line and on three at 360px (issue #99). */}
             <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'auto' }}>
-              {!docsOnly && service.doc_url && (
-                <a
-                  href={service.doc_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={s.tile.docsLink + s.tile.newTab}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onLaunch?.(service, 'documentation', false)
-                  }}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-md border border-border bg-surface-2 p-1.5 text-text-muted transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:h-auto md:w-auto"
-                >
-                  <FileText className="h-4 w-4" aria-hidden="true" />
-                </a>
-              )}
+              {helpBtn}
               {starBtn}
             </div>
           </div>
@@ -221,7 +243,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
       />
 
       {/* Content — pointer-events:none lets clicks fall through to the link
-          except on the star and docs-link which re-enable them explicitly. */}
+          except on the action cluster, which re-enables them explicitly. */}
       <div
         style={{
           position: 'relative',
@@ -234,7 +256,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           pointerEvents: 'none',
         }}
       >
-        {/* Top row: icon chip + star */}
+        {/* Top row: icon chip + action cluster (guide button, star) */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
           <div
             aria-hidden="true"
@@ -246,7 +268,10 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           >
             <ServiceIcon name={service.icon} className="h-[22px] w-[22px]" aria-hidden="true" />
           </div>
-          <div style={{ pointerEvents: 'auto', flexShrink: 0 }}>{starBtn}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, pointerEvents: 'auto', flexShrink: 0 }}>
+            {helpBtn}
+            {starBtn}
+          </div>
         </div>
 
         {/* Body: name + badge(s) + description */}
@@ -259,16 +284,19 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           <TileDescription>{description}</TileDescription>
         </div>
 
-        {/* Footer: category label + docs link. The label is the flexible half
-            (min-width:0 + hyphenate-compound): a long German compound wraps
-            inside its own column instead of pushing the docs pill out of the corner —
-            uppercase + letter-spacing makes even a 31-character category wider
-            than the narrowest grid column (issue #97). The pill never shrinks,
-            so it stays anchored at the trailing edge at every viewport. */}
+        {/* Footer: the category label alone (issue #185 moved the docs control
+            up into the action cluster). The label is min-width:0 +
+            hyphenate-compound, so a long German compound wraps inside its own
+            column instead of clipping (issue #97).
+
+            minHeight is the box the old docs pill had (16px text-xs line +
+            2×4px padding + 2×1px border). The card is height:100% in a grid
+            whose rows are sized by content, so a footer that quietly shrank
+            would reflow every row — the geometry stays what it was. */}
         <div
           style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            gap: 8, marginTop: 'auto',
+            display: 'flex', alignItems: 'center',
+            gap: 8, marginTop: 'auto', minHeight: 26,
           }}
         >
           <span
@@ -281,29 +309,6 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
           >
             {categoryLabel}
           </span>
-          {/* Docs-only tiles already open the documentation via the main link, so
-              the secondary docs chip is redundant and omitted. */}
-          {!docsOnly && service.doc_url && (
-            <a
-              href={service.doc_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={s.tile.docsLink + s.tile.newTab}
-              onClick={(e) => {
-                e.stopPropagation()
-                onLaunch?.(service, 'documentation', false)
-              }}
-              style={{ pointerEvents: 'auto' }}
-              // The grid card is the desktop layout, but it is reachable at
-              // phone widths through the admin service form's live preview, so
-              // the chip carries the 44px floor like every other control and
-              // collapses to its designed box from md: up (issue #101).
-              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface-2 px-3 py-1 text-xs font-semibold text-text-muted no-underline transition-colors hover:border-primary hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0 md:px-2"
-            >
-              <FileText className="h-[14px] w-[14px]" aria-hidden="true" />
-              {s.tile.docsLink}
-            </a>
-          )}
         </div>
       </div>
     </div>

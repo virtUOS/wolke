@@ -1,5 +1,6 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { MockInstance } from 'vitest'
 import { Tile } from '@/components/Tile'
 import type { Category, Service } from '@/lib/api'
 import { expectNoAxeViolations } from '@/test/axe'
@@ -15,6 +16,17 @@ const service: Service = {
   service_url: 'https://myshare.example.edu',
   doc_url: 'https://docs.example.edu/myshare',
   icon: 'hard-drive',
+  categories: ['data'],
+  doc_only: false,
+}
+
+/** A launchable service without a guide: the help button has nothing to open. */
+const noGuide: Service = {
+  id: 's3',
+  name: 'Serververwaltung',
+  description: { de: 'Verwaltung der Server.', en: 'Server management.' },
+  service_url: 'https://srv.example.edu',
+  icon: 'server',
   categories: ['data'],
   doc_only: false,
 }
@@ -38,17 +50,15 @@ describe('Tile', () => {
     expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
   })
 
-  it('description is always visible and documentation link is in the footer', () => {
+  it('description is always visible', () => {
     render(<Tile service={service} categories={categories} locale="de" />)
     expect(screen.getByText('Persönlicher Netzspeicher.')).toBeInTheDocument()
-    const docsLink = screen.getByRole('link', { name: /Doku/ })
-    expect(docsLink).toHaveAttribute('href', 'https://docs.example.edu/myshare')
   })
 
   // Issue #177: "this entry links to a help page rather than an app" is a
   // property of the link, not a status the user is meant to act on, so it no
   // longer sits in the badge slot beside Beta and Wartung. `doc_only` itself
-  // stays — it is what suppresses the redundant secondary "Doku" chip below.
+  // stays — it is what suppresses the redundant secondary guide button (#185).
   it.each(['grid', 'list'] as const)('a doc-only entry (%s) launches its documentation with no status badge', (layout) => {
     render(<Tile service={docOnly} categories={categories} locale="de" layout={layout} />)
     const links = screen.getAllByRole('link')
@@ -76,13 +86,6 @@ describe('Tile', () => {
     expect(
       screen.getByRole('link', { name: 'WLAN an der UOS – Dokumentation öffnen (öffnet in neuem Tab)' }),
     ).toBeInTheDocument()
-  })
-
-  it.each(['grid', 'list'] as const)('a service with both URLs (%s) still shows the Doku chip', (layout) => {
-    render(<Tile service={service} categories={categories} locale="de" layout={layout} />)
-    expect(screen.queryByText('Dokumentation')).not.toBeInTheDocument()
-    const docsLink = screen.getByRole('link', { name: /Doku/ })
-    expect(docsLink).toHaveAttribute('href', 'https://docs.example.edu/myshare')
   })
 
   it('shows the favorite star only when a handler is provided, with aria-pressed', async () => {
@@ -123,12 +126,129 @@ describe('Tile', () => {
     expect(onLaunch).toHaveBeenCalledWith(service, undefined, false)
   })
 
-  it('fires onLaunch with plainClick=false when the Doku link is activated', async () => {
-    const user = userEvent.setup()
-    const onLaunch = vi.fn()
-    render(<Tile service={service} categories={categories} locale="de" onLaunch={onLaunch} />)
-    await user.click(screen.getByRole('link', { name: /Doku/ }))
-    expect(onLaunch).toHaveBeenCalledWith(service, 'documentation', false)
+  // Issue #185: the footer "Doku" chip became an icon-only help button in the
+  // action cluster beside the star, in both layouts. It is a real <button>
+  // that opens the guide in a new tab; the tile's own link is a sibling
+  // underneath it, so activating help must never launch the service.
+  describe('the guide (help) button', () => {
+    const GUIDE_NAME_DE = 'Anleitung öffnen (öffnet in neuem Tab)'
+    const GUIDE_NAME_EN = 'Open guide (opens in new tab)'
+    let open: MockInstance
+
+    beforeEach(() => {
+      // jsdom has no window.open; the button must call it with the guide URL.
+      open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    })
+    afterEach(() => {
+      open.mockRestore()
+    })
+
+    it.each(['grid', 'list'] as const)('renders (%s) only for a service with a guide that is not doc-only', (layout) => {
+      render(<Tile service={service} categories={categories} locale="de" layout={layout} onToggleFavorite={() => {}} />)
+      const help = screen.getByRole('button', { name: GUIDE_NAME_DE })
+      expect(help.tagName).toBe('BUTTON')
+      expect(help).toHaveAttribute('title', 'Anleitung')
+      // The visible copy is "Anleitung" everywhere; "Doku" is gone for good.
+      expect(screen.queryByText(/Doku/)).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(/Doku/)).not.toBeInTheDocument()
+      // Still exactly one link — the launch overlay. The guide is no longer an <a>.
+      expect(screen.getAllByRole('link')).toHaveLength(1)
+
+      cleanup()
+      render(<Tile service={noGuide} categories={categories} locale="de" layout={layout} onToggleFavorite={() => {}} />)
+      expect(screen.queryByRole('button', { name: GUIDE_NAME_DE })).not.toBeInTheDocument()
+
+      cleanup()
+      // Settled decision 1: a doc-only entry's own link already opens the
+      // documentation, so no second control to the same URL.
+      render(<Tile service={docOnly} categories={categories} locale="de" layout={layout} onToggleFavorite={() => {}} />)
+      expect(screen.queryByRole('button', { name: GUIDE_NAME_DE })).not.toBeInTheDocument()
+    })
+
+    it.each(['grid', 'list'] as const)('carries the English name and tooltip (%s)', (layout) => {
+      render(<Tile service={service} categories={categories} locale="en" layout={layout} />)
+      expect(screen.getByRole('button', { name: GUIDE_NAME_EN })).toHaveAttribute('title', 'Guide')
+    })
+
+    it.each(['grid', 'list'] as const)('opens the guide in a new tab without launching the tile (%s)', async (layout) => {
+      const user = userEvent.setup()
+      const onLaunch = vi.fn()
+      render(<Tile service={service} categories={categories} locale="de" layout={layout} onLaunch={onLaunch} />)
+      await user.click(screen.getByRole('button', { name: GUIDE_NAME_DE }))
+      expect(open).toHaveBeenCalledTimes(1)
+      expect(open).toHaveBeenCalledWith('https://docs.example.edu/myshare', '_blank', 'noopener,noreferrer')
+      // Settled decision 4: the metrics target keeps its value.
+      expect(onLaunch).toHaveBeenCalledTimes(1)
+      expect(onLaunch).toHaveBeenCalledWith(service, 'documentation', false)
+    })
+
+    it.each(['grid', 'list'] as const)('sits in the tab order after the tile link and before the star, and takes Enter and Space (%s)', async (layout) => {
+      const user = userEvent.setup()
+      const onLaunch = vi.fn()
+      const onToggle = vi.fn()
+      render(
+        <Tile
+          service={service}
+          categories={categories}
+          locale="de"
+          layout={layout}
+          favorited={false}
+          onToggleFavorite={onToggle}
+          onLaunch={onLaunch}
+        />,
+      )
+      await user.tab()
+      expect(screen.getByRole('link', { name: /MyShare/ })).toHaveFocus()
+      await user.tab()
+      const help = screen.getByRole('button', { name: GUIDE_NAME_DE })
+      expect(help).toHaveFocus()
+      // The focus ring is the shared IconButton one (docs/03 §8).
+      expect(help.className).toContain('focus-visible:ring-2')
+      await user.tab()
+      expect(screen.getByRole('button', { name: /zu Favoriten hinzufügen/ })).toHaveFocus()
+
+      help.focus()
+      await user.keyboard('{Enter}')
+      await user.keyboard(' ')
+      expect(open).toHaveBeenCalledTimes(2)
+      expect(onLaunch).toHaveBeenCalledTimes(2)
+      expect(onLaunch).not.toHaveBeenCalledWith(service, undefined, expect.anything())
+      expect(onToggle).not.toHaveBeenCalled()
+    })
+
+    it.each(['grid', 'list'] as const)('is immediately left of the star in the DOM (%s)', (layout) => {
+      render(<Tile service={service} categories={categories} locale="de" layout={layout} onToggleFavorite={() => {}} />)
+      const help = screen.getByRole('button', { name: GUIDE_NAME_DE })
+      const star = screen.getByRole('button', { name: /Favoriten/ })
+      expect(help.parentElement).toBe(star.parentElement)
+      expect(help.nextElementSibling).toBe(star)
+    })
+
+    it('leaves the grid footer with only the category label, at the old footer height', () => {
+      render(<Tile service={service} categories={categories} locale="de" onToggleFavorite={() => {}} />)
+      const label = screen.getByText('Netz & Daten')
+      const footer = label.parentElement!
+      expect(footer.textContent).toBe('Netz & Daten')
+      expect(within(footer).queryAllByRole('link')).toHaveLength(0)
+      expect(within(footer).queryAllByRole('button')).toHaveLength(0)
+      // The card is height:100% in a grid; a footer that lost its 26px pill
+      // (16px text-xs line + 2×4px padding + 2×1px border) would reflow the row.
+      expect(footer).toHaveStyle({ minHeight: '26px' })
+    })
+
+    it.each(['grid', 'list'] as const)('has no axe violations (%s)', async (layout) => {
+      const { container } = render(
+        <Tile
+          service={service}
+          categories={categories}
+          locale="de"
+          layout={layout}
+          onToggleFavorite={() => {}}
+          onLaunch={() => {}}
+        />,
+      )
+      await expectNoAxeViolations(container)
+    })
   })
 
   it('has no axe violations with all controls', async () => {

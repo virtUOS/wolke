@@ -36,7 +36,7 @@ const MIN_DESCRIPTION_SHARE = 0.85
 
 /** The row's own controls, by their real accessible names (src/lib/i18n.ts). */
 const ROW_CONTROLS = [
-  { what: 'documentation link', name: 'Doku (öffnet in neuem Tab)' },
+  { what: 'guide button', name: 'Anleitung öffnen (öffnet in neuem Tab)' },
   { what: 'favourite star', name: /zu Favoriten hinzufügen$|aus Favoriten entfernen$/ },
 ]
 
@@ -63,9 +63,9 @@ test.describe('issue #99 — the phone layout is comfortably sized', () => {
     //
     // `:not(.tile-focus-link)` excludes the row's full-coverage launch overlay:
     // it is a link too, and for a doc-only entry its accessible name is
-    // "… – Dokumentation öffnen", which a loose /Dokumentation/ matcher hit
-    // instead of the docs chip. Every seeded service has a doc_url, so both
-    // controls must be there — a missing one is a failure, not a skip.
+    // "… – Dokumentation öffnen", which a loose matcher once hit instead of the
+    // docs control. The first seeded service has a doc_url and a service_url,
+    // so both controls must be there — a missing one is a failure, not a skip.
     const row = page.locator('.tile-list-item').first()
     for (const { what, name } of ROW_CONTROLS) {
       const control = row

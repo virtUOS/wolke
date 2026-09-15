@@ -6,7 +6,7 @@
 // help page rather than an app" is a property of the link, and the user finds
 // that out by following it.
 //
-// `doc_only` itself stays — it suppresses the secondary "Doku" chip on a tile
+// `doc_only` itself stays — it suppresses the secondary guide button on a tile
 // whose main link already *is* the documentation — so both halves are asserted
 // here: no status badge, and still exactly one link.
 //
@@ -50,11 +50,13 @@ test.describe('issue #177 — a doc-only tile carries no status badge', () => {
     const tile = tileOf(page, DOC_ONLY_NAME, isMobile)
     await expect(tile).toBeVisible()
 
-    // The badge is gone from the visible text — in either locale's wording, and
-    // the short "Doku" chip with it (the main link is already the docs).
+    // The badge is gone from the visible text — in either locale's wording — and
+    // so is the secondary guide control (the main link is already the docs;
+    // since #185 that control is the help button beside the star, so it is
+    // asserted by role rather than by the old "Doku" text).
     await expect(tile.getByText('Dokumentation', { exact: true })).toHaveCount(0)
     await expect(tile.getByText('Documentation', { exact: true })).toHaveCount(0)
-    await expect(tile.getByText('Doku', { exact: true })).toHaveCount(0)
+    await expect(tile.getByRole('button', { name: /Anleitung öffnen|Open guide/ })).toHaveCount(0)
 
     // One link: the full-coverage launch overlay, pointing at the doc URL.
     const links = tile.locator('a')
