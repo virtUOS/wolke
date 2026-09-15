@@ -217,6 +217,54 @@ func TestAssistantWidgetURLValidated(t *testing.T) {
 	}
 }
 
+// news_url follows the bot_url / help_url pattern — empty by default (the link
+// is hidden), settable via file, overridable via env — but is stricter about
+// what it accepts: a news site is a website, so only http(s) passes.
+func TestNewsURLConfig(t *testing.T) {
+	cfg, err := load("", envMap(nil))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Branding.NewsURL != "" {
+		t.Errorf("NewsURL = %q, want empty by default (link hidden)", cfg.Branding.NewsURL)
+	}
+
+	path := writeTemp(t, `
+branding:
+  news_url: https://from-file.example.edu/news
+`)
+	cfg, err = load(path, envMap(nil))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Branding.NewsURL != "https://from-file.example.edu/news" {
+		t.Errorf("NewsURL = %q, want the file value", cfg.Branding.NewsURL)
+	}
+
+	cfg, err = load(path, envMap(map[string]string{"NEWS_URL": "https://news.example.edu"}))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Branding.NewsURL != "https://news.example.edu" {
+		t.Errorf("NewsURL = %q, want env to win over file", cfg.Branding.NewsURL)
+	}
+}
+
+// Unlike feedback_url (mailto:) and help_url (tel:), news_url is a website:
+// anything else must fail at startup rather than render a dead link.
+func TestNewsURLValidated(t *testing.T) {
+	for _, bad := range []string{"not-a-url", "mailto:news@example.edu", "tel:+495419690", "/news", "ftp://example.edu/news"} {
+		if _, err := load("", envMap(map[string]string{"NEWS_URL": bad})); err == nil {
+			t.Errorf("load: want error for news_url %q, got nil", bad)
+		}
+	}
+	for _, ok := range []string{"", "http://news.example.edu", "https://news.example.edu/aktuelles"} {
+		if _, err := load("", envMap(map[string]string{"NEWS_URL": ok})); err != nil {
+			t.Errorf("load: news_url %q must be valid, got %v", ok, err)
+		}
+	}
+}
+
 func TestMissingFileIsError(t *testing.T) {
 	if _, err := load("/no/such/config.yaml", envMap(nil)); err == nil {
 		t.Fatal("load: want error for missing file, got nil")

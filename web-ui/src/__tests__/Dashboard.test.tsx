@@ -29,7 +29,7 @@ const BRANDING: Branding = {
   privacy_url: '',
   feedback_url: '',
   bot_url: '',
-  help_url: '',
+  help_url: '', news_url: '',
   assistant_widget_url: '',
   assistant_bot_id: '',
   theme: { light: {}, dark: {} },

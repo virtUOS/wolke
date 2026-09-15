@@ -147,6 +147,13 @@ category public. Slugs follow the role rules and may not collide with a role; ea
 `claim` + `match`. See `config.example.yaml`, `docs/specs/service-visibility.md` and the runbook
 below.
 
+**Optional links** are all branding config and all hidden when empty: `imprint_url` /
+`privacy_url` / `feedback_url` in the footer, `bot_url` / `help_url` as top-bar quick actions, and
+`news_url` — a link to the institution's news site at the foot of the notification panel behind the
+bell. Each has an env override (`FEEDBACK_URL`, `BOT_URL`, `HELP_URL`, `NEWS_URL`). `feedback_url`
+also takes an email/`mailto:` and `help_url` a phone number/`tel:`; `news_url` is http(s) only — a
+news site is a website, so anything else fails at startup rather than rendering a dead link.
+
 **Branding assets** are plain files: mount a directory over the bundled `branding/`
 (compose: `- ./branding:/branding:ro,z`). The mount **replaces the bundled set
 wholesale — provide all seven files**: `logo-light.svg`, `logo-dark.svg`,

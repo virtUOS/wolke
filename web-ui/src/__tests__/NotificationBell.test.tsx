@@ -26,9 +26,9 @@ function withClient(ui: ReactNode) {
   return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>
 }
 
-async function openPanel() {
+async function openPanel(newsUrl = '') {
   const user = userEvent.setup()
-  render(withClient(<NotificationBell locale="de" />))
+  render(withClient(<NotificationBell locale="de" newsUrl={newsUrl} />))
   await user.click(await screen.findByRole('button', { name: /Mitteilungen/ }))
   return user
 }
@@ -131,6 +131,43 @@ describe('NotificationBell', () => {
     await screen.findByText('VPN-Störung')
     expect(within(panel).getByRole('heading', { name: 'Verlauf' })).toBeInTheDocument()
     expect(within(panel).queryByRole('heading', { name: 'Aktuell' })).not.toBeInTheDocument()
+  })
+
+  // Issue #179 §2: an optional link to the institution's news site, hidden
+  // entirely when branding.news_url is empty.
+  it('omits the news link when no news_url is configured', async () => {
+    await openPanel()
+    const panel = await screen.findByRole('dialog', { name: 'Mitteilungen' })
+    await screen.findByText('VPN-Störung')
+    expect(within(panel).queryByRole('link', { name: 'Alle Neuigkeiten' })).not.toBeInTheDocument()
+  })
+
+  it('renders the news link inside the panel, opening in a new tab', async () => {
+    await openPanel('https://news.example.edu')
+    const panel = await screen.findByRole('dialog', { name: 'Mitteilungen' })
+    const link = within(panel).getByRole('link', { name: 'Alle Neuigkeiten' })
+    expect(link).toHaveAttribute('href', 'https://news.example.edu')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  // The empty state used to short-circuit the whole panel body — which is the
+  // one case where a user most wants somewhere to go.
+  it('renders the news link in the empty state too', async () => {
+    vi.spyOn(api, 'announcements').mockResolvedValue({ announcements: [] })
+    vi.spyOn(api, 'announcementHistory').mockResolvedValue({ announcements: [] })
+    await openPanel('https://news.example.edu')
+    const panel = await screen.findByRole('dialog', { name: 'Mitteilungen' })
+    await waitFor(() => expect(within(panel).getByText('Keine Mitteilungen.')).toBeInTheDocument())
+    expect(within(panel).getByRole('link', { name: 'Alle Neuigkeiten' })).toBeInTheDocument()
+  })
+
+  it('has no axe violations with the panel open and the news link shown', async () => {
+    const user = userEvent.setup()
+    const { container } = render(withClient(<NotificationBell locale="de" newsUrl="https://news.example.edu" />))
+    await user.click(await screen.findByRole('button', { name: /Mitteilungen/ }))
+    await screen.findByText('VPN-Störung')
+    await expectNoAxeViolations(container)
   })
 
   it('has no axe violations with the panel open', async () => {

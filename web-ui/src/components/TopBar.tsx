@@ -160,7 +160,7 @@ export function TopBar({
               <MessageCircleQuestionMark className="h-5 w-5" aria-hidden="true" />
             </a>
           )}
-          <NotificationBell locale={locale} />
+          <NotificationBell locale={locale} newsUrl={branding.news_url} />
           <AccountMenu
             locale={locale}
             currentLocalePref={currentLocalePref}

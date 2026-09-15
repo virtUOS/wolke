@@ -101,6 +101,11 @@ type Branding struct {
 	// a phone number / tel: link (the dialer on a smartphone).
 	BotURL  string `yaml:"bot_url" json:"bot_url"`
 	HelpURL string `yaml:"help_url" json:"help_url"`
+	// NewsURL is the institution's news site, linked at the foot of the
+	// notification panel. Empty hides the link. Unlike FeedbackURL (mailto:) and
+	// HelpURL (tel:), news is a website: only http(s) is accepted, and validate()
+	// refuses anything else at startup rather than rendering a dead link.
+	NewsURL string `yaml:"news_url" json:"news_url"`
 	// Embedded assistant chat widget (launcher mode). Enabled only when both are
 	// set; when enabled it supersedes the BotURL top-bar link. AssistantWidgetURL
 	// is the absolute http(s) URL of the widget bundle; its origin doubles as the
@@ -262,6 +267,7 @@ func applyEnv(cfg *Config, lookupEnv func(string) (string, bool)) {
 	setStr("BRANDING_DIR", &cfg.BrandingDir)
 	setStr("BOT_URL", &cfg.Branding.BotURL)
 	setStr("HELP_URL", &cfg.Branding.HelpURL)
+	setStr("NEWS_URL", &cfg.Branding.NewsURL)
 	setStr("FEEDBACK_URL", &cfg.Branding.FeedbackURL)
 	setStr("ASSISTANT_WIDGET_URL", &cfg.Branding.AssistantWidgetURL)
 	setStr("ASSISTANT_BOT_ID", &cfg.Branding.AssistantBotID)
@@ -297,6 +303,15 @@ func (c *Config) validate() error {
 	}
 	if c.AnnouncementRetentionDays < 0 {
 		return fmt.Errorf("config: announcement_retention_days must be >= 0 (0 disables purging)")
+	}
+	// A news site is a website, not a mail or phone target: a value that isn't
+	// an absolute http(s) URL would render as a dead link in the notification
+	// panel, so refuse it at startup.
+	if v := c.Branding.NewsURL; v != "" {
+		u, err := url.Parse(v)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return fmt.Errorf("config: news_url %q must be an absolute http(s) URL", v)
+		}
 	}
 	// A set widget URL must yield an origin: it feeds the CSP allowlist and the
 	// widget's gateway base URL, so a malformed value must fail at startup, not

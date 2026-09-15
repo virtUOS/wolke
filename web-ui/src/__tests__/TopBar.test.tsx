@@ -18,6 +18,7 @@ const branding = {
   feedback_url: '',
   bot_url: '',
   help_url: '',
+  news_url: '',
   assistant_widget_url: '',
   assistant_bot_id: '',
   theme: { light: {}, dark: {} },
@@ -109,6 +110,20 @@ describe('TopBar quick links', () => {
     renderTopBar('favoriten', () => {}, { branding: linked })
     expect(screen.getByRole('banner').querySelector('a[href="https://bot.example.edu"]')).not.toBeNull()
     expect(screen.getByRole('banner').querySelector('a[href="https://help.example.edu"]')).not.toBeNull()
+  })
+
+  // branding.news_url reaches the notification panel through the bell (#179).
+  it('passes news_url through to the notification panel', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(api, 'announcementHistory').mockResolvedValue({ announcements: [] })
+    renderTopBar('favoriten', () => {}, { branding: { ...linked, news_url: 'https://news.example.edu' } })
+
+    await user.click(await screen.findByRole('button', { name: /Mitteilungen/ }))
+    const panel = await screen.findByRole('dialog', { name: 'Mitteilungen' })
+    expect(within(panel).getByRole('link', { name: 'Alle Neuigkeiten' })).toHaveAttribute(
+      'href',
+      'https://news.example.edu',
+    )
   })
 
   it('moves them into the account menu on a phone', async () => {

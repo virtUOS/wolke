@@ -577,6 +577,8 @@ branding:
   feedback_url: ""  # right-aligned footer feedback link (env FEEDBACK_URL): URL or email/mailto:
   bot_url:  ""   # top-bar chatbot button (env BOT_URL); empty hides it
   help_url: ""   # top-bar help button (env HELP_URL): an http(s) URL or a phone/tel: number
+  news_url: ""   # "Alle Neuigkeiten" link at the foot of the notification panel (env NEWS_URL):
+                 # http(s) only — empty hides it; a non-http(s) value fails at startup
   # Embedded assistant chat widget (launcher mode), e.g. eule (github.com/virtUOS/eule).
   # Active only when BOTH are set; supersedes the bot_url top-bar link. The widget URL's
   # origin doubles as the gateway base URL and is CSP-allowlisted (script-src/connect-src).

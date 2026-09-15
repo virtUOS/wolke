@@ -8,6 +8,11 @@
 //
 // The seeded environment has no announcements, so both endpoints are stubbed
 // with the pathological content the issue is about.
+//
+// The second half covers the panel's optional "Alle Neuigkeiten" link
+// (branding.news_url). The suite's config file sets it (dev/config.e2e.yaml), so
+// the link exercises the real config -> /api/branding -> panel wiring; the
+// hidden case patches the branding response instead.
 
 import type { Page } from '@playwright/test'
 import { expectViewportHealthy } from './helpers/viewport'
@@ -124,5 +129,76 @@ test.describe('issue #179 — the notification panel at every viewport', () => {
     const dialog = page.getByRole('dialog', { name: 'Wartungsfenster Identitätsmanagement' })
     await expect(dialog).toBeVisible()
     await expect(dialog.getByRole('button', { name: dismissLabel })).toHaveCount(0)
+  })
+})
+
+const NEWS_URL = 'https://news.example.edu/aktuelles'
+
+test.describe('issue #179 — the "all news" link', () => {
+  test.beforeEach(async ({ page }) => {
+    await stubAnnouncements(page)
+  })
+
+  test('is the panel\u2019s last element, opening the configured news site in a new tab', async ({
+    page,
+  }, testInfo) => {
+    const isMobile = testInfo.project.use.isMobile === true
+    await gotoApp(page)
+    const panel = await openPanel(page)
+
+    const link = panel.getByRole('link', { name: /Alle Neuigkeiten|All news/ })
+    await expect(link).toBeVisible()
+    await expect(link).toHaveAttribute('href', NEWS_URL)
+    await expect(link).toHaveAttribute('target', '_blank')
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+
+    // Last element: below the history group, and still inside the panel.
+    const linkBox = (await link.boundingBox())!
+    const lastRowBox = (await panel.getByRole('button', { name: /Vergangene Störungsmeldung 5/ }).boundingBox())!
+    expect(linkBox.y).toBeGreaterThan(lastRowBox.y)
+    if (isMobile) expect(linkBox.height).toBeGreaterThanOrEqual(44)
+
+    await expectViewportHealthy(page, { isMobile, label: 'notification panel with the news link' })
+  })
+
+  // The empty state used to short-circuit the whole panel body — the one case
+  // where a user most wants somewhere to go.
+  test('renders in the empty state too', async ({ page }, testInfo) => {
+    const isMobile = testInfo.project.use.isMobile === true
+    await page.route('**/api/announcements', (route) => route.fulfill({ json: { announcements: [] } }))
+    await page.route('**/api/announcements/history', (route) => route.fulfill({ json: { announcements: [] } }))
+    await gotoApp(page)
+    const panel = await openPanel(page)
+
+    await expect(panel.getByText(/Keine Mitteilungen\.|No announcements\./)).toBeVisible()
+    await expect(panel.getByRole('link', { name: /Alle Neuigkeiten|All news/ })).toBeVisible()
+    await expectViewportHealthy(page, { isMobile, label: 'empty notification panel with the news link' })
+  })
+
+  // Hidden entirely when unconfigured: the branding response is patched to drop it.
+  test('is absent when news_url is not configured', async ({ page }) => {
+    await page.route('**/api/branding', async (route) => {
+      const res = await route.fetch()
+      await route.fulfill({ response: res, json: { ...(await res.json()), news_url: '' } })
+    })
+    await gotoApp(page)
+    const panel = await openPanel(page)
+    await expect(panel.getByRole('link', { name: /Alle Neuigkeiten|All news/ })).toHaveCount(0)
+  })
+
+  // The panel is a role="dialog" with a Tab trap; the link must be inside it and
+  // reachable by keyboard.
+  test('is reachable by keyboard inside the panel\u2019s focus trap', async ({ page }) => {
+    await gotoApp(page)
+    const panel = await openPanel(page)
+    const link = panel.getByRole('link', { name: /Alle Neuigkeiten|All news/ })
+
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press('Tab')
+      // Tab never leaves the panel — it is a role="dialog" with a trap.
+      await expect(panel.locator(':focus')).toHaveCount(1)
+      if (await link.evaluate((el) => el === document.activeElement)) break
+    }
+    await expect(link).toBeFocused()
   })
 })

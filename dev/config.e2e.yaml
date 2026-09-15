@@ -17,6 +17,12 @@
 # a user pref (docs/specs/service-visibility.md §2.1).
 #
 # To run the same locally:  CONFIG_FILE=dev/config.e2e.yaml make run
+
+# The optional news link in the notification panel (issue #179): set here so the
+# suite exercises the real config -> /api/branding -> panel wiring.
+branding:
+  news_url: "https://news.example.edu/aktuelles"
+
 visibility:
   - slug: it-infra
     label: { de: "IT-Infrastruktur", en: "IT infrastructure" }

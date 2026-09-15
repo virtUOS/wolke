@@ -90,6 +90,35 @@ func TestBrandingReflectsOverride(t *testing.T) {
 	}
 }
 
+// news_url reaches the SPA through /api/branding like every other optional
+// link, and is absent (empty) by default so the panel's link stays hidden.
+func TestBrandingServesNewsURL(t *testing.T) {
+	cfg := config.Defaults()
+	h := newTestRouter(t, &cfg, Deps{})
+	req := httptest.NewRequest(http.MethodGet, "/api/branding", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	var b config.Branding
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if b.NewsURL != "" {
+		t.Errorf("news_url = %q, want empty by default", b.NewsURL)
+	}
+
+	cfg.Branding.NewsURL = "https://news.example.edu"
+	h = newTestRouter(t, &cfg, Deps{})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/branding", nil))
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if b.NewsURL != "https://news.example.edu" {
+		t.Errorf("news_url = %q, want the configured value", b.NewsURL)
+	}
+}
+
 func TestBrandingAssetServedWhenDirPresent(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "logo-light.svg"), []byte("<svg/>"), 0o600); err != nil {

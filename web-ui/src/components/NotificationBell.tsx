@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { AlertTriangle, Bell, Info, OctagonAlert } from 'lucide-react'
+import { AlertTriangle, ArrowUpRight, Bell, Info, OctagonAlert } from 'lucide-react'
 import type { VariantProps } from 'class-variance-authority'
 import { localized, type Announcement, type Severity } from '@/lib/api'
 import { t, type Lang } from '@/lib/i18n'
@@ -28,7 +28,18 @@ import { focusFirst, trapTab } from '@/lib/focus'
 // moves a notice from the active group into the history group in one step, so
 // nothing becomes unreachable and no second dismiss path is needed. It also keeps
 // the rows free of nested interactive elements (the trap #168 hit with links).
-export function NotificationBell({ locale }: { locale: Lang }) {
+//
+// The panel's last element is an optional link to the institution's news site
+// (branding.news_url): hidden entirely when unconfigured, and rendered in the
+// empty state too — that is the one case where a user most wants somewhere to
+// go (#179).
+interface NotificationBellProps {
+  locale: Lang
+  /** branding.news_url — the institution's news site. Empty hides the link. */
+  newsUrl?: string
+}
+
+export function NotificationBell({ locale, newsUrl = '' }: NotificationBellProps) {
   const s = t(locale)
   const [open, setOpen] = useState(false)
   // The notice a row opened, if any (issue #115) — a separate Dialog layered
@@ -193,6 +204,22 @@ export function NotificationBell({ locale }: { locale: Lang }) {
                 </section>
               )}
             </div>
+          )}
+
+          {/* Outside the scroll container: the link stays put as the panel's
+              last element however long the list is. */}
+          {newsUrl && (
+            <a
+              href={newsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              // 44px touch target on a phone, compact from `md` up — the same
+              // convention as the rows above it.
+              className="mt-2 flex min-h-11 items-center gap-1.5 rounded border-t border-border px-1 pt-2 text-sm font-medium text-text hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] md:min-h-0"
+            >
+              <span className="hyphenate-compound min-w-0 flex-1">{s.announce.allNews}</span>
+              <ArrowUpRight className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
+            </a>
           )}
         </div>
       )}
