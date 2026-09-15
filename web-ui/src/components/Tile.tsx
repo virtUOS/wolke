@@ -88,8 +88,12 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
   const primaryCategory = categories.find((c) => c.slug === service.categories[0])
   const categoryLabel = primaryCategory ? localized(primaryCategory.label, locale) : ''
   const description = localized(service.description, locale)
-  // The link's accessible name carries everything a sighted user sees: the
-  // status badge (Beta/Wartung) and a new-tab warning, not just the name.
+  // The link's accessible name carries everything a sighted user sees — the
+  // status badge (Beta/Wartung) — plus the two cues that only exist in the
+  // name: the new-tab warning, and for a doc-only entry that the link leads to
+  // documentation rather than an app (issue #177 dropped that as a visible
+  // badge; it is not a status to act on, but it is still worth hearing before
+  // following the link).
   const accessibleLabel = s.tile.open(service.name, docsOnly) + s.tile.status(service.tag) + s.tile.newTab
 
   const starBtn = onToggleFavorite ? (
@@ -165,7 +169,6 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
               <TileName style={{ minWidth: 0 }}>{service.name}</TileName>
               {service.tag === 'beta' && <Badge variant="info">{s.tile.beta}</Badge>}
               {service.tag === 'wartung' && <Badge variant="warning">{s.tile.maintenance}</Badge>}
-              {docsOnly && <Badge variant="neutral">{s.tile.docs}</Badge>}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, pointerEvents: 'auto' }}>
@@ -252,7 +255,6 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
             <TileName>{service.name}</TileName>
             {service.tag === 'beta' && <Badge variant="info">{s.tile.beta}</Badge>}
             {service.tag === 'wartung' && <Badge variant="warning">{s.tile.maintenance}</Badge>}
-            {docsOnly && <Badge variant="neutral">{s.tile.docs}</Badge>}
           </div>
           <TileDescription>{description}</TileDescription>
         </div>

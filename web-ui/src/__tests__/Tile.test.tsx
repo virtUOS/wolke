@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Tile } from '@/components/Tile'
 import type { Category, Service } from '@/lib/api'
@@ -45,11 +45,44 @@ describe('Tile', () => {
     expect(docsLink).toHaveAttribute('href', 'https://docs.example.edu/myshare')
   })
 
-  it('a doc-only entry launches its documentation and shows the Dokumentation badge', () => {
+  // Issue #177: "this entry links to a help page rather than an app" is a
+  // property of the link, not a status the user is meant to act on, so it no
+  // longer sits in the badge slot beside Beta and Wartung. `doc_only` itself
+  // stays — it is what suppresses the redundant secondary "Doku" chip below.
+  it.each(['grid', 'list'] as const)('a doc-only entry (%s) launches its documentation with no status badge', (layout) => {
+    render(<Tile service={docOnly} categories={categories} locale="de" layout={layout} />)
+    const links = screen.getAllByRole('link')
+    expect(links).toHaveLength(1)
+    expect(links[0]).toHaveAttribute('href', 'https://docs.example.edu/wifi')
+    expect(screen.queryByText('Dokumentation')).not.toBeInTheDocument()
+    expect(screen.queryByText('Doku')).not.toBeInTheDocument()
+  })
+
+  it.each(['grid', 'list'] as const)('a doc-only entry (%s) still carries the tag badge it has', (layout) => {
+    render(<Tile service={{ ...docOnly, tag: 'beta' }} categories={categories} locale="de" layout={layout} />)
+    expect(screen.getByText('Beta')).toBeInTheDocument()
+    expect(screen.queryByText('Dokumentation')).not.toBeInTheDocument()
+
+    cleanup()
+    render(<Tile service={{ ...docOnly, tag: 'wartung' }} categories={categories} locale="de" layout={layout} />)
+    expect(screen.getByText('Wartung')).toBeInTheDocument()
+    expect(screen.queryByText('Dokumentation')).not.toBeInTheDocument()
+  })
+
+  // The visible badge goes; the accessible name keeps the distinction, in the
+  // same family as the new-tab warning already folded into that string.
+  it('keeps the documentation cue in the doc-only tile’s accessible name', () => {
     render(<Tile service={docOnly} categories={categories} locale="de" />)
-    const link = screen.getByRole('link', { name: /WLAN an der UOS/ })
-    expect(link).toHaveAttribute('href', 'https://docs.example.edu/wifi')
-    expect(screen.getByText('Dokumentation')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'WLAN an der UOS – Dokumentation öffnen (öffnet in neuem Tab)' }),
+    ).toBeInTheDocument()
+  })
+
+  it.each(['grid', 'list'] as const)('a service with both URLs (%s) still shows the Doku chip', (layout) => {
+    render(<Tile service={service} categories={categories} locale="de" layout={layout} />)
+    expect(screen.queryByText('Dokumentation')).not.toBeInTheDocument()
+    const docsLink = screen.getByRole('link', { name: /Doku/ })
+    expect(docsLink).toHaveAttribute('href', 'https://docs.example.edu/myshare')
   })
 
   it('shows the favorite star only when a handler is provided, with aria-pressed', async () => {
