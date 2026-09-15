@@ -215,6 +215,27 @@ describe('LauncherTabs', () => {
     )
     expect(within(tabRow()).getByRole('button', { name: 'Reihenfolge' })).toBeVisible()
   })
+
+  // Issue #182: a control at the edge of a layout is aligned optically. The
+  // desktop trigger is a filled chip, so its box is its visible edge and sits
+  // flush as it is; the phone trigger is a transparent icon button whose icon
+  // has to meet the list rows' star column. The measurement itself is the e2e
+  // spec's job (issue-182-launcher-alignment.spec.ts); this pins the two
+  // shapes of the slot.
+  describe('optical alignment of the sort slot', () => {
+    const slot = () => tabRow().querySelector('[data-sort-slot]') as HTMLElement
+
+    it('on a desktop, leaves the filled chip box-flush with the row\'s end', () => {
+      render(<LauncherTabs locale="de" tab="favoriten" onTab={noop} isMobile={false} sort={<button type="button">Reihenfolge</button>} />)
+      expect(slot().className).not.toMatch(/(^|\s)-?mr-/)
+    })
+
+    it('on a phone, insets the slot by the list row\'s 8px inner padding so the icon meets the star column', () => {
+      render(<LauncherTabs locale="de" tab="favoriten" onTab={noop} isMobile sort={<button type="button">Reihenfolge</button>} />)
+      expect(slot()).toHaveClass('mr-2')
+      expect(slot()).not.toHaveClass('-mr-2')
+    })
+  })
 })
 
 // ── The row inside the dashboard ────────────────────────────────────────────

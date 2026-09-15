@@ -204,7 +204,13 @@ export function FavoritesSortMenu({
     <Popover
       label={tr.dash.favOrder}
       trigger={trigger}
-      align="start"
+      // The trigger sits at the END of the tab row, on the content column's
+      // right edge (issue #182). A start-aligned panel would extend past that
+      // edge, so Popover reserves the panel's width on its anchor — which
+      // parked the trigger 96px short of the edge at 1280px. Opening the panel
+      // leftwards from the trigger's own edge keeps it inside the column with
+      // nothing reserved, so the trigger can sit flush.
+      align="end"
       panelWidth={236}
       panelClassName="mt-2 bg-surface p-0 pb-1.5 pt-3 shadow-[0_12px_32px_rgba(0,0,0,.45)]"
     >
