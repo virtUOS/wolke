@@ -162,9 +162,11 @@ test('a restricted category is invisible to a non-holder, in the UI and in the A
 })
 
 // The holder's side: a restricted category they do hold renders like any other
-// — with one difference, the marker, on the pill and on the section heading.
-// Icon only, so the pill keeps the width the 44px target and the 324px strip
-// were tuned for; the meaning rides in the accessible name.
+// — with one difference, the marker on its pill. (It used to sit on the
+// section heading too; since issue #182 no facet has a heading, and the pill,
+// highlighted while the facet is active, is the marker's only and sufficient
+// home.) Icon only, so the pill keeps the width the 44px target and the 324px
+// strip were tuned for; the meaning rides in the accessible name.
 test('a restricted category the user holds is marked as restricted', async ({ page }, testInfo) => {
   const isMobile = testInfo.project.use.isMobile === true
   await gotoApp(page, '/?tab=dienste')
@@ -186,18 +188,20 @@ test('a restricted category the user holds is marked as restricted', async ({ pa
   )
   await expectViewportHealthy(page, { isMobile, label: 'filter strip with a restricted category' })
 
-  // …and the section heading carries it too, once the facet is active.
+  // …and it stays on screen once the facet is active: the highlighted pill
+  // still carries it, and there is no heading to carry it a second time.
   await pill.click()
-  const heading = page.getByRole('heading', { level: 2, name: new RegExp(HELD_CATEGORY) })
-  await expect(heading).toBeVisible()
-  await expect(heading.getByText(HELD_MARKER)).toBeAttached()
-  await expectViewportHealthy(page, { isMobile, label: 'restricted category section' })
+  await expect(pill).toHaveAttribute('aria-pressed', 'true')
+  await expect(pill.getByText(HELD_MARKER)).toBeAttached()
+  await expect(main.getByRole('heading', { level: 2 })).toHaveCount(0)
+  await expectViewportHealthy(page, { isMobile, label: 'restricted category active' })
 
-  // A public category's pill and heading stay bare.
+  // A public category's pill stays bare.
   const publicPill = page.getByRole('button', { name: /^Netz & Daten$/ })
   await expect(publicPill).toHaveCount(1)
   await publicPill.click()
-  await expect(page.getByRole('heading', { level: 2, name: /Netz & Daten/ }).getByText(/Nur für|Visible only/)).toHaveCount(0)
+  await expect(publicPill).toHaveAttribute('aria-pressed', 'true')
+  await expect(publicPill.getByText(/Nur für|Visible only/)).toHaveCount(0)
 })
 
 // The admin-narrowing fix (spec §5): the admin screens read unnarrowed data, so
