@@ -1,8 +1,8 @@
 import type { CSSProperties } from 'react'
 
 // The decorative institution mark in the launcher background (issue #174): one
-// element, anchored bottom-right of the viewport and hanging about a third off
-// both edges, tinted with --accent at 7%.
+// element, anchored bottom-right of the *content column* (issue #181) and
+// hanging about a third off both edges, tinted with --accent at 7%.
 //
 // Rendered as a CSS-masked, token-filled box rather than an <img>: an external
 // SVG in an <img> cannot take the CSS color, so the tint would not re-skin with
@@ -42,9 +42,12 @@ interface WatermarkProps {
   src: string
   /** The effective dark-mode state, which picks the opacity (see above). */
   isDark?: boolean
+  /** The centred content column's max width (DashboardShell's
+   *  SHELL_MAX_WIDTH), which is what the mark is anchored to. */
+  columnWidth?: number
 }
 
-export function Watermark({ src, isDark = false }: WatermarkProps) {
+export function Watermark({ src, isDark = false, columnWidth = 1180 }: WatermarkProps) {
   const url = src.trim()
   // The config gate: no configured mark, no element. A deployment that mounts
   // its own branding dir replaces the bundled set wholesale, so a watermark.svg
@@ -65,15 +68,32 @@ export function Watermark({ src, isDark = false }: WatermarkProps) {
 
   const style: CSSProperties = {
     position: 'fixed',
-    // Anchor at the corner and push out with a transform, NOT with negative
+    // Anchored to the CONTENT COLUMN, not the viewport (issue #181). The
+    // content the mark sits behind is a centred column of at most
+    // `columnWidth`; a mark welded to the viewport's corner agrees with it
+    // only while the column fills the viewport, and at 3440px it floats alone
+    // in the empty canvas, hundreds of pixels from the cards. `right` is
+    // therefore the gap between the viewport edge and the column's right
+    // edge, (100vw − column) / 2, clamped at 0 — below ~1180px this is the
+    // viewport anchoring the phone tuning was done against, and above it the
+    // mark keeps the same relationship to the cards at 1280, 1920 and 3440.
+    // `fixed` is kept: it stays put while the list scrolls, and the same
+    // arithmetic is what an absolutely positioned wrapper would resolve to.
+    right: `max(0px, calc(50vw - ${columnWidth / 2}px))`,
+    // Anchor at the edge and push out with a transform, NOT with negative
     // percentage offsets: percentage right/bottom on a fixed element resolve
     // against the *viewport*, so the framing would drift with every screen
     // height. Transform percentages resolve against the element's own box, so
-    // "a third off both edges" is exactly true at 324px and at 1920px alike.
-    right: 0,
+    // "a third off both edges" is exactly true at 324px and at 3440px alike.
     bottom: 0,
     transform: 'translate(33%, 33%)',
-    width: 'min(90vw, 640px)',
+    // 640px on a desktop (60vw exceeds the cap from ~1067px up, so nothing the
+    // #174 tuning was judged on changes there). On a phone 60vw, not 90vw: with
+    // the 35:47 aspect a 90vw mark was taller than it was wide, and the two
+    // thirds of it on screen owned the empty lower half of a tall phone under
+    // a short favourites list — a drawing, not a texture (issue #181). At 60vw
+    // the visible part is roughly a quarter of the height: a corner accent.
+    width: 'min(60vw, 640px)',
     aspectRatio: '35 / 47',
     // Behind everything. .app-canvas isolates, so -1 lands above the canvas's
     // own background but below all of its content — no z-index bookkeeping on

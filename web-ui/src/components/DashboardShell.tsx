@@ -6,8 +6,9 @@ import { TopBar } from './TopBar'
 import { Watermark } from './Watermark'
 import { UpdateNotice } from './UpdateNotice'
 
-// The centered content column: <main> and the footer share this width, and the
-// assistant launcher aligns its right edge to it (AssistantWidget).
+// The centered content column: <main> and the footer share this width, the
+// assistant launcher aligns its right edge to it (AssistantWidget), and the
+// watermark hangs off its bottom-right corner (Watermark, issue #181).
 export const SHELL_MAX_WIDTH = 1180
 
 function initials(name: string): string {
@@ -122,7 +123,7 @@ export function DashboardShell({
       >
         {s.common.skipToContent}
       </a>
-      {watermark && <Watermark src={branding.watermark} isDark={isDark} />}
+      {watermark && <Watermark src={branding.watermark} isDark={isDark} columnWidth={SHELL_MAX_WIDTH} />}
       <TopBar
         branding={branding}
         locale={locale}

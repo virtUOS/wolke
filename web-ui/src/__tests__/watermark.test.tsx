@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Watermark, WATERMARK_MAX_OPACITY, WATERMARK_OPACITY } from '@/components/Watermark'
-import { DashboardShell } from '@/components/DashboardShell'
+import { DashboardShell, SHELL_MAX_WIDTH } from '@/components/DashboardShell'
 import type { Branding } from '@/lib/branding'
 import type { Me } from '@/lib/api'
 import { expectNoAxeViolations } from '@/test/axe'
@@ -103,9 +103,39 @@ describe('Watermark', () => {
     // Percentage right/bottom on a fixed element resolve against the viewport,
     // so the framing would drift with every screen size. Transform percentages
     // resolve against the element's own box, which is what "a third off" means.
-    expect(el.style.right).toBe('0px')
     expect(el.style.bottom).toBe('0px')
     expect(el.style.transform).toBe('translate(33%, 33%)')
+  })
+
+  // Issue #181: the mark is anchored to the *content column*, not the viewport.
+  // The two agree only while the column fills the viewport; on a wide screen
+  // a viewport-anchored mark floats alone in the empty canvas, hundreds of
+  // pixels from the cards it was designed to sit behind.
+  it('anchors to the right edge of the content column, falling back to the viewport edge below it', () => {
+    const { container } = render(<Watermark src={MARK} columnWidth={1180} />)
+    const el = mark(container)!
+    // `right` is the gap between the viewport edge and the column edge —
+    // (100vw − 1180px) / 2 — clamped at 0 where the column fills the viewport,
+    // so below ~1180px the behaviour is exactly the viewport anchoring that the
+    // phone tuning was done against. jsdom re-serialises the calc(), so the
+    // assertion is on its parts rather than its spelling.
+    expect(el.style.right).toMatch(/^max\(0px, /)
+    expect(el.style.right).toContain('50vw')
+    expect(el.style.right).toContain('590px')
+  })
+
+  it('takes the column width from the shell rather than restating 1180', () => {
+    const { container } = render(<Watermark src={MARK} columnWidth={1000} />)
+    expect(mark(container)!.style.right).toContain('500px')
+  })
+
+  it('is a corner accent on a phone, not a backdrop: 60vw, capped at 640px', () => {
+    // min(90vw, 640px) with a 35:47 aspect made the mark taller than the empty
+    // lower half of a tall phone (issue #181). 60vw keeps two thirds of it —
+    // the part that is on screen — to roughly a quarter of the viewport height
+    // at 390×844, while a desktop, where 60vw exceeds the cap, is unchanged.
+    const { container } = render(<Watermark src={MARK} />)
+    expect(mark(container)!.style.width).toBe('min(60vw, 640px)')
   })
 
   it('sits behind content in the canvas stacking context', () => {
@@ -198,6 +228,14 @@ describe('DashboardShell watermark placement', () => {
     // `region` is a page-level rule this isolated render can't satisfy; see
     // a11y.test.tsx for the same exclusion.
     await expectNoAxeViolations(baseElement, ['region'])
+  })
+
+  it('anchors the mark to the shell\'s own content column', () => {
+    // SHELL_MAX_WIDTH is the column <main> and the footer share; the mark hangs
+    // off *that* edge (issue #181), so the shell passes it rather than the
+    // mark carrying a second copy of the number.
+    const { container } = renderShell({ watermark: true })
+    expect(mark(container)!.style.right).toContain(`${SHELL_MAX_WIDTH / 2}px`)
   })
 
   it('threads the shell\'s theme through to the mark', () => {
