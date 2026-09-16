@@ -1,5 +1,8 @@
+import { useRef } from 'react'
 import { Wrench } from 'lucide-react'
 import { t } from '@/lib/i18n'
+import { useAnchorTop } from '@/lib/useAnchorTop'
+import { WATERMARK_ANCHOR_VAR } from './Watermark'
 
 interface GreetingProps {
   firstName: string
@@ -17,10 +20,17 @@ interface GreetingProps {
 // twice, 24px apart.
 export function Greeting({ firstName, locale, isMobile, maintenanceCount, onShowMaintenance }: GreetingProps) {
   const s = t(locale)
+  // The launcher watermark's vertical anchor (issue #195): the mark's top
+  // aligns with this block's, and follows it when the announcement banner —
+  // or anything else in the column — mounts or unmounts. The greeting
+  // measures itself and publishes the value rather than the shell reaching
+  // across the tree for an element it doesn't own.
+  const ref = useRef<HTMLDivElement>(null)
+  useAnchorTop(ref, WATERMARK_ANCHOR_VAR)
   return (
     // Plain <div>, not <header>: this sits inside <main>, and the salutation is
     // the page's <h1> — a sectioning <header> here would add landmark noise.
-    <div style={{ marginBottom: isMobile ? 18 : 28 }}>
+    <div ref={ref} style={{ marginBottom: isMobile ? 18 : 28 }}>
       <h1
         style={{
           margin: 0,
