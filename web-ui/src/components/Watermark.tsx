@@ -1,10 +1,19 @@
 import type { CSSProperties } from 'react'
 
-// The decorative institution mark in the launcher background (issue #174): a
-// large backdrop scaled from the viewport height, anchored to the *content
-// column* (issue #181) and cropped by the canvas edges (issue #187), tinted
-// with --accent at 7%. It reads as a large-format print behind the content,
-// not as an ornament with a visible, arbitrary position.
+// The decorative institution mark in the launcher background (issue #174).
+//
+// Issue #195 (design board turn 9) replaces the desktop geometry of #174/#181/
+// #187 and the whole #193 exploration: the mark is anchored to the *content
+// column* horizontally and to the *greeting* vertically, and the layer it sits
+// in dissolves into the right gutter through a horizontal gradient mask rather
+// than being cropped by an edge. See docs/specs/watermark-column-fade.md.
+//
+// Why a fade and not a crop: on a wide screen the part of the mark that reaches
+// past the column would otherwise float alone in empty canvas (#181's finding)
+// — and the frozen `clip-path` #193 tried instead read as a truncated image,
+// because a hard edge on a recognisable shape always does. A gradient has no
+// edge to notice, and it makes the rule width-independent: nothing about it
+// changes between 1280 and 3440.
 //
 // Rendered as a CSS-masked, token-filled box rather than an <img>: an external
 // SVG in an <img> cannot take the CSS color, so the tint would not re-skin with
@@ -13,56 +22,93 @@ import type { CSSProperties } from 'react'
 // value means no element at all, which is also what keeps a failed mask from
 // ever painting an unmasked rectangle (see the offline note below).
 
-/** The ceiling from the design handoff. Past ~0.08 the shape stops being a
- *  texture and becomes a readable object competing with the content. */
+/** The board's opacity ceiling (frame 7e). It was derived on the *dark* canvas
+ *  and is kept there; see WATERMARK_OPACITY for why light is not bound by it. */
 export const WATERMARK_MAX_OPACITY = 0.08
 
 /**
- * What we ship, per theme: the design references' 7% in both.
+ * What we ship, per theme.
  *
- * The dark value was 0.035 for a while (issue #181, picked off a ladder on the
- * real canvas). That compensation existed for one reason: the desktop cards
- * were transparent, so the mark's strokes ran straight through them and their
- * text, and at 7% a 2–3px light stroke on the dark canvas stayed legible as a
- * drawing across the card row. Issue #187 made the grid card opaque, so on a
- * desktop the mark no longer crosses any card text — the strokes show only in
- * the canvas gaps — and the value goes back to what the references specify.
- * On a phone the list rows stay transparent by design (the mobile reference
- * shows the mark crossing them); the e2e spec asserts the row text stays at
- * AA against the accent composited over the canvas at this opacity.
+ * The board specifies 0.07 flat. That value was judged on dark renders, and it
+ * does not transfer: the accent (#f2c879) sits far from the dark canvas and
+ * close to the light one, so the *same* opacity draws half the contrast in
+ * light. Measured against the shipped tokens, as the largest per-channel delta
+ * of the accent composited over the canvas each theme actually paints:
  *
- * Kept per theme so a future re-judgement can split them again without
- * re-plumbing; the shell passes the `isDark` it already derives for the canvas.
+ *   dark  (22,22,24)    at 0.07 → Δ15/255   — the cap's own reference point
+ *   light (254,252,248) at 0.07 → Δ9/255    — "barely visible on most screens"
+ *   light               at 0.15 → Δ19/255   — shipped (issue #195, C1)
+ *
+ * Light lands at 0.15 rather than the 0.18 the issue started from: #195's
+ * gutter fade concentrates the mark over the content column instead of letting
+ * it bleed across the whole canvas, so it carries at a lower value — judged on
+ * the new geometry at 1280/1920/2560, which is what the issue asked for.
+ *
+ * This is a deliberate departure from the handoff, not a drift; the per-theme
+ * split is a different thing from the *width*-based opacity fade the board
+ * rejected.
  */
-export const WATERMARK_OPACITY = { light: 0.07, dark: 0.07 } as const
+export const WATERMARK_OPACITY = { light: 0.15, dark: 0.07 } as const
 
 /**
- * The geometry, derived by overlaying the mark's SVG on the two design
- * references (local-archive/design_handoff_watermark/reference-v2/, options
- * 7d desktop / 7f mobile) and fitting scale and offset — not from the earlier
- * handoff's `640px` / `right: -220px; bottom: -190px`, which are the numbers
- * that produced the corner ornament this replaces.
+ * The column width, published once by this component and read by everything
+ * that has to agree with it (the gutter gradient and the mark's own width and
+ * offset). The handoff quotes pixels for a 960px column; ours is 1180
+ * (SHELL_MAX_WIDTH), so the ratios carry and the pixels do not — and a pixel
+ * restated in CSS is a pixel that will disagree with the column the day it
+ * changes.
+ */
+export const WATERMARK_COLUMN_VAR = '--launcher-max-width'
+
+/** The vertical anchor: the greeting's own measured document offset, published
+ *  by Greeting (useAnchorTop) and consumed here. */
+export const WATERMARK_ANCHOR_VAR = '--greeting-top'
+
+/**
+ * First-paint fallback for the anchor, in px: the measured greeting top of a
+ * desktop launcher (sticky app bar + <main>'s 28px top padding = 89px at every
+ * desktop width). It is a fallback, not the implementation — the real value is
+ * measured and follows the greeting — and because useAnchorTop publishes in a
+ * layout effect, a launcher never actually paints with it.
  *
- * Measured on the desktop reference (760×520 canvas, mark fitted at 640×849,
- * F1 0.94 against the stroke pixels): the mark is 1.63× the canvas height,
- * bleeds 17% of its height off the top and 22% off the bottom, and 34% of its
- * width off the right edge; its left edge lands at 45% of the canvas width.
- * On the mobile reference (300×560 canvas, mark 361×479, F1 0.95): 0.86× the
- * canvas height, bleeding 22% of its height off the bottom and 36% of its
- * width off the right — and NOT off the top: it starts right under the tab
- * row, at a third of the height.
+ * Not the handoff's 112/62 pair: those assume the announcement banner sits
+ * ABOVE the greeting. In our launcher it sits below it (Dashboard.tsx), so the
+ * greeting's own top does not move when a banner appears — see the PR for what
+ * that means for the measurement.
+ */
+export const WATERMARK_FALLBACK_TOP = 89
+
+/**
+ * The geometry rule (issue #195), as ratios of the column width C:
  *
- * Expressed as: a height in vh (so the mark scales with the canvas, never a
- * fixed pixel width), a vertical anchor, and overhangs as transform
- * percentages of the element's own box — percentage right/bottom offsets on a
- * fixed element would resolve against the viewport and drift with every
- * screen size (issue #174, decision 3). The desktop top of −28vh is the 17%
- * top overhang of a 163vh box.
+ *  - width  = 0.65 × C           → 767px at C = 1180
+ *  - height = width × 47/35      → ≈1030px (from aspect-ratio, not set)
+ *  - right  = −0.247 × C         → −291px, i.e. 38% of the mark's OWN width
+ *                                  past the column's right edge
+ *  - the layer fades to transparent over the 360px right of the column
+ *
+ * The mark may run off the bottom of the viewport (it does at 720p); its top
+ * must never be cropped, which is what anchoring to the greeting guarantees.
+ *
+ * The phone geometry is #181's, unchanged and deliberately out of #195's scope:
+ * a bottom-anchored box at 0.86× the viewport height, pushed 22% of its height
+ * off the bottom and 36% of its width off the right, so it starts under the tab
+ * row and sits behind the transparent list rows.
  */
 export const WATERMARK_GEOMETRY = {
-  desktop: { height: '163vh', top: '-28vh', overhang: 'translateX(34%)' },
+  desktop: { widthRatio: 0.65, rightRatio: -0.247, gutterFade: 360 },
   mobile: { height: '86vh', overhang: 'translate(36%, 22%)' },
 } as const
+
+/** Opaque across the column, linear to transparent over the gutter to its
+ *  right. The left side fades in symmetrically for free; nothing of the mark
+ *  reaches there, so it costs nothing and keeps the gradient readable. */
+const GUTTER_MASK =
+  `linear-gradient(to right,` +
+  ` transparent 0,` +
+  ` #000 calc(50% - var(${WATERMARK_COLUMN_VAR}) / 2),` +
+  ` #000 calc(50% + var(${WATERMARK_COLUMN_VAR}) / 2),` +
+  ` transparent calc(50% + var(${WATERMARK_COLUMN_VAR}) / 2 + ${WATERMARK_GEOMETRY.desktop.gutterFade}px))`
 
 interface WatermarkProps {
   /** `branding.watermark` — a mounted asset path, or '' to render nothing. */
@@ -96,48 +142,62 @@ export function Watermark({ src, isDark = false, isMobile = false, columnWidth =
   // parenthesis or a space can't break out of the function.
   const mask = `url("${url.replace(/["\\]/g, '\\$&')}")`
 
+  const layer: CSSProperties = {
+    position: 'fixed',
+    inset: 0,
+    // Behind everything. .app-canvas isolates, so -1 lands above the canvas's
+    // own background but below all of its content — no z-index bookkeeping on
+    // the app bar, the tab row, the widget or any portalled dialog.
+    zIndex: -1,
+    pointerEvents: 'none',
+    // Published here, consumed by the gradient below and by the mark.
+    [WATERMARK_COLUMN_VAR]: `${columnWidth}px`,
+    // No gutter on a phone: there the column *is* the viewport, so a gradient
+    // keyed to the column edge would fade the mark out over its own anchor.
+    ...(isMobile
+      ? {}
+      : { WebkitMaskImage: GUTTER_MASK, maskImage: GUTTER_MASK }),
+  } as CSSProperties
+
+  // The column the mark is composed against: the same centred, max-width box
+  // that <main> and the footer use. Anchoring to it rather than to the viewport
+  // is #181's decision, kept: a mark welded to the viewport's edge agrees with
+  // the cards only while the column fills the screen, and at 3440px it floats
+  // alone in the empty canvas hundreds of pixels away from them.
+  const column: CSSProperties = {
+    position: 'relative',
+    height: '100%',
+    maxWidth: `var(${WATERMARK_COLUMN_VAR})`,
+    margin: '0 auto',
+  }
+
   const geometry: CSSProperties = isMobile
     ? {
-        // Bottom-anchored, 86% of the viewport height, pushed 22% of its
-        // height off the bottom and 36% of its width off the right. The top
-        // therefore sits at about a third of the screen height — under the
-        // tab row, over the transparent list rows, as on the mobile reference.
+        // #181, unchanged: 86% of the viewport height, pushed 22% of its height
+        // off the bottom and 36% of its width off the right. The top therefore
+        // sits at about a third of the screen height — under the tab row, over
+        // the transparent list rows, as on the mobile reference.
+        right: 0,
         bottom: 0,
         height: WATERMARK_GEOMETRY.mobile.height,
         transform: WATERMARK_GEOMETRY.mobile.overhang,
       }
     : {
-        // 163% of the viewport height with its top 28vh above the edge: it
-        // bleeds off the top and the bottom at every desktop height, and its
-        // right edge sits 34% of its width past the column edge.
-        top: WATERMARK_GEOMETRY.desktop.top,
-        height: WATERMARK_GEOMETRY.desktop.height,
-        transform: WATERMARK_GEOMETRY.desktop.overhang,
+        width: `calc(var(${WATERMARK_COLUMN_VAR}) * ${WATERMARK_GEOMETRY.desktop.widthRatio})`,
+        right: `calc(var(${WATERMARK_COLUMN_VAR}) * ${WATERMARK_GEOMETRY.desktop.rightRatio})`,
+        // Anchored to the greeting, measured (Greeting publishes it). The
+        // fallback is for first paint on a surface that has no greeting; it is
+        // never what a launcher renders with.
+        top: `var(${WATERMARK_ANCHOR_VAR}, ${WATERMARK_FALLBACK_TOP}px)`,
       }
 
   const style: CSSProperties = {
-    position: 'fixed',
-    // Anchored to the CONTENT COLUMN, not the viewport (issue #181, kept by
-    // #187). The content the mark sits behind is a centred column of at most
-    // `columnWidth`; a mark welded to the viewport's edge agrees with it only
-    // while the column fills the viewport, and at 3440px it floats alone in
-    // the empty canvas, hundreds of pixels from the cards. `right` is
-    // therefore the gap between the viewport edge and the column's right
-    // edge, (100vw − column) / 2, clamped at 0 — below ~1180px this is the
-    // viewport edge, and above it the mark keeps the same relationship to the
-    // cards at 1280, 1920 and 3440. `fixed` is kept: it stays put while the
-    // list scrolls, and the same arithmetic is what an absolutely positioned
-    // wrapper would resolve to.
-    right: `max(0px, calc(50vw - ${columnWidth / 2}px))`,
+    position: 'absolute',
     ...geometry,
     // The box is the mark's own portrait ratio; the mask is fitted inside it
     // (contain), so a deployment's mark of a different ratio is letterboxed
     // rather than stretched.
     aspectRatio: '35 / 47',
-    // Behind everything. .app-canvas isolates, so -1 lands above the canvas's
-    // own background but below all of its content — no z-index bookkeeping on
-    // the app bar, the tab row, the widget or any portalled dialog.
-    zIndex: -1,
     pointerEvents: 'none',
     opacity: isDark ? WATERMARK_OPACITY.dark : WATERMARK_OPACITY.light,
     backgroundColor: 'var(--accent)',
@@ -151,5 +211,11 @@ export function Watermark({ src, isDark = false, isMobile = false, columnWidth =
     maskPosition: 'center',
   }
 
-  return <div className="app-watermark" aria-hidden="true" style={style} />
+  return (
+    <div className="app-watermark-layer" aria-hidden="true" style={layer}>
+      <div className="app-watermark-column" style={column}>
+        <div className="app-watermark" aria-hidden="true" style={style} />
+      </div>
+    </div>
+  )
 }

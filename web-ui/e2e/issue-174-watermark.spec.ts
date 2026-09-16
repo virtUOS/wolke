@@ -1,13 +1,14 @@
 // Viewport + a11y spec for https://github.com/virtUOS/wolke/issues/174
 // "Launcher: configurable institution-mark watermark in the app background",
-// with the geometry of issue #187 ("rebuild as a full-bleed backdrop").
+// with the geometry of issue #195 ("column-anchored mark with a right-gutter
+// fade", design board turn 9). See docs/specs/watermark-column-fade.md.
 //
-// The mark is a fixed, aria-hidden, pointer-transparent box scaled from the
-// viewport height, anchored to the right edge of the content column (issue
-// #181; the viewport's edge below ~1180px) and cropped by the canvas edges —
-// which is to say it is *deliberately* mostly outside the viewport, in a suite
-// whose whole job is failing things that stick out past the viewport. Two
-// properties of the harness keep those from colliding:
+// The mark is a fixed, aria-hidden, pointer-transparent layer whose content is
+// anchored to the content column horizontally and to the greeting vertically,
+// and which dissolves into the 360px of gutter right of the column — which is
+// to say it is *deliberately* partly outside the viewport, in a suite whose
+// whole job is failing things that stick out past the viewport. Two properties
+// of the harness keep those from colliding:
 //
 //   1. the DOM walk skips `[aria-hidden="true"]` subtrees (helpers/viewport.ts,
 //      §5.1), so the mark is never probed for overflow;
@@ -33,7 +34,9 @@ import { expect, test } from './fixtures'
 
 /** A stand-in mark with the real one's 35:47 aspect ratio — a plain shape, no
  *  institution's anything. Only its alpha matters; the colour comes from the
- *  --accent token via the CSS mask. */
+ *  --accent token via the CSS mask. It is deliberately a *solid* hexagon: a
+ *  horizontal line through its middle has ink at every x, which is what lets
+ *  the gutter-fade test below read the gradient off the rendered pixels. */
 const MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 47">
   <path fill="#000" d="M17.5 1 34 12v23L17.5 46 1 35V12Z"/>
 </svg>`
@@ -53,7 +56,30 @@ async function enableWatermark(page: Page): Promise<void> {
   })
 }
 
+/** One announcement, so the banner mounts — the layout change the vertical
+ *  anchor is specified against. */
+async function withAnnouncement(page: Page): Promise<void> {
+  await page.route('**/api/announcements', async (route) => {
+    await route.fulfill({
+      json: {
+        announcements: [
+          {
+            id: 'e2e-1',
+            title: { de: 'Wartungsankündigung', en: 'Maintenance notice' },
+            body: { de: 'HISinOne ist am Samstag nicht erreichbar.', en: 'HISinOne is unavailable on Saturday.' },
+            severity: 'info',
+            audience: { kind: 'all' },
+            dismissible: true,
+          },
+        ],
+      },
+    })
+  })
+}
+
+const layer = (page: Page) => page.locator('.app-watermark-layer')
 const watermark = (page: Page) => page.locator('.app-watermark')
+const greeting = (page: Page) => page.getByRole('heading', { level: 1 })
 
 /** The launcher's underline tab row (issue #170). Scoping to it matters on a
  *  phone: "Alle Dienste" also appears in the app bar's search pill
@@ -71,70 +97,107 @@ const catalogTab = (page: Page) =>
 const COLUMN_WIDTH = 1180
 
 /**
- * The geometry rule since issue #187, derived by overlaying the mark on the
- * two design references (see Watermark.tsx for the measurements):
+ * The geometry rule since issue #195, as ratios of the column width C — the
+ * handoff's pixels assume a 960px column, ours is 1180, so only ratios carry:
  *
- *  - Desktop: the mark is 1.63× the viewport height, its top 28vh above the
- *    viewport, so it bleeds off the top AND the bottom; its right edge sits
- *    34% of its own width past the RIGHT EDGE OF THE CONTENT COLUMN — which is
- *    the viewport's right edge only while the column fills the viewport
- *    (below ~1180px), and the column's own edge, (100vw + 1180) / 2, above
- *    that (issue #181). So the relationship between the mark and the cards is
- *    identical at 1280, 1920 and 3440, instead of the mark drifting into the
- *    empty canvas as the screen widens.
- *  - Phone: 0.86× the viewport height, anchored at the bottom, bleeding 22% of
- *    its height off the bottom and 36% of its width off the right — and NOT
- *    off the top: it starts under the tab row, as on the mobile reference.
+ *  - width  = 0.65 × C (767px), height from the 35:47 ratio (≈1030px)
+ *  - the mark's right edge sits 38% of its OWN width past the column's right
+ *    edge (right: −0.247 × C)
+ *  - top = the greeting's top, measured
+ *  - the whole layer fades linearly to transparent over the 360px right of the
+ *    column, so nothing floats in the empty canvas of a wide screen and
+ *    nothing reads as a truncated image (#193's failure)
  *
- * Asserted at every matrix size and returned for the ultra-wide check below.
+ * Nothing here is viewport-derived, which is the point: the rule is identical
+ * at 1280, 1920, 2560 and 3440.
  */
 const GEOMETRY = {
-  desktop: { heightOverVh: 1.63, topOverVh: -0.28, overRight: 0.34 },
-  mobile: { heightOverVh: 0.86, overBottom: 0.22, overRight: 0.36 },
+  widthRatio: 0.65,
+  overRight: 0.38,
+  aspect: 47 / 35,
+  gutterFade: 360,
 } as const
 
-async function expectBackdropGeometry(page: Page, isMobile: boolean): Promise<{ overlapsColumn: boolean }> {
+/** The phone geometry of issue #181, deliberately untouched by #195. */
+const MOBILE_GEOMETRY = { heightOverVh: 0.86, overBottom: 0.22, overRight: 0.36 } as const
+
+async function expectColumnGeometry(page: Page): Promise<{ overlapsColumn: boolean }> {
   const g = await watermark(page).evaluate((node, column) => {
     const r = node.getBoundingClientRect()
     const vw = document.documentElement.clientWidth
-    const vh = document.documentElement.clientHeight
+    // The column wrapper is `max-width: C; margin: 0 auto`, so below C the
+    // column IS the viewport — which is exactly the anchor the mark should
+    // hang off there. Above C it is the centred column's own edge.
     const columnRight = Math.min(vw, (vw + column) / 2)
     const columnLeft = Math.max(0, (vw - column) / 2)
     return {
-      vh,
+      width: r.width,
+      height: r.height,
       top: r.top,
-      bottom: r.bottom,
-      heightOverVh: r.height / vh,
-      topOverVh: r.top / vh,
-      // How far the box reaches past the anchor edge, as a share of its own size.
+      // How far the box reaches past the column's right edge, as a share of
+      // its own width. The column's edge, NOT the viewport's: they agree only
+      // while the column fills the screen.
       overRight: (r.right - columnRight) / r.width,
-      overBottom: (r.bottom - vh) / r.height,
       overlapsColumn: r.left < columnRight && r.right > columnLeft,
     }
   }, COLUMN_WIDTH)
 
-  // The overhangs are transforms on the element's own box rather than
-  // percentage right/bottom offsets, which would resolve against the viewport
-  // and drift with every screen size — so they hold at 324px, 1920px and
-  // 3440px alike.
-  if (isMobile) {
-    expect(g.heightOverVh, '0.86× the viewport height').toBeCloseTo(GEOMETRY.mobile.heightOverVh, 2)
-    expect(g.overBottom, '22% of its height past the bottom edge').toBeCloseTo(GEOMETRY.mobile.overBottom, 2)
-    expect(g.overRight, '36% of its width past the right edge').toBeCloseTo(GEOMETRY.mobile.overRight, 2)
-    expect(g.top, 'on a phone the mark does not bleed off the top').toBeGreaterThan(0)
-  } else {
-    expect(g.heightOverVh, '1.63× the viewport height').toBeCloseTo(GEOMETRY.desktop.heightOverVh, 2)
-    expect(g.topOverVh, '28vh above the top edge').toBeCloseTo(GEOMETRY.desktop.topOverVh, 2)
-    expect(g.bottom, 'bleeds off the bottom edge').toBeGreaterThan(g.vh)
-    expect(g.overRight, '34% of its width past the column\'s right edge').toBeCloseTo(GEOMETRY.desktop.overRight, 2)
-  }
+  expect(g.width, '0.65 × the column width').toBeCloseTo(COLUMN_WIDTH * GEOMETRY.widthRatio, 0)
+  expect(g.height, 'height from the 35:47 ratio').toBeCloseTo(g.width * GEOMETRY.aspect, 0)
+  expect(g.overRight, "38% of its own width past the column's right edge").toBeCloseTo(GEOMETRY.overRight, 2)
   return { overlapsColumn: g.overlapsColumn }
+}
+
+async function expectMobileGeometry(page: Page): Promise<void> {
+  const g = await watermark(page).evaluate((node) => {
+    const r = node.getBoundingClientRect()
+    const vw = document.documentElement.clientWidth
+    const vh = document.documentElement.clientHeight
+    return {
+      top: r.top,
+      heightOverVh: r.height / vh,
+      overRight: (r.right - vw) / r.width,
+      overBottom: (r.bottom - vh) / r.height,
+    }
+  })
+  expect(g.heightOverVh, '0.86× the viewport height').toBeCloseTo(MOBILE_GEOMETRY.heightOverVh, 2)
+  expect(g.overBottom, '22% of its height past the bottom edge').toBeCloseTo(MOBILE_GEOMETRY.overBottom, 2)
+  expect(g.overRight, '36% of its width past the right edge').toBeCloseTo(MOBILE_GEOMETRY.overRight, 2)
+  expect(g.top, 'on a phone the mark does not bleed off the top').toBeGreaterThan(0)
 }
 
 /** The document's own horizontal overflow — what a user would scroll. */
 async function documentOverflow(page: Page): Promise<number> {
   return page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+}
+
+/** Reads the rendered colour at a list of viewport points out of one
+ *  screenshot (there is no PNG library on the Node side, so the decode happens
+ *  in the page). Points are in CSS pixels; the deviceScaleFactor is handled. */
+async function samplePixels(page: Page, points: { x: number; y: number }[]): Promise<number[][]> {
+  const shot = (await page.screenshot()).toString('base64')
+  return page.evaluate(
+    async ({ shot, points }) => {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const i = new Image()
+        i.onload = () => resolve(i)
+        i.onerror = reject
+        i.src = `data:image/png;base64,${shot}`
+      })
+      const c = document.createElement('canvas')
+      c.width = img.width
+      c.height = img.height
+      const ctx = c.getContext('2d')!
+      ctx.drawImage(img, 0, 0)
+      const scale = img.width / document.documentElement.clientWidth
+      return points.map(({ x, y }) => {
+        const d = ctx.getImageData(Math.round(x * scale), Math.round(y * scale), 1, 1).data
+        return [d[0], d[1], d[2]]
+      })
+    },
+    { shot, points },
   )
 }
 
@@ -146,6 +209,7 @@ test.describe('watermark off by default', () => {
   test('renders no element when branding carries no mark', async ({ page }) => {
     await gotoApp(page)
     await expect(watermark(page)).toHaveCount(0)
+    await expect(layer(page)).toHaveCount(0)
   })
 })
 
@@ -154,39 +218,119 @@ test.describe('watermark enabled', () => {
     await enableWatermark(page)
   })
 
-  test('is a backdrop scaled from the viewport height, cropped by the canvas edges, without scrolling the document', async ({
+  test('is anchored to the content column, not the viewport, without scrolling the document', async ({
     page,
   }, testInfo) => {
     await gotoApp(page)
     await expect(watermark(page)).toHaveCount(1)
-    await expectBackdropGeometry(page, testInfo.project.use.isMobile === true)
+    if (testInfo.project.use.isMobile === true) {
+      await expectMobileGeometry(page)
+    } else {
+      await expectColumnGeometry(page)
+    }
 
-    // …and bleeding off the edges must not give the user anything to scroll.
+    // …and hanging off the column edge must not give the user anything to
+    // scroll.
     expect(await documentOverflow(page)).toBeLessThanOrEqual(0)
+  })
+
+  // The vertical half of #195's rule. The handoff's 112px/62px pair is a
+  // fallback; what ships is a measurement, so this asserts against the
+  // greeting's real position — with and without the announcement banner, the
+  // layout change the design calls out.
+  test.describe('vertical anchor', () => {
+    test('starts at the greeting, not at a viewport fraction', async ({ page }, testInfo) => {
+      testInfo.skip(testInfo.project.use.isMobile === true, 'the phone mark is bottom-anchored (#181)')
+      await gotoApp(page)
+      const markTop = (await watermark(page).boundingBox())!.y
+      const greetingTop = (await greeting(page).boundingBox())!.y
+      expect(markTop, "the mark's top is the greeting's top").toBeCloseTo(greetingTop, 0)
+      // And it is never cropped at the top, at any height in the matrix.
+      expect(markTop).toBeGreaterThan(0)
+    })
+
+    test('follows the greeting when the announcement banner mounts', async ({ page }, testInfo) => {
+      testInfo.skip(testInfo.project.use.isMobile === true, 'the phone mark is bottom-anchored (#181)')
+      await withAnnouncement(page)
+      await gotoApp(page)
+      await expect(page.getByText(/Wartungsank/)).toBeVisible()
+      const markTop = (await watermark(page).boundingBox())!.y
+      const greetingTop = (await greeting(page).boundingBox())!.y
+      // The point of measuring rather than hardcoding: whatever the banner
+      // does to the column, the two stay equal. (In this launcher the banner
+      // sits *below* the greeting, so neither moves — the assertion is that
+      // they agree, not that they changed.)
+      expect(markTop).toBeCloseTo(greetingTop, 0)
+      expect(await documentOverflow(page)).toBeLessThanOrEqual(0)
+    })
   })
 
   // Issue #181: the matrix tops out at 1920, which is why a mark welded to the
   // viewport corner — hundreds of pixels from a 1180px column — went unnoticed
-  // until a 3440px monitor. The geometry rule is therefore also checked well
-  // above the matrix, once (one project, not six: the viewport is resized
-  // inside the test, so the project's own size is irrelevant to it).
-  test('keeps the same relationship to the column on an ultra-wide screen', async ({ page }, testInfo) => {
-    testInfo.skip(testInfo.project.name !== 'desktop-1920', 'one ultra-wide check is enough')
-    await page.setViewportSize({ width: 3440, height: 1440 })
+  // until a 3440px monitor. Every predecessor of this rule failed above the
+  // matrix, so the rule is checked there explicitly, at both the 21:9 the
+  // design board rendered (2560) and the ultrawide that caught #181 (3440).
+  for (const { width, height } of [
+    { width: 2560, height: 1080 },
+    { width: 3440, height: 1440 },
+  ]) {
+    test(`keeps the same relationship to the column at ${width}×${height}`, async ({ page }, testInfo) => {
+      testInfo.skip(testInfo.project.name !== 'desktop-1920', 'one project drives the above-matrix widths')
+      await page.setViewportSize({ width, height })
+      await gotoApp(page)
+      await expect(watermark(page)).toHaveCount(1)
+      const { overlapsColumn } = await expectColumnGeometry(page)
+      // The point of anchoring to the column: on a wide screen the mark is
+      // back under the cards, not floating alone in the empty canvas.
+      expect(overlapsColumn, 'the mark sits behind the content column, not beside it').toBe(true)
+      expect(await documentOverflow(page)).toBeLessThanOrEqual(0)
+
+      const markTop = (await watermark(page).boundingBox())!.y
+      expect(markTop).toBeCloseTo((await greeting(page).boundingBox())!.y, 0)
+    })
+  }
+
+  // The gutter fade is the whole idea of turn 9, and it is the thing a CSS
+  // refactor could silently drop (a dropped mask leaves a *harder* looking
+  // mark, not a broken page). So it is asserted on rendered pixels, above the
+  // matrix, where the entire fade fits on screen.
+  test('dissolves across the gutter instead of being cut off', async ({ page }, testInfo) => {
+    testInfo.skip(testInfo.project.name !== 'desktop-1920', 'the full 360px fade only fits above the matrix')
+    await page.setViewportSize({ width: 2560, height: 1080 })
     await gotoApp(page)
     await expect(watermark(page)).toHaveCount(1)
-    const { overlapsColumn } = await expectBackdropGeometry(page, false)
-    // The point of anchoring to the column: on a wide screen the mark is back
-    // under the cards, not floating alone in the empty canvas beside them.
-    expect(overlapsColumn, 'the mark sits behind the content column, not beside it').toBe(true)
-    expect(await documentOverflow(page)).toBeLessThanOrEqual(0)
+
+    const box = (await watermark(page).boundingBox())!
+    const columnRight = (2560 + COLUMN_WIDTH) / 2
+    // A horizontal line through the middle of the stand-in hexagon: it has ink
+    // at every x there, so anything that varies along it is the gradient.
+    const y = Math.round(box.y + box.height / 2)
+    const xs = [columnRight - 40, columnRight + 20, columnRight + 150, columnRight + 280]
+    // …and one reference point on bare canvas, left of the mark entirely.
+    const reference = { x: 40, y }
+    const samples = await samplePixels(page, [...xs.map((x) => ({ x: Math.round(x), y })), reference])
+    const canvas = samples.pop()!
+    // Blue is the channel the accent moves most against either canvas.
+    const ink = samples.map((p) => Math.abs(p[2] - canvas[2]))
+
+    expect(y, 'the sampled line is on screen').toBeLessThan(1080)
+    expect(ink[0], 'the mark is at full strength over the column').toBeGreaterThan(8)
+    // Strictly decreasing across the gutter, and gone by its far end.
+    expect(ink[1]).toBeLessThan(ink[0] + 1)
+    expect(ink[2], 'half way across the gutter it is weaker').toBeLessThan(ink[1])
+    expect(ink[3], 'at the far end of the gutter it is nearly gone').toBeLessThan(ink[2])
+    expect(ink[3], 'and it really is nearly gone, not merely weaker').toBeLessThanOrEqual(2)
+    // The fade ends inside the gutter, so nothing of the mark survives past it.
+    expect(box.x + box.width).toBeLessThan(columnRight + GEOMETRY.gutterFade)
   })
 
   test('stays decorative: out of the a11y tree, out of the pointer\'s way, under the ceiling', async ({
     page,
-  }) => {
+  }, testInfo) => {
+    const isMobile = testInfo.project.use.isMobile === true
     await gotoApp(page)
     const el = watermark(page)
+    await expect(layer(page)).toHaveAttribute('aria-hidden', 'true')
     await expect(el).toHaveAttribute('aria-hidden', 'true')
 
     const style = await el.evaluate((node) => {
@@ -195,9 +339,27 @@ test.describe('watermark enabled', () => {
     })
     expect(style.pointerEvents).toBe('none')
     expect(style.opacity).toBeGreaterThan(0)
-    expect(style.opacity).toBeLessThanOrEqual(0.08)
+    // Light's value is a decided departure from the board's dark-derived 0.08
+    // cap (issue #195, C1); it is still far below anything that could compete
+    // with content.
+    expect(style.opacity).toBeLessThanOrEqual(0.15)
     // The mask URL is the configured one, never a constant baked into the SPA.
     expect(style.maskImage).toContain(MARK_URL)
+
+    // The layer reads the column width from the one variable that publishes
+    // it, and carries the gutter gradient — on a desktop. On a phone the
+    // column IS the viewport, so a gradient keyed to the column edge would
+    // fade the mark out over its own anchor; there is deliberately none.
+    const layerStyle = await layer(page).evaluate((node) => ({
+      mask: getComputedStyle(node).maskImage,
+      column: getComputedStyle(node).getPropertyValue('--launcher-max-width').trim(),
+    }))
+    expect(layerStyle.column).toBe(`${COLUMN_WIDTH}px`)
+    if (isMobile) {
+      expect(layerStyle.mask).toBe('none')
+    } else {
+      expect(layerStyle.mask).toContain('linear-gradient')
+    }
 
     // Nothing at the corner responds to a click: whatever is under the pointer
     // there, it is not the mark.
@@ -205,7 +367,7 @@ test.describe('watermark enabled', () => {
       const w = document.documentElement.clientWidth
       const h = document.documentElement.clientHeight
       const el = document.elementFromPoint(w - 4, h - 4)
-      return el?.classList.contains('app-watermark') ?? false
+      return el?.closest('.app-watermark-layer') !== null && el?.closest('.app-watermark-layer') !== undefined
     })
     expect(hit).toBe(false)
 
@@ -218,13 +380,13 @@ test.describe('watermark enabled', () => {
     await gotoApp(page)
     await expect(watermark(page)).toHaveCount(1)
 
-    // Since issue #187 the mark's *box* deliberately reaches behind the app bar
-    // and the tab row — on a desktop it bleeds off the top edge — so there is
-    // no geometric "clear of the chrome" to assert any more, and there never
-    // reliably was one (at 1280×720 the old box already reached the tab row).
-    // What actually matters is asserted directly: the mark is painted BEHIND
-    // the chrome (z-index -1 inside the canvas's isolated stacking context),
-    // so it can never obscure or intercept either of them, at any size.
+    // The mark's *box* deliberately reaches behind the app bar and the tab row
+    // — anchored to the greeting, it starts level with the tab row on a
+    // desktop — so there is no geometric "clear of the chrome" to assert, and
+    // there never reliably was one. What actually matters is asserted
+    // directly: the mark is painted BEHIND the chrome (z-index -1 inside the
+    // canvas's isolated stacking context), so it can never obscure or
+    // intercept either of them, at any size.
     const painted = await page.evaluate(() => {
       const at = (el: Element | null | undefined) => {
         if (!el) return null
@@ -233,7 +395,7 @@ test.describe('watermark enabled', () => {
           Math.round(r.left + r.width / 2),
           Math.round(r.top + r.height / 2),
         )
-        return hit?.closest('.app-watermark') !== null && hit?.closest('.app-watermark') !== undefined
+        return hit?.closest('.app-watermark-layer') !== null && hit?.closest('.app-watermark-layer') !== undefined
       }
       return {
         overBar: at(document.querySelector('header')),
@@ -246,8 +408,8 @@ test.describe('watermark enabled', () => {
 
   // Issue #187: with the desktop cards opaque, the mark crosses no card text on
   // a desktop — and on a phone, where the list rows stay transparent and the
-  // mark shows through them, 7% of the accent over the canvas must leave the
-  // row text at AA.
+  // mark shows through them, the accent over the canvas must leave the row text
+  // at AA.
   test.describe('text contrast', () => {
     test('desktop: the fill of a card the mark passes behind is pixel-identical with the mark on and off', async ({
       page,
@@ -300,7 +462,7 @@ test.describe('watermark enabled', () => {
       // worker's clicks did to the layout in between.
       const withMark = await page.screenshot({ clip })
       const wholeWithMark = await page.screenshot()
-      await watermark(page).evaluate((node) => {
+      await layer(page).evaluate((node) => {
         node.style.display = 'none'
       })
       const withoutMark = await page.screenshot({ clip })
@@ -416,19 +578,34 @@ test.describe('watermark enabled', () => {
   })
 
   // The rendered opacity is asserted in a dark browser context, not just the
-  // constant, so a theme wired up wrongly fails. Issue #187 put both themes
-  // back on the references' 7%: the dark compensation of #181 existed to stop
-  // the mark competing with card text it crossed, and the opaque cards mean it
-  // crosses none.
+  // constant, so a theme wired up wrongly fails. Issue #195 splits the two
+  // themes: dark keeps the board's 0.07 under its 0.08 cap, light is lifted
+  // because the same value measures Δ9 there against dark's Δ15.
   test.describe('in the dark theme', () => {
     test.use({ colorScheme: 'dark' })
 
-    test('renders at the same 0.07 as light, under the ceiling', async ({ page }) => {
+    test('renders at the board\'s 0.07, under the ceiling that value defined', async ({ page }) => {
       await gotoApp(page)
       const dark = await watermark(page).evaluate((n) => Number(getComputedStyle(n).opacity))
       expect(dark).toBeCloseTo(0.07, 3)
       expect(dark).toBeLessThanOrEqual(0.08)
     })
+
+    test('keeps the column geometry: the rule is not theme-dependent', async ({ page }, testInfo) => {
+      testInfo.skip(testInfo.project.use.isMobile === true, 'the column rule is the desktop one')
+      await gotoApp(page)
+      await expectColumnGeometry(page)
+    })
+  })
+
+  test('renders more faintly in light than in dark, which is what keeps them equally visible', async ({
+    page,
+  }) => {
+    await gotoApp(page)
+    const light = await watermark(page).evaluate((n) => Number(getComputedStyle(n).opacity))
+    expect(light).toBeCloseTo(0.15, 3)
+    // Deliberately above the board's cap; see docs/specs/watermark-column-fade.md §3.
+    expect(light).toBeGreaterThan(0.07)
   })
 
   test('the full viewport matrix stays healthy on every launcher view', async ({
@@ -457,7 +634,23 @@ test.describe('watermark enabled', () => {
     expect(await documentOverflow(page)).toBeLessThanOrEqual(0)
   })
 
+  test('the announcement banner keeps the matrix healthy with the mark on', async ({ page }, testInfo) => {
+    await withAnnouncement(page)
+    await gotoApp(page)
+    await expect(page.getByText(/Wartungsank/)).toBeVisible()
+    await expect(watermark(page)).toHaveCount(1)
+    await expectViewportHealthy(page, {
+      isMobile: testInfo.project.use.isMobile === true,
+      label: 'announcement + watermark',
+    })
+    expect(await documentOverflow(page)).toBeLessThanOrEqual(0)
+  })
+
   test('scrolling the list leaves the mark fixed to the viewport', async ({ page }) => {
+    // The deliberate consequence of a fixed layer anchored to an in-flow
+    // element: they agree at scroll-top — the state the composition is
+    // designed in — and the mark then stays put while the list scrolls, which
+    // is what keeps a ~1030px box out of the document's scrollable overflow.
     await gotoApp(page)
     await catalogTab(page).click()
     const before = await watermark(page).boundingBox()

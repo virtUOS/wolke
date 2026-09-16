@@ -575,8 +575,10 @@ branding:
   watermark:  ""   # decorative institution mark in the launcher background; EMPTY = off (issue #174).
                    # A CSS mask (alpha only; tinted with the `accent` token at 7%), so a missing or
                    # unreachable file must never reach the DOM — hence off by default and gated on
-                   # this value being non-empty. Opt in with /branding/watermark.svg. Drawn as a
-                   # full-height backdrop behind the opaque desktop tiles (issue #187).
+                   # this value being non-empty. Opt in with /branding/watermark.svg. Drawn behind
+                   # the opaque desktop tiles, anchored to the content column and the greeting and
+                   # dissolving into the right gutter (issue #195; docs/specs/watermark-column-fade.md).
+                   # Light uses 0.15, dark 0.07 — see that spec for why the two differ.
   imprint_url: "https://www.uni-osnabrueck.de/impressum/"   # legal footer links
   privacy_url: "https://www.uni-osnabrueck.de/datenschutz/" # (empty hides the link)
   feedback_url: ""  # right-aligned footer feedback link (env FEEDBACK_URL): URL or email/mailto:
