@@ -25,20 +25,16 @@ import type { CSSProperties } from 'react'
 // value means no element at all, which is also what keeps a failed mask from
 // ever painting an unmasked rectangle (see the offline note below).
 
-/** The board's opacity ceiling (frame 7e). It was derived on the *dark* canvas
- *  and is kept there; see WATERMARK_OPACITY for why light is not bound by it. */
-export const WATERMARK_MAX_OPACITY = 0.08
-
 /**
  * What we ship, per theme.
  *
- * The board specifies 0.07 flat. That value was judged on dark renders, and it
- * does not transfer: the accent (#f2c879) sits far from the dark canvas and
- * close to the light one, so the *same* opacity draws half the contrast in
- * light. Measured against the shipped tokens, as the largest per-channel delta
+ * The board specifies 0.07 flat, under a 0.08 ceiling (issue #187, frame 7e).
+ * That value was judged on dark renders, and it does not transfer: the accent
+ * (#f2c879) sits far from the dark canvas and close to the light one, so the
+ * *same* opacity draws half the contrast in light. Measured against the shipped tokens, as the largest per-channel delta
  * of the accent composited over the canvas each theme actually paints:
  *
- *   dark  (22,22,24)    at 0.07 → Δ15/255   — the cap's own reference point
+ *   dark  (22,22,24)    at 0.07 → Δ15/255   — the ceiling's own reference point
  *   light (254,252,248) at 0.07 → Δ9/255    — "barely visible on most screens"
  *   light               at 0.15 → Δ19/255   — shipped (issue #195, C1)
  *

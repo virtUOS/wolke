@@ -6,7 +6,6 @@ import {
   WATERMARK_COLUMN_VAR,
   WATERMARK_FALLBACK_TOP,
   WATERMARK_GEOMETRY,
-  WATERMARK_MAX_OPACITY,
   WATERMARK_OPACITY,
 } from '@/components/Watermark'
 import { DashboardShell, SHELL_MAX_WIDTH } from '@/components/DashboardShell'
@@ -132,8 +131,10 @@ describe('Watermark', () => {
       const { container } = render(<Watermark src={MARK} isDark />)
       expect(Number(mark(container)!.style.opacity)).toBe(WATERMARK_OPACITY.dark)
       expect(WATERMARK_OPACITY.dark).toBe(0.07)
-      expect(WATERMARK_OPACITY.dark).toBeLessThanOrEqual(WATERMARK_MAX_OPACITY)
-      expect(WATERMARK_MAX_OPACITY).toBeLessThanOrEqual(0.08)
+      // 0.08 is the board's ceiling (issue #187, frame 7e). It was derived on
+      // the dark canvas and binds there only — light is the decided departure
+      // below, so the number lives here rather than as a shared constant.
+      expect(WATERMARK_OPACITY.dark).toBeLessThanOrEqual(0.08)
     })
 
     it('lifts light above the dark-derived cap, because the same value measures half the contrast there', () => {

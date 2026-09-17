@@ -238,9 +238,10 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   // marker names the group, not the category. Only ever populated for a
   // category this user holds: /api/catalog drops the ones they don't
   // (docs/specs/service-visibility.md §2.2).
-  // A handful of entries, so a plain derivation: the React Compiler memoizes
-  // it, and a manual useMemo here is what it refused to preserve once the
-  // facet heading's own memo (issue #182) no longer sat beside it.
+  // A handful of entries, so a plain derivation rather than a useMemo:
+  // rebuilding the map costs less than the memo's own bookkeeping, and nothing
+  // downstream holds on to its identity — it is read only by restrictedBy,
+  // which is itself re-made each render.
   const groupLabels: Record<string, string> = {}
   for (const e of me.visibility.entries) groupLabels[e.slug] = localized(e.label, locale)
   const restrictedBy = (slug: string): string | undefined => {

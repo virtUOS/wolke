@@ -92,7 +92,6 @@ const de = {
       return 'Guten Abend'
     },
     today: () => formatToday('de-DE'),
-    favCount: (n: number) => `${n} ${n === 1 ? 'Favorit' : 'Favoriten'}`,
     maintenanceCount: (n: number) => `${n} ${n === 1 ? 'Dienst' : 'Dienste'} in Wartung`,
   },
   dash: {
@@ -379,7 +378,6 @@ const en: Strings = {
       return 'Good evening'
     },
     today: () => formatToday('en-GB'),
-    favCount: (n: number) => `${n} ${n === 1 ? 'favorite' : 'favorites'}`,
     maintenanceCount: (n: number) => `${n} ${n === 1 ? 'service' : 'services'} in maintenance`,
   },
   dash: {
