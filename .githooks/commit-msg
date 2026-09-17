@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+#
+# Reject AI-tool attribution before the commit is written, so the failure
+# arrives now instead of on a CI run after the push.
+#
+# Opt-in, once per clone:
+#
+#   git config core.hooksPath .githooks
+#
+# CI remains the real gate (see the "No AI attribution" job in
+# .github/workflows/ci.yml) — hooks are opt-in and can be bypassed with
+# --no-verify, so this is a convenience, not the enforcement point.
+
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+
+# git strips comment lines from the message; match what will actually be
+# committed, not the instructions git wrote into the editor buffer.
+git stripspace --strip-comments <"$1" |
+	"$root/scripts/check-attribution.sh" \
+		"this commit message" \
+		"delete the offending line(s) from the message and commit again." \
+		-

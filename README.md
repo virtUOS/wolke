@@ -97,6 +97,29 @@ make mcp          Build the admin MCP server → bin/mcp
 make clean        Remove build artifacts
 ```
 
+### Commit hooks (optional)
+
+`CLAUDE.md` forbids AI-tool attribution in commit messages and pull request
+text. A CI job (`.github/workflows/attribution.yml`) enforces it on every pull
+request, checking every commit message in the PR range plus the PR title and
+body, and failing with the offending line and how to fix it.
+
+The repo also ships a versioned `commit-msg` hook running the same check, so
+the failure arrives before the push instead of after it. It is opt-in — enable
+it once per clone:
+
+```
+git config core.hooksPath .githooks
+```
+
+Both call `scripts/check-attribution.sh`, so there is one pattern list. CI
+stays the real gate: hooks are opt-in and `--no-verify` bypasses them.
+
+One narrowness worth knowing: the check rejects any line starting with a
+`claude-<word>:` trailer key, so a commit subject cannot begin that way. The
+repo uses conventional-commit types (`feat`, `fix`, `chore`, `docs`, `lint`),
+so nothing legitimate does.
+
 ---
 
 ## Deployment (Docker Compose)
