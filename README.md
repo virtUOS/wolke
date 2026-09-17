@@ -166,7 +166,9 @@ the PNGs serve the PWA manifest and the apple-touch link. An optional eighth fil
 it is **off unless you both provide the file and set `branding.watermark:
 /branding/watermark.svg`** — with no value the app renders no such element at all,
 which is what stops a missing or unreachable file leaving an unmasked block on the
-page. It is used as a CSS mask, so only its alpha matters: ship a single-colour
+page. The value must be a same-origin path: the content security policy allows
+`img-src 'self'`, so a mark hosted elsewhere would be blocked by the browser, and
+the server refuses an absolute URL at startup rather than let that fail silently. It is used as a CSS mask, so only its alpha matters: ship a single-colour
 silhouette on a transparent background and the app tints it with the `accent`
 theme token at 7%. It is drawn as a full-height backdrop — scaled to the viewport
 height, cropped by the canvas edges, behind the opaque desktop tiles and through

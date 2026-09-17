@@ -13,7 +13,10 @@ import type { CSSProperties } from 'react'
 // — and the frozen `clip-path` #193 tried instead read as a truncated image,
 // because a hard edge on a recognisable shape always does. A gradient has no
 // edge to notice, and it makes the rule width-independent: nothing about it
-// changes between 1280 and 3440.
+// changes between 1280 and 3440. What does change with width is how much of the
+// fade fits — it fills the gutter there is, and below the column width there is
+// none and the mark bleeds off the edge (issue #199, and the spec's "How far
+// the fade gets").
 //
 // Rendered as a CSS-masked, token-filled box rather than an <img>: an external
 // SVG in an <img> cannot take the CSS color, so the tint would not re-skin with
@@ -100,15 +103,36 @@ export const WATERMARK_GEOMETRY = {
   mobile: { height: '86vh', overhang: 'translate(36%, 22%)' },
 } as const
 
-/** Opaque across the column, linear to transparent over the gutter to its
- *  right. The left side fades in symmetrically for free; nothing of the mark
- *  reaches there, so it costs nothing and keeps the gradient readable. */
+/**
+ * The column as it is actually RENDERED, which is not the same thing as the
+ * variable: `--launcher-max-width` is a *cap*, and below it the shell's column
+ * is the viewport (issue #199). The layer is the viewport, so `100%` here is
+ * the viewport width and `min()` picks whichever of the two is in force.
+ */
+const RENDERED_COLUMN = `min(100%, var(${WATERMARK_COLUMN_VAR}))`
+
+/** The rendered column's right edge, which is what the mark hangs off and what
+ *  the fade starts at. */
+const COLUMN_RIGHT = `calc(50% + ${RENDERED_COLUMN} / 2)`
+
+/**
+ * Opaque across the column, linear to transparent over the gutter to its right.
+ * The left side fades in symmetrically for free; nothing of the mark reaches
+ * there, so it costs nothing and keeps the gradient readable.
+ *
+ * The end of the fade is clamped to the layer's own right edge (issue #199).
+ * Without that clamp the gradient needs `column + 360px` of half-viewport to
+ * finish, i.e. about 1900px of screen — below which it ran off the side of the
+ * display still opaque, and the mark was cut by the *viewport* instead of
+ * dissolving. That is precisely the hard edge this rule exists to remove, so
+ * the fade fills whatever gutter there is, up to the full 360px.
+ */
 const GUTTER_MASK =
   `linear-gradient(to right,` +
   ` transparent 0,` +
-  ` #000 calc(50% - var(${WATERMARK_COLUMN_VAR}) / 2),` +
-  ` #000 calc(50% + var(${WATERMARK_COLUMN_VAR}) / 2),` +
-  ` transparent calc(50% + var(${WATERMARK_COLUMN_VAR}) / 2 + ${WATERMARK_GEOMETRY.desktop.gutterFade}px))`
+  ` #000 calc(50% - ${RENDERED_COLUMN} / 2),` +
+  ` #000 ${COLUMN_RIGHT},` +
+  ` transparent min(100%, calc(${COLUMN_RIGHT} + ${WATERMARK_GEOMETRY.desktop.gutterFade}px)))`
 
 interface WatermarkProps {
   /** `branding.watermark` — a mounted asset path, or '' to render nothing.

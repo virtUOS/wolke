@@ -324,6 +324,82 @@ test.describe('watermark enabled', () => {
     expect(box.x + box.width).toBeLessThan(columnRight + GEOMETRY.gutterFade)
   })
 
+  // Issue #199: the test above is the whole reason this pair exists. It asserts
+  // the fade at 2560, the one width where the full 360px happens to fit — and
+  // for as long as that was the only assertion, the fade could be (and was) a
+  // no-op everywhere below ~1900px without anything going red. A rule checked
+  // only where it holds is not checked.
+  //
+  // So both stated behaviours are pinned, at the width each one is the rule at:
+  //
+  //   1280 — there IS a gutter (50px of it), so the fade completes in it.
+  //    768 — the viewport is narrower than the content column, so there is NO
+  //          gutter, and the mark bleeds off the edge. Deliberately: the clamp
+  //          fills the gutter that exists, it does not invent room.
+  //
+  // Both read the rendered pixels at the screen's last column, because that is
+  // where the two differ and where a regression would show.
+
+  /** The blue delta of the mark's ink against the bare canvas, sampled along a
+   *  horizontal line through the middle of the stand-in hexagon (it has ink at
+   *  every x there, so anything that varies along the line is the mask). */
+  async function inkAlongTheMark(page: Page, xs: number[]): Promise<number[]> {
+    const box = (await watermark(page).boundingBox())!
+    const y = Math.round(box.y + box.height / 2)
+    const vh = await page.evaluate(() => document.documentElement.clientHeight)
+    expect(y, 'the sampled line is on screen').toBeLessThan(vh)
+    const samples = await samplePixels(page, [...xs.map((x) => ({ x: Math.round(x), y })), { x: 40, y }])
+    const canvas = samples.pop()!
+    return samples.map((p) => Math.abs(p[2] - canvas[2]))
+  }
+
+  test('completes the fade inside the narrow gutter of a 1280 screen', async ({ page }, testInfo) => {
+    testInfo.skip(testInfo.project.name !== 'desktop-1280', 'this is the 1280 case')
+    await gotoApp(page)
+    await expect(watermark(page)).toHaveCount(1)
+
+    const vw = await page.evaluate(() => document.documentElement.clientWidth)
+    const columnRight = (vw + COLUMN_WIDTH) / 2
+    const gutter = vw - columnRight
+    expect(gutter, 'at 1280 the gutter is a fraction of the 360px the rule asks for').toBeLessThan(
+      GEOMETRY.gutterFade,
+    )
+    // Well inside the column, then across the gutter to the screen's last pixel.
+    const ink = await inkAlongTheMark(page, [columnRight - 40, columnRight + gutter / 2, vw - 1])
+
+    expect(ink[0], 'full strength over the column').toBeGreaterThan(8)
+    expect(ink[1], 'weaker half way across the gutter').toBeLessThan(ink[0])
+    // The point of the whole issue: the mark reaches transparent BEFORE the
+    // screen edge cuts it, even though the gutter is 50px rather than 360.
+    expect(ink[2], 'and gone at the screen edge — dissolved, not cut').toBeLessThanOrEqual(1)
+  })
+
+  test('bleeds off the edge where the viewport is narrower than the column', async ({ page }, testInfo) => {
+    testInfo.skip(testInfo.project.name !== 'tablet-768', 'the widest viewport that is narrower than the column')
+    await gotoApp(page)
+    await expect(watermark(page)).toHaveCount(1)
+
+    const vw = await page.evaluate(() => document.documentElement.clientWidth)
+    expect(vw, 'this width is below the column cap, which is what makes it the bleed case').toBeLessThan(
+      COLUMN_WIDTH,
+    )
+    // 768 is the desktop layout (MOBILE_BREAKPOINT_PX is a min-width), so this
+    // is the desktop geometry, not #181's phone rule — the mark runs past the
+    // right edge with no gutter behind it to dissolve into.
+    const box = (await watermark(page).boundingBox())!
+    expect(box.x + box.width, 'the mark reaches past the viewport').toBeGreaterThan(vw)
+
+    const ink = await inkAlongTheMark(page, [vw / 2, vw - 1])
+    expect(ink[0], 'full strength over the column').toBeGreaterThan(8)
+    // Asserted, not tolerated: with no gutter there is nothing to fade over, so
+    // the mark meets the edge at full strength and bleeds — the same thing the
+    // phone rule does on purpose. If this ever goes to zero, the fade has been
+    // keyed to something that eats into the column itself.
+    expect(ink[1], 'still at full strength where the screen ends').toBeGreaterThan(8)
+    expect(ink[1], 'i.e. it bleeds rather than dissolving').toBeCloseTo(ink[0], -1)
+    expect(await documentOverflow(page)).toBeLessThanOrEqual(0)
+  })
+
   test('stays decorative: out of the a11y tree, out of the pointer\'s way, under the ceiling', async ({
     page,
   }, testInfo) => {

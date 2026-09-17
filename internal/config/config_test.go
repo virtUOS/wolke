@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -282,5 +284,51 @@ func TestEmptyPublicURLRejected(t *testing.T) {
 	path := writeTemp(t, "public_url: \"\"\n")
 	if _, err := load(path, envMap(nil)); err == nil {
 		t.Fatal("load: want error for empty public_url, got nil")
+	}
+}
+
+// branding.watermark is an asset WE serve, not a link we hand to the browser:
+// the CSP allows img-src 'self', so an absolute URL passes every other check,
+// renders nothing, and reports nothing. It must fail at startup like the other
+// two externally-supplied URLs — and the message has to say why, because "it is
+// a valid URL" is exactly what the operator will be thinking.
+func TestWatermarkValidated(t *testing.T) {
+	watermarkConfig := func(t *testing.T, v string) string {
+		t.Helper()
+		return writeTemp(t, "branding:\n  watermark: "+v+"\n")
+	}
+
+	for _, bad := range []string{
+		"https://cdn.example.edu/mark.svg",
+		"http://cdn.example.edu/mark.svg",
+		"//cdn.example.edu/mark.svg",
+		"branding/watermark.svg",
+		"data:image/svg+xml,<svg/>",
+	} {
+		_, err := load(watermarkConfig(t, strconv.Quote(bad)), envMap(nil))
+		if err == nil {
+			t.Errorf("load: want error for watermark %q, got nil", bad)
+			continue
+		}
+		if !strings.Contains(strings.ToLower(err.Error()), "content security policy") {
+			t.Errorf("load: watermark %q error must name the CSP as the reason, got %v", bad, err)
+		}
+	}
+
+	// Empty still means "off" — the shipped default — and a mounted asset path
+	// still loads.
+	cfg, err := load("", envMap(nil))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Branding.Watermark != "" {
+		t.Errorf("Watermark = %q, want empty by default (mark off)", cfg.Branding.Watermark)
+	}
+	cfg, err = load(watermarkConfig(t, "/branding/watermark.svg"), envMap(nil))
+	if err != nil {
+		t.Fatalf("load: a same-origin watermark path must be valid, got %v", err)
+	}
+	if cfg.Branding.Watermark != "/branding/watermark.svg" {
+		t.Errorf("Watermark = %q, want the file value", cfg.Branding.Watermark)
 	}
 }

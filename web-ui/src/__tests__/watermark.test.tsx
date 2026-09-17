@@ -188,12 +188,33 @@ describe('Watermark', () => {
         expect(style).toContain(prop)
       }
       expect(style).toContain('linear-gradient(to right')
-      expect(style).toContain(`calc(50% - var(${WATERMARK_COLUMN_VAR}) / 2)`)
-      expect(style).toContain(`calc(50% + var(${WATERMARK_COLUMN_VAR}) / 2)`)
+      expect(style).toContain(`calc(50% - min(100%, var(${WATERMARK_COLUMN_VAR})) / 2)`)
+      expect(style).toContain(`calc(50% + min(100%, var(${WATERMARK_COLUMN_VAR})) / 2)`)
       expect(style).toContain(
-        `calc(50% + var(${WATERMARK_COLUMN_VAR}) / 2 + ${WATERMARK_GEOMETRY.desktop.gutterFade}px)`,
+        `min(100%, calc(calc(50% + min(100%, var(${WATERMARK_COLUMN_VAR})) / 2) + ${WATERMARK_GEOMETRY.desktop.gutterFade}px))`,
       )
       expect(WATERMARK_GEOMETRY.desktop.gutterFade).toBe(360)
+    })
+
+    // Issue #199. The stops above are not the cap and a constant; both halves
+    // of that matter, and neither is visible in a jsdom render, so they are
+    // stated here as the reason the expressions look the way they do.
+    it('keys the fade to the rendered column and ends it inside the viewport', () => {
+      const { container } = render(<Watermark src={MARK} columnWidth={1180} />)
+      const style = css(layer(container)!)
+      // 1. `--launcher-max-width` is a CAP, not the column: below it the shell's
+      //    column is the viewport, and the layer IS the viewport, so `100%` is
+      //    the other candidate and min() picks whichever is in force.
+      expect(style).toContain(`min(100%, var(${WATERMARK_COLUMN_VAR}))`)
+      // 2. The fade ends at the layer's own right edge at the latest. Without
+      //    this the gradient needs `column + 360px` of half-viewport to finish
+      //    — about 1900px of screen — and below that it ran off the side still
+      //    opaque, so the mark was cut by the viewport instead of dissolving.
+      //    Asserted at the pixel level at 1280 in the e2e suite.
+      expect(style).toContain('min(100%, calc(')
+      // The cap is still the one published value; nothing restates 1180.
+      expect(style).toContain(`${WATERMARK_COLUMN_VAR}: 1180px`)
+      expect(style.split('1180px')).toHaveLength(2)
     })
 
     it('is a fixed, full-viewport layer', () => {
