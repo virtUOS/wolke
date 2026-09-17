@@ -1,0 +1,2 @@
+red-case fixture: an offending commit, deliberately not the tip.
+and a clean commit on top, so the offender is not the head.
