@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { Branding } from '@/lib/branding'
+import { BRANDING } from '@/test/branding'
 import type { Me } from '@/lib/api'
 import { Dashboard } from '@/components/Dashboard'
 
@@ -17,24 +17,6 @@ import { Dashboard } from '@/components/Dashboard'
 //   or the doc link must leave it alone. Click tracking (recordClick) fires
 //   unconditionally either way; these tests cover the query-clearing decision
 //   made in Dashboard's `actions.onLaunch`, which Tile.test.tsx doesn't reach.
-
-const BRANDING: Branding = {
-  product_name: 'wolke',
-  org_name: 'Universität Osnabrück',
-  logo_light: '',
-  logo_dark: '',
-  favicon: '',
-  watermark: '',
-  default_locale: 'de',
-  imprint_url: '',
-  privacy_url: '',
-  feedback_url: '',
-  bot_url: '',
-  help_url: '', news_url: '',
-  assistant_widget_url: '',
-  assistant_bot_id: '',
-  theme: { light: {}, dark: {} },
-}
 
 const ME: Me = {
   id: 'u1',

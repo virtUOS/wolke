@@ -11,6 +11,7 @@ import {
 import { DashboardShell, SHELL_MAX_WIDTH } from '@/components/DashboardShell'
 import { Greeting } from '@/components/Greeting'
 import type { Branding } from '@/lib/branding'
+import { BRANDING } from '@/test/branding'
 import type { Me } from '@/lib/api'
 import { expectNoAxeViolations } from '@/test/axe'
 
@@ -312,24 +313,9 @@ describe('Greeting publishes its top as the watermark anchor', () => {
 // where that is decided. DashboardShell is shared by both views, so these
 // assert the `watermark` prop gate the same way `search` is gated.
 
-const BRANDING: Branding = {
-  product_name: 'wolke',
-  org_name: 'Universität Osnabrück',
-  logo_light: '',
-  logo_dark: '',
-  favicon: '',
-  watermark: MARK,
-  default_locale: 'de',
-  imprint_url: '',
-  privacy_url: '',
-  feedback_url: '',
-  bot_url: '',
-  help_url: '',
-  news_url: '',
-  assistant_widget_url: '',
-  assistant_bot_id: '',
-  theme: { light: {}, dark: {} },
-}
+// The shared fixture (src/test/branding.ts) carries no mark; a mark is what
+// this suite is about, so it stays an explicit override here.
+const BRANDING_WITH_MARK: Branding = { ...BRANDING, watermark: MARK }
 
 const ME = {
   id: 'u1',
@@ -351,7 +337,7 @@ function renderShell(props: { watermark?: boolean; branding?: Branding; isDark?:
   return render(
     <QueryClientProvider client={qc}>
       <DashboardShell
-        branding={props.branding ?? BRANDING}
+        branding={props.branding ?? BRANDING_WITH_MARK}
         me={ME}
         locale="de"
         isDark={props.isDark ?? false}
@@ -415,14 +401,14 @@ describe('DashboardShell watermark placement', () => {
   })
 
   it('renders nothing even on the launcher when branding has no mark', () => {
-    const { container } = renderShell({ watermark: true, branding: { ...BRANDING, watermark: '' } })
+    const { container } = renderShell({ watermark: true, branding: { ...BRANDING_WITH_MARK, watermark: '' } })
     expect(mark(container)).toBeNull()
   })
 
   it('survives a stale branding payload that predates the watermark field', () => {
     // The shape a client five minutes either side of a deploy actually holds:
     // the key is missing, not empty. The shell must render, not throw.
-    const stale: Partial<Branding> = { ...BRANDING }
+    const stale: Partial<Branding> = { ...BRANDING_WITH_MARK }
     delete stale.watermark
     const { container } = renderShell({ watermark: true, branding: stale as Branding })
     expect(mark(container)).toBeNull()

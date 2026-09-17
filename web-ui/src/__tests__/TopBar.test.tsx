@@ -5,24 +5,17 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TopBar } from '@/components/TopBar'
 import { api, type Me } from '@/lib/api'
 import type { Branding } from '@/lib/branding'
+import { BRANDING } from '@/test/branding'
 
-const branding = {
-  product_name: 'wolke',
+const branding: Branding = {
+  ...BRANDING,
+  // TopBar renders the mark and the wordmark, so this suite wants a real logo
+  // pair rather than the shared fixture's empty defaults.
   org_name: 'Uni',
   logo_light: '/l.svg',
   logo_dark: '/d.svg',
   favicon: '/f.svg',
-  default_locale: 'de',
-  imprint_url: '',
-  privacy_url: '',
-  feedback_url: '',
-  bot_url: '',
-  help_url: '',
-  news_url: '',
-  assistant_widget_url: '',
-  assistant_bot_id: '',
-  theme: { light: {}, dark: {} },
-} as Branding
+}
 
 // TopBar mounts the NotificationBell, which reads server state via TanStack
 // Query, so renders need a QueryClient and a stubbed announcements call.

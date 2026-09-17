@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Settings, Star } from 'lucide-react'
 import { expectNoAxeViolations } from '@/test/axe'
+import { BRANDING } from '@/test/branding'
 import type { Branding } from '@/lib/branding'
 import type { Me, Service, Category } from '@/lib/api'
 
@@ -169,20 +170,20 @@ describe('a11y (axe) — prop-driven views', () => {
   })
 
   it('TopBar', async () => {
-    const branding = {
-      product_name: 'wolke',
+    const branding: Branding = {
+      ...BRANDING,
+      // The top bar audited here renders a logo and every footer/contact link,
+      // so those get real values instead of the shared fixture's empty ones.
       org_name: 'Uni',
       logo_light: '/l.svg',
       logo_dark: '/d.svg',
       favicon: '/f.svg',
-      default_locale: 'de',
       imprint_url: 'https://example.edu/impressum',
       privacy_url: 'https://example.edu/datenschutz',
       feedback_url: 'feedback@example.edu',
       bot_url: 'https://example.edu/bot',
       help_url: '+49 541 9690',
-      theme: { light: {}, dark: {} },
-    } as Branding
+    }
     const me = { display_name: 'Tim B', email: 't@example.edu', is_admin: true } as Me
     // TopBar now mounts the NotificationBell, which reads server state via
     // TanStack Query, so it needs a QueryClient in scope.
