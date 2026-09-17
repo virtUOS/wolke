@@ -87,6 +87,25 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const isMobile = useIsMobile()
   const layout = isMobile ? 'list' : 'grid'
 
+  // `searchOpen` belongs to the phone layout alone, so it must not outlive a
+  // crossing of the breakpoint (issue #198, docs/specs/search-view-state.md
+  // §3): the desktop renders no overlay, so a flag left standing there is one
+  // that pops the full-bar overlay open the next time the window narrows.
+  // Adjusted during render — the pattern the view invariants below use, and the
+  // reason this needs no effect and no second source of truth.
+  const [lastMobile, setLastMobile] = useState(isMobile)
+  if (lastMobile !== isMobile) {
+    setLastMobile(isMobile)
+    setSearchOpen(false)
+  }
+  // The phone overlay's real state: the flag, plus the rule that an active
+  // query is always visible and clearable. The query itself crosses the
+  // breakpoint untouched (losing typed text on a rotate is the worse failure),
+  // and this is what makes that safe — a query typed in the desktop bar arrives
+  // in the phone layout with a field to see it in and a ✕ to drop it with,
+  // rather than narrowing the list from a control that isn't on screen.
+  const phoneSearchOpen = isMobile && (searchOpen || searching)
+
   const prefersDark = usePrefersDark()
   const isDark = me.theme === 'dark' || (me.theme === 'system' && prefersDark)
 
@@ -184,7 +203,14 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   // Typing must never create history entries, so the filter clear replaces.
   const onSearch = (value: string) => {
     setQuery(value)
-    if (value.trim() && filter.kind !== 'all') replace({ ...view, filter: { kind: 'all' } })
+    if (!value.trim()) return
+    if (filter.kind !== 'all') replace({ ...view, filter: { kind: 'all' } })
+    // …and it cancels the Anordnen edit mode, for the same reason (issue #198,
+    // docs/specs/search-view-state.md §2): a search resets the view, the way a
+    // tab switch and a popstate already cancel a search. Cancelled, not
+    // suppressed — clearing the query lands on the ordinary favorites list, and
+    // the mode is re-entered the way it was entered, through the sort menu.
+    setArrangeRequested(false)
   }
 
   // Jump to the Dienste tab showing only services currently in maintenance.
@@ -254,7 +280,13 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   const showHeading = searching
 
   const favCount = favoriteServices.length
-  const arranging = arrangeRequested && me.favorites_order === 'manual' && favCount > 0
+  // `tab === 'favoriten'` for the same reason as the other two guards: arrange
+  // is an edit mode *of the favorites list*, and nothing ever cleared the flag
+  // on a navigation, so without it the mode followed the user onto the Dienste
+  // tab — where it renders no bar of its own but still suppresses the tab row
+  // below (issue #198, docs/specs/search-view-state.md §1).
+  const arranging =
+    arrangeRequested && tab === 'favoriten' && me.favorites_order === 'manual' && favCount > 0
   const firstName = me.display_name.split(' ')[0]
 
   // The sort trigger rides on the right of the tab row (issue #170; it sat
@@ -291,11 +323,14 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   // that asked for it. iOS only raises the keyboard for a focus it can trace
   // back to a tap, and a focus scheduled after React's normal async render
   // no longer counts as one.
+  // The reveal is phone state, so only a phone sets it: on a desktop the field
+  // is already in the bar, and a ⌘K that set the flag there was what left the
+  // overlay waiting to spring open on the next narrow resize (issue #198).
   const openSearch = useCallback(() => {
-    flushSync(() => setSearchOpen(true))
+    if (isMobile) flushSync(() => setSearchOpen(true))
     searchInputRef.current?.focus()
     searchInputRef.current?.select()
-  }, [])
+  }, [isMobile])
   // ⌘K / Ctrl+K, and "/" when nothing is being typed into. Off in the admin
   // view, which has no search field to focus (see DashboardShell's `search`).
   useSearchHotkeys(openSearch, !adminOpen)
@@ -307,7 +342,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
       value={query}
       onChange={onSearch}
       inputRef={searchInputRef}
-      open={searchOpen}
+      open={phoneSearchOpen}
       onOpen={openSearch}
       onClose={clearSearch}
     />
@@ -357,9 +392,11 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         searches the catalogue, and the admin surface isn't it. */}
     {/* `searchOpen` only matters on a phone: there the revealed field is laid
         over the whole app-bar row, and the bar's actions go inert under it
-        (TopBar). A desktop keeps this state too — ⌘K sets it — but has no
-        overlay, so it must not reach the bar. */}
-    <DashboardShell {...shellProps} search={globalSearch} searchOpen={isMobile && searchOpen} watermark>
+        (TopBar). Both consumers take the same reconciled value — see
+        phoneSearchOpen — so the overlay and the inertness it implies can never
+        disagree, and neither survives into the layout that renders no overlay
+        at all (issue #198). */}
+    <DashboardShell {...shellProps} search={globalSearch} searchOpen={phoneSearchOpen} watermark>
       <Greeting
         firstName={firstName}
         locale={locale}
