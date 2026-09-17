@@ -104,6 +104,13 @@ text. A CI job (`.github/workflows/attribution.yml`) enforces it on every pull
 request, checking every commit message in the PR range plus the PR title and
 body, and failing with the offending line and how to fix it.
 
+This is about authorship, not secrecy. AI assistance is not hidden here — it
+just does not get recorded as a contributor. A commit's author and co-authors
+are the people accountable for the change, and a tool is not one of them.
+Saying in prose that something was AI-assisted is fine and passes the check;
+what it rejects is authorship metadata (`Co-Authored-By:` trailers,
+session-URL trailers, tool email addresses) and the generated credit line.
+
 The repo also ships a versioned `commit-msg` hook running the same check, so
 the failure arrives before the push instead of after it. It is opt-in — enable
 it once per clone:
