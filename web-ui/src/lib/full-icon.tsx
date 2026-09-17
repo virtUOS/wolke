@@ -8,5 +8,14 @@ import { iconComponent } from './icon-set'
 // (re)created during render.
 export default function FullIcon({ name, ...rest }: { name: string } & Omit<ComponentProps<LucideIcon>, 'ref'>) {
   const Icon = iconComponent(name) ?? AppWindow
+  // react-hooks/static-components sees a capitalised local bound during render
+  // and assumes a component factory, whose fresh identity each render would
+  // remount the subtree and drop its state. It is not one: iconComponent()
+  // (icon-set.tsx) is `byKebab[name]`, a plain lookup into a map built once at
+  // module load from lucide's own `icons` export. Every binding it returns is
+  // an existing module-scope component, and the same `name` yields the exact
+  // same reference on every render — so there is nothing to remount. The
+  // fallback, AppWindow, is a module-scope import for the same reason.
+  // eslint-disable-next-line react-hooks/static-components
   return <Icon {...rest} />
 }
