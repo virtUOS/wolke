@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { FlaskConical, Wrench, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
+import { FlaskConical, Wrench } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { assistantEnabled, type Branding } from '@/lib/branding'
 import { DESKTOP_MEDIA_QUERY } from '@/lib/breakpoints'
@@ -28,51 +29,13 @@ import { CatalogView } from './CatalogView'
 import { DashboardShell } from './DashboardShell'
 import { FavoritesArrange, FavoritesSortMenu } from './FavoritesOrder'
 import { Greeting } from './Greeting'
+import { LauncherTabs } from './LauncherTabs'
+import { SearchResults } from './SearchResults'
+import { GlobalSearch, useSearchHotkeys } from './GlobalSearch'
 import { type TileActions } from './Tile'
-import { type Tab } from './TopBar'
+import { type Tab } from '@/lib/view-url'
 import { PillButton } from '@/components/ui/pill-button'
 import { RestrictedMarker } from '@/components/ui/restricted-marker'
-
-// SearchBox is the service search field with a one-click clear (✕) button that
-// shows while there's a query. Shared by the mobile and desktop layouts.
-function SearchBox({
-  value,
-  onChange,
-  placeholder,
-  label,
-  clearLabel,
-  width,
-}: {
-  value: string
-  onChange: (v: string) => void
-  placeholder: string
-  label: string
-  clearLabel: string
-  width: number | string
-}) {
-  return (
-    <div style={{ position: 'relative', width }}>
-      <input
-        type="search"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        aria-label={label}
-        className="h-11 w-full rounded-md border border-border bg-surface pl-3 pr-12 text-sm text-text placeholder:text-text-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:h-9 md:pr-9 [&::-webkit-search-cancel-button]:appearance-none"
-      />
-      {value !== '' && (
-        <button
-          type="button"
-          aria-label={clearLabel}
-          onClick={() => onChange('')}
-          className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 cursor-pointer place-items-center rounded text-text-muted transition-colors hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:right-1 md:h-7 md:w-7"
-        >
-          <X className="h-4 w-4" aria-hidden="true" />
-        </button>
-      )}
-    </div>
-  )
-}
 
 function useIsMobile(): boolean {
   const [mobile, setMobile] = useState(() => !window.matchMedia(DESKTOP_MEDIA_QUERY).matches)
@@ -103,11 +66,22 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   }, [locale])
   const qc = useQueryClient()
   const [query, setQuery] = useState('')
+  // Phone only: whether the app-bar search field is revealed (issue #171).
+  // A desktop has no such state — the field is simply always in the bar.
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  // Standing down from search: drop the query AND put the phone's field away.
+  // One function, because every caller means both — a tab switch, a popstate,
+  // and the plain-click launch that leaves a stale query behind (issue #27).
+  const clearSearch = useCallback(() => {
+    setQuery('')
+    setSearchOpen(false)
+  }, [])
   // View state (tab, filter, admin) lives in the browser history so Back and
   // Forward walk through views and view URLs are deep-linkable (issue #29).
   // Search stays local and out of the URL; every navigation cancels it, and
   // popstate does the same via onPop.
-  const { view, navigate, replace } = useViewHistory({ onPop: () => setQuery('') })
+  const { view, navigate, replace } = useViewHistory({ onPop: clearSearch })
   const { tab, filter } = view
   const searching = query.trim() !== ''
   const isMobile = useIsMobile()
@@ -195,7 +169,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     onLaunch: (s, target, plainClick) => {
       api.recordClick(s.id, target)
       qc.invalidateQueries({ queryKey: ['favorites'] })
-      if (searching && target === undefined && plainClick) setQuery('')
+      if (searching && target === undefined && plainClick) clearSearch()
     },
   }
 
@@ -213,15 +187,9 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     if (value.trim() && filter.kind !== 'all') replace({ ...view, filter: { kind: 'all' } })
   }
 
-  // Jump to the favorites tab (shortcut from the greeting's favorites count).
-  const showFavorites = () => {
-    setQuery('')
-    navigate({ tab: 'favoriten', filter: { kind: 'all' }, admin: false })
-  }
-
   // Jump to the Dienste tab showing only services currently in maintenance.
   const showMaintenance = () => {
-    setQuery('')
+    clearSearch()
     navigate({ tab: 'dienste', filter: { kind: 'maintenance' }, admin: false })
   }
 
@@ -244,31 +212,15 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
   // marker names the group, not the category. Only ever populated for a
   // category this user holds: /api/catalog drops the ones they don't
   // (docs/specs/service-visibility.md §2.2).
-  const groupLabels = useMemo(() => {
-    const out: Record<string, string> = {}
-    for (const e of me.visibility.entries) out[e.slug] = localized(e.label, locale)
-    return out
-  }, [me.visibility.entries, locale])
+  // A handful of entries, so a plain derivation: the React Compiler memoizes
+  // it, and a manual useMemo here is what it refused to preserve once the
+  // facet heading's own memo (issue #182) no longer sat beside it.
+  const groupLabels: Record<string, string> = {}
+  for (const e of me.visibility.entries) groupLabels[e.slug] = localized(e.label, locale)
   const restrictedBy = (slug: string): string | undefined => {
     const group = allCategories.find((c) => c.slug === slug)?.visibility
     return group ? groupLabels[group] ?? group : undefined
   }
-
-  // The group restricting the section currently on screen, if any.
-  const activeGroup = filter.kind === 'category' ? restrictedBy(filter.slug) : undefined
-
-  // Section heading for the current view.
-  const heading = useMemo(() => {
-    if (searching) return tr.dash.searchResults
-    if (tab === 'favoriten') return tr.dash.favorites
-    if (filter.kind === 'maintenance') return tr.dash.inMaintenance
-    if (filter.kind === 'beta') return tr.dash.betaServices
-    if (filter.kind === 'category') {
-      const c = allCategories.find((x) => x.slug === filter.slug)
-      return c ? localized(c.label, locale) : filter.slug
-    }
-    return tr.dash.allServices
-  }, [searching, tab, filter, allCategories, locale, tr])
 
   // Announce only settled numbers: see useResultAnnouncement. The key names
   // *what* produced the count (search text, or the active tab/filter) so a
@@ -289,14 +241,27 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     settleKey,
   )
 
+  // Section heading for the current view — a search, and only a search. Every
+  // other view is already named on screen: the unfiltered Favoriten / Alle
+  // Dienste views by the active tab (issue #170), and every facet — "In
+  // Wartung", "Beta", a category — by its own highlighted pill directly above
+  // the list (issue #182). A heading over a facet was the same name twice, and
+  // because the unfiltered view had none, selecting a category pushed the
+  // pills and every card down by the heading's height and back again on
+  // "Alle". A search has no pill, so "Suchergebnisse" stays: it is what tells
+  // the reader why neither tab is highlighted and why these services are not
+  // the list they were just looking at.
+  const showHeading = searching
+
   const favCount = favoriteServices.length
   const arranging = arrangeRequested && me.favorites_order === 'manual' && favCount > 0
   const firstName = me.display_name.split(' ')[0]
 
-  // The sort trigger belongs to the favorites heading (issue #125): it makes
+  // The sort trigger rides on the right of the tab row (issue #170; it sat
+  // beside the "Favoriten" heading the row replaced, issue #125): it makes
   // usage/alpha discoverable and manual reachable, and it is what opens the
-  // Anordnen edit mode. Hidden while searching — a search is global, so it is
-  // not the favorites list being ordered.
+  // Anordnen edit mode. Favorites-only, and hidden while searching — a search
+  // is global, so it is not the favorites list being ordered.
   const showSortMenu = !searching && tab === 'favoriten'
   const sortMenu = showSortMenu && (
     <FavoritesSortMenu
@@ -309,23 +274,49 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
     />
   )
 
+  // Switching the view always returns to the dashboard — out of the admin view
+  // and out of search mode (a switch during a search cancels the search). Also
+  // clears the filter: filter ≠ all implies the Dienste tab, which is what keeps
+  // the view's URL unambiguous.
+  const onTab = (next: Tab) => {
+    clearSearch()
+    navigate({ tab: next, filter: { kind: 'all' }, admin: false })
+  }
+
   const adminOpen = view.admin && me.is_admin
+
+  // Reaching the field. On a desktop it is already in the bar, so this is a
+  // plain focus; on a phone it has to be revealed first — and the reveal is
+  // flushed synchronously so focus() still happens inside the user gesture
+  // that asked for it. iOS only raises the keyboard for a focus it can trace
+  // back to a tap, and a focus scheduled after React's normal async render
+  // no longer counts as one.
+  const openSearch = useCallback(() => {
+    flushSync(() => setSearchOpen(true))
+    searchInputRef.current?.focus()
+    searchInputRef.current?.select()
+  }, [])
+  // ⌘K / Ctrl+K, and "/" when nothing is being typed into. Off in the admin
+  // view, which has no search field to focus (see DashboardShell's `search`).
+  useSearchHotkeys(openSearch, !adminOpen)
+
+  const globalSearch = (
+    <GlobalSearch
+      locale={locale}
+      isMobile={isMobile}
+      value={query}
+      onChange={onSearch}
+      inputRef={searchInputRef}
+      open={searchOpen}
+      onOpen={openSearch}
+      onClose={clearSearch}
+    />
+  )
 
   const shellProps = {
     branding,
     me,
     locale,
-    // Search results are their own view (global, across all services), so no
-    // section tab is highlighted while a query is active.
-    tab: searching ? null : tab,
-    // Switching tab always returns to the dashboard — out of the admin view and
-    // out of search mode (a tab click during a search cancels the search).
-    // Also clears the filter: filter ≠ all implies the Dienste tab, which is
-    // what keeps the view's URL unambiguous.
-    onTab: (next: Tab) => {
-      setQuery('')
-      navigate({ tab: next, filter: { kind: 'all' }, admin: false })
-    },
     isDark,
     theme: me.theme,
     onSetTheme: (next: Me['theme']) => prefs.mutate({ theme: next }),
@@ -362,14 +353,18 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
 
   return (
     <>
-    <DashboardShell {...shellProps}>
+    {/* `search` only here, not on the admin shell above: the app-bar field
+        searches the catalogue, and the admin surface isn't it. */}
+    {/* `searchOpen` only matters on a phone: there the revealed field is laid
+        over the whole app-bar row, and the bar's actions go inert under it
+        (TopBar). A desktop keeps this state too — ⌘K sets it — but has no
+        overlay, so it must not reach the bar. */}
+    <DashboardShell {...shellProps} search={globalSearch} searchOpen={isMobile && searchOpen} watermark>
       <Greeting
         firstName={firstName}
         locale={locale}
         isMobile={isMobile}
-        favCount={favCount}
         maintenanceCount={maintenanceCount}
-        onShowFavorites={showFavorites}
         onShowMaintenance={showMaintenance}
       />
 
@@ -383,72 +378,46 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         </div>
       )}
 
-      {/* Section head. Mobile is intentionally minimal — the search box, plus
-          (on the favorites tab) the heading row that carries the sort trigger;
-          no category chips, discovery relies on search. Desktop keeps the
-          heading + search and the category filters.
+      {/* The view switch (issue #170): an underline tab row directly above the
+          list it controls, carrying each set's count and the favorites sort
+          control. It sits where the old "Favoriten" heading row sat — and so
+          it inherits that row's behaviour in the arrange edit mode below:
+          arrange brings its own Abbrechen · Anordnen · Fertig bar and owns the
+          view, and two stacked control rows ate too much phone screen
+          (#125/#127). Counts are the full visible sets, not the filtered ones,
+          and are omitted until their query has answered. */}
+      {!arranging && (
+        <LauncherTabs
+          locale={locale}
+          // Search results are their own view (global, across all services), so
+          // neither tab is current while a query is active.
+          tab={searching ? null : tab}
+          onTab={onTab}
+          favCount={favorites.data ? favCount : undefined}
+          allCount={catalog.data ? allServices.length : undefined}
+          sort={sortMenu || undefined}
+          isMobile={isMobile}
+        />
+      )}
 
-          The arrange edit mode brings its own Abbrechen · Anordnen · Fertig
-          bar and owns the view while it is open, so the section head steps
-          aside rather than stacking a second header above it. */}
-      {!arranging &&
-        (isMobile ? (
-          <div style={{ marginBottom: 16 }}>
-            {showSortMenu && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                <h2 className="m-0 min-w-0 truncate text-base font-medium text-text">{heading}</h2>
-                {sortMenu}
-              </div>
-            )}
-            <div style={{ marginTop: showSortMenu ? 14 : 0 }}>
-              <SearchBox
-                value={query}
-                onChange={onSearch}
-                placeholder={tr.dash.searchPlaceholder}
-                label={tr.dash.searchLabel}
-                clearLabel={tr.dash.searchClear}
-                width="100%"
-              />
-            </div>
-          </div>
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 20,
-              marginBottom: 18,
-            }}
-          >
-            {/* Heading + sort trigger are one group: the trigger labels how
-                the list below it is ordered, so it belongs to the heading and
-                not to the search field on the other side of the row. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-              <h2
-                style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.01em', flexShrink: 0 }}
-                className="inline-flex items-center gap-1.5"
-              >
-                {heading}
-                {/* Same marker as the pill and the admin lists: this section is
-                    one only its group can see. Desktop only, because a
-                    category filter cannot be active on a phone — the layout
-                    has no pills and resets the filter to "all". */}
-                {activeGroup && <RestrictedMarker srLabel={tr.common.restrictedTo(activeGroup)} />}
-              </h2>
-              {sortMenu}
-            </div>
-            <SearchBox
-              value={query}
-              onChange={onSearch}
-              placeholder={tr.dash.searchPlaceholder}
-              label={tr.dash.searchLabel}
-              clearLabel={tr.dash.searchClear}
-              width={260}
-            />
-          </div>
-        ))}
+      {/* Section head: "Suchergebnisse", for the one view nothing else names
+          (see showHeading). It renders on a phone too: the in-content search
+          field moved into the app bar (issue #171), so this is what a phone
+          reader has. */}
+      {!arranging && showHeading && (
+        <h2
+          style={{
+            margin: '0 0 18px',
+            fontSize: 15,
+            fontWeight: 600,
+            color: 'var(--text)',
+            letterSpacing: '-0.01em',
+            minWidth: 0,
+          }}
+        >
+          {tr.dash.searchResults}
+        </h2>
+      )}
 
       {/* Single-select filters: desktop only (mobile relies on search). Hidden
           while searching, since a search is global and deactivates filters.
@@ -550,6 +519,19 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         <p style={{ fontSize: 14, color: 'var(--text-muted)' }} role="status" aria-busy="true">{tr.dash.searching}</p>
       ) : !searching && catalog.isLoading ? (
         <p style={{ fontSize: 14, color: 'var(--text-muted)' }} role="status" aria-busy="true">{tr.common.loading}</p>
+      ) : searching ? (
+        // Grouped by set (issue #171): the hits say which side of the
+        // Favoriten / Alle Dienste line they fell on, so a global search never
+        // pretends to be local. Ranking stays the server's inside each group.
+        <SearchResults
+          services={results}
+          favoritedIDs={favoritedIDs}
+          categories={allCategories}
+          locale={locale}
+          layout={layout}
+          actions={actions}
+          emptyMessage={tr.dash.searchEmpty(query)}
+        />
       ) : (
         <CatalogView
           services={results}
@@ -557,7 +539,6 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
           locale={locale}
           layout={layout}
           actions={actions}
-          emptyMessage={searching ? tr.dash.searchEmpty(query) : undefined}
         />
       )}
     </DashboardShell>

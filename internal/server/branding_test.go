@@ -154,9 +154,11 @@ func TestBrandingAssetRouteAbsentWhenNoDir(t *testing.T) {
 	}
 }
 
-// TestBrandingAllowlistServesEveryKnownAsset asserts each of the seven
-// referenced asset filenames (README "Branding assets", docs/02 §11.1) serves
-// with a sane Content-Type when present in the mounted dir.
+// TestBrandingAllowlistServesEveryKnownAsset asserts each referenced asset
+// filename (README "Branding assets", docs/02 §11.1) serves with a sane
+// Content-Type when present in the mounted dir. Seven of them are the bundled
+// set every mount must provide; watermark.svg (issue #174) is the optional
+// eighth, served when a deployment drops it in.
 func TestBrandingAllowlistServesEveryKnownAsset(t *testing.T) {
 	dir := t.TempDir()
 	assets := map[string]string{
@@ -167,6 +169,7 @@ func TestBrandingAllowlistServesEveryKnownAsset(t *testing.T) {
 		"icon-512.png":          "fake-png-512",
 		"icon-maskable-512.png": "fake-png-maskable",
 		"apple-touch-icon.png":  "fake-png-apple",
+		"watermark.svg":         "<svg/>",
 	}
 	for name, body := range assets {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
@@ -270,5 +273,101 @@ func TestBrandingMissingAllowlistedFileNotFound(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404 for missing allowlisted file", rec.Code)
+	}
+}
+
+// TestBrandingWatermarkDefaultsOff pins issue #174's one deliberate departure
+// from how every other branding asset behaves: the institution-mark watermark
+// defaults to the empty string, i.e. off. A mask-image that fails to load does
+// not reliably hide its box, and a deployment that mounts its own branding dir
+// without a watermark.svg would get a 404 for the mask — so the SPA must have a
+// config gate to render nothing at all, and the default must sit on the safe
+// side of it.
+func TestBrandingWatermarkDefaultsOff(t *testing.T) {
+	cfg := config.Defaults()
+	h := newTestRouter(t, &cfg, Deps{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/branding", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	// The field must be present in the payload (so the SPA can read it without
+	// an undefined check) and empty (so it renders nothing by default).
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if _, ok := raw["watermark"]; !ok {
+		t.Fatalf("/api/branding is missing the watermark field: %s", rec.Body.String())
+	}
+	var b config.Branding
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if b.Watermark != "" {
+		t.Errorf("watermark = %q, want empty (opt-in per issue #174)", b.Watermark)
+	}
+}
+
+// TestBrandingWatermarkConfigured: a deployment opting in gets the path it set
+// back from /api/branding verbatim — the SPA masks with that URL, never with a
+// constant.
+func TestBrandingWatermarkConfigured(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.Branding.Watermark = "/branding/watermark.svg"
+	h := newTestRouter(t, &cfg, Deps{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/branding", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	var b config.Branding
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if b.Watermark != "/branding/watermark.svg" {
+		t.Errorf("watermark = %q, want the configured path", b.Watermark)
+	}
+}
+
+// TestBrandingWatermarkAssetServed: watermark.svg is on the allowlist and
+// serves from a mounted dir, while a near-miss neighbour in the same dir still
+// 404s — the allowlist stays a closed set, an opt-in asset doesn't loosen it.
+func TestBrandingWatermarkAssetServed(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"watermark.svg":      "<svg id=\"mark\"/>",
+		"watermark-alt.svg":  "<svg/>",
+		"watermark.svg.orig": "<svg/>",
+	}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	cfg := config.Defaults()
+	cfg.BrandingDir = dir
+	h := newTestRouter(t, &cfg, Deps{})
+
+	req := httptest.NewRequest(http.MethodGet, "/branding/watermark.svg", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("watermark.svg: status = %d, want 200", rec.Code)
+	}
+	if rec.Body.String() != files["watermark.svg"] {
+		t.Errorf("watermark.svg: body = %q, want asset contents", rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "image/svg+xml" {
+		t.Errorf("watermark.svg: content-type = %q, want image/svg+xml", got)
+	}
+
+	for _, name := range []string{"watermark-alt.svg", "watermark.svg.orig"} {
+		req := httptest.NewRequest(http.MethodGet, "/branding/"+name, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s: status = %d, want 404 (not allowlisted)", name, rec.Code)
+		}
 	}
 }

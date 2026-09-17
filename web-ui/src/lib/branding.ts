@@ -12,6 +12,9 @@ export interface Branding {
   logo_light: string
   logo_dark: string
   favicon: string
+  // Decorative institution mark for the launcher background (issue #174).
+  // Empty means off, and off means no element at all — see Watermark.tsx.
+  watermark: string
   default_locale: string
   imprint_url: string
   privacy_url: string

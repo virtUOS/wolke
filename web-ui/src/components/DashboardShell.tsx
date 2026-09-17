@@ -2,11 +2,13 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import type { Me } from '@/lib/api'
 import { feedbackHref, type Branding } from '@/lib/branding'
 import { t, type Lang } from '@/lib/i18n'
-import { TopBar, type Tab } from './TopBar'
+import { TopBar } from './TopBar'
+import { Watermark } from './Watermark'
 import { UpdateNotice } from './UpdateNotice'
 
-// The centered content column: <main> and the footer share this width, and the
-// assistant launcher aligns its right edge to it (AssistantWidget).
+// The centered content column: <main> and the footer share this width, the
+// assistant launcher aligns its right edge to it (AssistantWidget), and the
+// watermark is anchored to its right edge (Watermark, issues #181/#187).
 export const SHELL_MAX_WIDTH = 1180
 
 function initials(name: string): string {
@@ -32,9 +34,6 @@ interface DashboardShellProps {
   me: Me
   /** The active locale, resolved once in Dashboard and threaded down. */
   locale: Lang
-  /** The active section; null while a search is active (no tab highlighted). */
-  tab: Tab | null
-  onTab: (t: Tab) => void
   /** Derived, effective dark-mode state — still needed for the canvas
    *  background and the assistant widget even though the top bar now takes
    *  the raw `theme` pref (issue #28). */
@@ -51,18 +50,30 @@ interface DashboardShellProps {
   /** Identifies the current view; when it changes, focus moves to <main> so a
    *  view switch (e.g. opening/closing Admin) isn't lost to <body>. */
   focusKey: string
+  /** The global search entry point for the app bar (issue #171). The launcher
+   *  passes it; the admin surface deliberately doesn't — it has no catalogue
+   *  search, and an app-bar field that searches nothing on screen is a lie. */
+  search?: ReactNode
+  /** Phone only: whether the search entry point's overlay is laid over the app
+   *  bar, which makes the bar's own actions inert while it is (see TopBar). */
+  searchOpen?: boolean
+  /** Whether to paint the decorative institution mark behind the canvas
+   *  (issue #174). Like `search`, the admin shell deliberately doesn't ask for
+   *  it: it is launcher decoration, not chrome. Even when true it renders
+   *  nothing unless `branding.watermark` is configured. */
+  watermark?: boolean
   children: ReactNode
 }
 
 // The warm-canvas + sticky TopBar + centered <main> chrome shared by every
-// dashboard view (the catalog tabs and the admin surface), so the shell — and
-// the logout handler — live in one place instead of being duplicated per branch.
+// dashboard view (the launcher and the admin surface), so the shell — and the
+// logout handler — live in one place instead of being duplicated per branch.
+// The view switch is not part of it: since issue #170 it sits above the list,
+// inside the launcher's own content (LauncherTabs).
 export function DashboardShell({
   branding,
   me,
   locale,
-  tab,
-  onTab,
   isDark,
   theme,
   onSetTheme,
@@ -72,6 +83,9 @@ export function DashboardShell({
   showBeta,
   onSetShowBeta,
   focusKey,
+  search,
+  searchOpen = false,
+  watermark = false,
   children,
 }: DashboardShellProps) {
   const s = t(locale)
@@ -95,12 +109,19 @@ export function DashboardShell({
   // dead band between the last tile and a footer pinned to the bottom edge —
   // issue #33. There the footer simply follows the content. The canvas height
   // itself comes from .app-canvas (dvh, see index.css).
+  //
+  // Canvas tone, per theme (issue #187): light is --bg warmed with 5% of the
+  // accent; dark is plain --bg. Dark used to carry a 7% tint too, which put the
+  // canvas at (37,34,31) — *lighter* than the opaque --surface card (30,30,33),
+  // so the card read as a recess. Raised surfaces in dark UI are conventionally
+  // lighter than their ground, and the design references draw a lighter card on
+  // a plain (22,22,24) canvas. Light keeps the tint on purpose: there a card a
+  // touch darker than the canvas reads as a delineated surface. The watermark
+  // (accent at 7%) composites over whatever the canvas is.
   const canvasStyle: CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
-    background: isDark
-      ? 'color-mix(in srgb, var(--accent) 7%, var(--bg))'
-      : 'color-mix(in srgb, var(--accent) 5%, var(--bg))',
+    background: isDark ? 'var(--bg)' : 'color-mix(in srgb, var(--accent) 5%, var(--bg))',
     color: 'var(--text)',
   }
 
@@ -113,12 +134,13 @@ export function DashboardShell({
       >
         {s.common.skipToContent}
       </a>
+      {watermark && (
+        <Watermark src={branding.watermark} isDark={isDark} isMobile={isMobile} columnWidth={SHELL_MAX_WIDTH} />
+      )}
       <TopBar
         branding={branding}
         locale={locale}
         currentLocalePref={me.locale}
-        tab={tab}
-        onTab={onTab}
         theme={theme}
         onSetTheme={onSetTheme}
         onSetLocale={onSetLocale}
@@ -129,6 +151,8 @@ export function DashboardShell({
         onAdmin={onAdmin}
         onLogout={logout}
         isMobile={isMobile}
+        search={search}
+        searchOpen={searchOpen}
         showBeta={showBeta}
         onSetShowBeta={onSetShowBeta}
       />

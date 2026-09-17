@@ -1,7 +1,8 @@
 // Issue #125: the favorites sort menu and the "Anordnen" edit mode, at every
 // resolution in the matrix (docs/specs/responsive-viewport-testing.md).
 //
-// The order now lives behind a compact trigger beside the "Favoriten" heading:
+// The order now lives behind a compact trigger on the right of the launcher
+// tab row (issue #170; it sat beside the "Favoriten" heading that row replaced):
 // a popover from the md: breakpoint up, a bottom sheet below it. Both open
 // states are asserted healthy at every resolution — a panel that opens is a
 // layout state like any other, and the sheet in particular is new geometry at
@@ -129,7 +130,12 @@ async function pickOrder(panel: Locator, value: string, label: string) {
 
 async function openFavorites(page: Page) {
   await gotoApp(page)
-  await page.getByRole('button', { name: 'Favoriten', exact: true }).first().click()
+  // The launcher tab row (issue #170) — the tab carries its item count, so the
+  // name is "Favoriten n" rather than "Favoriten".
+  await page
+    .getByRole('navigation', { name: /Hauptnavigation|Main navigation/i })
+    .getByRole('button', { name: /^Favoriten/ })
+    .click()
   // 'usage' is the default the server ships; nothing has been written yet.
   await expect(sortTrigger(page, 'Häufig genutzt')).toBeVisible()
 }
@@ -140,13 +146,17 @@ test('the sort menu offers the three modes and stays inside the viewport', async
   await stubFavorites(page)
   await openFavorites(page)
 
-  // The trigger is a real touch target at phone widths and shows the active
-  // order as its visible label (the design's icon-only variant was rejected).
+  // The trigger is a real touch target at phone widths. It shows the active
+  // order as its visible label on a desktop; on a phone it is icon-only since
+  // issue #170 — it shares the tab row with both tab labels and their counts,
+  // and "Eigene Reihenfolge" leaves the tabs nothing at 324px. Either way the
+  // active order is in its accessible name, which is what sortTrigger() finds
+  // it by.
   const trigger = sortTrigger(page, 'Häufig genutzt')
-  await expect(trigger).toHaveText(/Häufig genutzt/)
+  await expect(trigger).toHaveText(isMobile ? '' : /Häufig genutzt/)
   await expectTouchTarget(trigger, isMobile, 'sort trigger')
   await expect(trigger).toHaveAttribute('aria-expanded', 'false')
-  await expectViewportHealthy(page, { isMobile, label: 'favorites heading with the sort trigger' })
+  await expectViewportHealthy(page, { isMobile, label: 'tab row with the sort trigger' })
 
   const panel = await openSortMenu(page, 'Häufig genutzt')
   await expect(trigger).toHaveAttribute('aria-expanded', 'true')
@@ -220,7 +230,17 @@ test('the first switch to manual starts from the usage order', async ({ page }, 
   // reshuffle the list on the way into the mode.)
   await arrange.click()
   await expect.poll(() => arrangedNames(page)).toEqual(usageOrder)
+  // The edit mode owns the view: its Abbrechen · Anordnen · Fertig bar is the
+  // only chrome above the list, so the launcher tab row steps aside exactly as
+  // the "Favoriten" heading row it replaced did (#125/#127, issue #170 settled
+  // decision 2) — two stacked control rows ate too much phone screen.
+  await expect(page.getByRole('navigation', { name: /Hauptnavigation|Main navigation/i })).toHaveCount(0)
   await expectViewportHealthy(page, { isMobile, label: 'favorites arrange mode' })
+
+  // …and it comes back on Fertig.
+  await page.getByRole('button', { name: 'Fertig' }).click()
+  await expect(page.getByRole('navigation', { name: /Hauptnavigation|Main navigation/i })).toBeVisible()
+  await expectViewportHealthy(page, { isMobile, label: 'tab row back after arrange' })
 })
 
 test('reordering with the buttons is keyboard-operable and sends the whole list', async ({ page }, testInfo) => {

@@ -98,8 +98,6 @@ describe('Account menu beta switch', () => {
           branding={branding}
           locale="de"
           currentLocalePref="auto"
-          tab="dienste"
-          onTab={() => {}}
           theme="system"
           onSetTheme={() => {}}
           onSetLocale={() => {}}
@@ -171,9 +169,10 @@ describe('Account menu beta switch', () => {
 })
 
 // The one marker, on all three surfaces: the admin category row (the reference
-// treatment), the admin service row, and the holder's own filter pill and
-// section heading. Every one of them must say what it means — a bare lock with
-// no accessible name is worse than no marker.
+// treatment), the admin service row, and the holder's own filter pill (its only
+// launcher home since issue #182 removed the facet heading). Every one of them
+// must say what it means — a bare lock with no accessible name is worse than no
+// marker.
 describe('the restricted marker', () => {
   beforeEach(() => {
     vi.spyOn(api, 'me').mockResolvedValue(me())

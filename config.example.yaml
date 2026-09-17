@@ -80,6 +80,17 @@ branding:
   logo_light: /branding/logo-light.svg
   logo_dark: /branding/logo-dark.svg
   favicon: /branding/favicon.svg
+  # Decorative institution mark in the launcher background (issues #174, #187):
+  # a large, faint, accent-tinted backdrop scaled to the viewport height and
+  # cropped by the canvas edges, behind the opaque tiles. OFF by
+  # default, and deliberately so — the SPA renders no element at all while this
+  # is empty, which is what keeps a missing or unreachable file (a branding
+  # mount without it, or an installed PWA offline) from leaving an unmasked
+  # block on the page. To opt in, drop a `watermark.svg` into the mounted
+  # branding dir and uncomment the line below. Use a single-colour silhouette
+  # with a transparent background: the file is used as a CSS mask, so only its
+  # alpha matters — the colour always comes from the `accent` theme token.
+  # watermark: /branding/watermark.svg
   default_locale: de
   # Legal footer links (institution-specific). Leave empty to hide a link.
   imprint_url: "https://www.uni-osnabrueck.de/impressum/"

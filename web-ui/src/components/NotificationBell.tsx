@@ -214,8 +214,11 @@ export function NotificationBell({ locale, newsUrl = '' }: NotificationBellProps
               target="_blank"
               rel="noopener noreferrer"
               // 44px touch target on a phone, compact from `md` up — the same
-              // convention as the rows above it.
-              className="mt-2 flex min-h-11 items-center gap-1.5 rounded border-t border-border px-1 pt-2 text-sm font-medium text-text hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] md:min-h-0"
+              // convention as the rows above it. `py-2`, not `pt-2`: from `md`
+              // up `md:min-h-0` drops the 44px floor that was hiding the missing
+              // bottom padding, and the box collapsed onto the label's line box
+              // — descenders on the edge, a lopsided hover highlight (#192).
+              className="mt-2 flex min-h-11 items-center gap-1.5 rounded border-t border-border px-1 py-2 text-sm font-medium text-text hover:bg-surface focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] md:min-h-0"
             >
               <span className="hyphenate-compound min-w-0 flex-1">{s.announce.allNews}</span>
               <ArrowUpRight className="h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />

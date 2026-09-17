@@ -11,6 +11,7 @@
 
 import { expectNothingInvisibleAnnounced } from './helpers/a11y'
 import { gotoApp } from './helpers/session'
+import { openSearch } from './helpers/search'
 import { expect, test } from './fixtures'
 
 test.use({ viewportChecks: [] })
@@ -38,7 +39,7 @@ test.describe('issue #35 — the accessibility tree matches what is on screen', 
     const liveRegion = page.locator('[aria-live="polite"][role="status"]')
     await expect(liveRegion).toHaveText('')
 
-    await page.getByRole('searchbox').fill('Netzspeicher')
+    await (await openSearch(page)).fill('Netzspeicher')
     await expect(liveRegion).toHaveText(/1 Dienst/)
   })
 

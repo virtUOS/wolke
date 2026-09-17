@@ -87,8 +87,28 @@ structural device — keep it as the page-title motif.
 
 ## 4. Layout & responsive
 
-- **Phone (default):** single-column **List** view. Top bar collapses to logo + search + a menu;
-  Services/Favorites as a segmented control; the theme/view toggles move into an overflow menu.
+- **Phone (default):** single-column **List** view. Top bar collapses to logo + a menu and is a
+  **single row** at every width; the theme/view toggles and the quick links move into the account
+  menu. The Favorites/Services switch is **not** in the bar: it is the underline **tab row**
+  directly above the list (issue #170) — the two labels with their item counts, flush with the
+  content's left edge, on a hairline the active tab's 2px brand underline sits on, with the
+  favorites sort control on the row's right (icon-only on a phone). It is *navigation*, not an
+  ARIA tablist: switching changes the URL and pushes a history entry, so the controls are buttons
+  carrying `aria-current`, never `role="tab"`. The row steps aside while the favorites arrange
+  mode is open, which brings its own bar. **Search** is the one launcher control that *is* in
+  the bar (issue #171): it is global — it searches every service regardless of the active tab —
+  so it sits above both tabs rather than inside the content one of them fills. On a phone it is
+  a fully-rounded "Suchen" pill whose tap lays a full-width field over the bar row (below 360px
+  the label gives way to the magnifier alone, so the wordmark keeps its width); on a desktop the
+  field is simply there, with a `⌘K`/`Ctrl K` hint in its trailing slot that the clear ✕ takes
+  over while there is a query. `⌘K`/`Ctrl+K` and `/` focus it, and both stand down inside a text
+  input and under any open `role="dialog"`. **Results stay a view, not a panel** — a query
+  replaces the content area under "Suchergebnisse", grouped "FAVORITEN · n" then
+  "ALLE DIENSTE · n" with the server's rank preserved inside each group. That is the **only
+  section heading the launcher has**: the unfiltered views are named by the active tab, and on a
+  desktop every facet — "In Wartung", "Beta", a category — by its own highlighted pill directly
+  above the list, so selecting a category never moves the pills or the cards (issue #182). The
+  restricted-category marker lives on that pill.
   The list row is **two lines, not three columns**: the icon chip, the service name and the row's
   controls (documentation, favourite) share the top line, and the description spans the row's
   full width underneath. One line of controls beside the text left the description barely 40% of

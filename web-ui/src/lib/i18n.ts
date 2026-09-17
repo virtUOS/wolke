@@ -60,9 +60,6 @@ const de = {
       'Falls der Server ohne OIDC läuft, sind die angemeldeten Endpunkte nicht verfügbar. Siehe README → „Local development".',
   },
   topbar: {
-    mainNav: 'Hauptnavigation',
-    favorites: 'Favoriten',
-    services: 'Dienste',
     bot: 'Chatbot öffnen',
     help: 'Hilfe & Kontakt',
     openAccount: 'Konto-Menü öffnen',
@@ -99,15 +96,38 @@ const de = {
     maintenanceCount: (n: number) => `${n} ${n === 1 ? 'Dienst' : 'Dienste'} in Wartung`,
   },
   dash: {
+    // Die Ansichtsumschaltung sitzt seit Issue #170 als Tab-Zeile über der
+    // Liste, nicht mehr in der Kopfzeile — der Name bleibt derselbe.
+    viewNav: 'Hauptnavigation',
     favorites: 'Favoriten',
-    searchPlaceholder: 'Dienste durchsuchen…',
-    searchLabel: 'Dienste suchen',
+    // „Alle Dienste", nicht „Dienste": die Suche war immer global, das Feld
+    // hat es nur nicht gesagt — und lieferte aus der Favoriten-Ansicht heraus
+    // Treffer, die gar nicht in ihr liegen (Issue #171).
+    searchPlaceholder: 'Alle Dienste durchsuchen',
+    searchLabel: 'Alle Dienste durchsuchen',
     searchClear: 'Suche löschen',
+    // Der Einstiegspunkt in der Kopfzeile (Issue #171). Auf dem Telefon ist er
+    // eine Pille mit sichtbarem „Suchen"; der zugängliche Name nennt zusätzlich
+    // den Umfang und enthält den sichtbaren Text („label in name", WCAG 2.5.3).
+    searchPill: 'Suchen',
+    searchPillLabel: 'Suchen: Alle Dienste durchsuchen',
+    searchClose: 'Suche schließen',
+    // Der Tastenkürzel-Hinweis rechts im Feld. Sichtbar ist nur „⌘K"/„Strg K"
+    // (das kbd-Chip ist aria-hidden). Dieser Satz ist der `title` des Feldes:
+    // Tooltip für die Maus, Beschreibung für den Screenreader. Das Kürzel selbst
+    // wird über `aria-keyshortcuts` angesagt, das der Screenreader lokalisiert.
+    searchShortcut: (keys: string) => `Tastenkürzel: ${keys}`,
+    searchShortcutMeta: 'Befehlstaste',
+    searchShortcutCtrl: 'Strg',
     all: 'Alle',
     inMaintenance: 'In Wartung',
     betaServices: 'Beta',
     allServices: 'Alle Dienste',
     searchResults: 'Suchergebnisse',
+    // Gruppenkopf in den Suchergebnissen (Issue #171): „FAVORITEN · 3".
+    // Groß geschrieben wird per CSS, nicht hier — sonst liest ein Screenreader
+    // Buchstaben einzeln vor.
+    searchGroup: (label: string, n: number) => `${label} · ${n}`,
     categoriesCount: (n: number) => `${n} Kategorien`,
     filterCategories: 'Kategorien filtern',
     favEmpty: 'Noch keine Favoriten — markiere Dienste mit dem Stern.',
@@ -330,9 +350,6 @@ const en: Strings = {
       'If the server is running without OIDC, the authenticated endpoints are unavailable. See README → “Local development”.',
   },
   topbar: {
-    mainNav: 'Main navigation',
-    favorites: 'Favorites',
-    services: 'Services',
     bot: 'Open chatbot',
     help: 'Help & contact',
     openAccount: 'Open account menu',
@@ -366,15 +383,23 @@ const en: Strings = {
     maintenanceCount: (n: number) => `${n} ${n === 1 ? 'service' : 'services'} in maintenance`,
   },
   dash: {
+    viewNav: 'Main navigation',
     favorites: 'Favorites',
-    searchPlaceholder: 'Search services…',
-    searchLabel: 'Search services',
+    searchPlaceholder: 'Search all services',
+    searchLabel: 'Search all services',
     searchClear: 'Clear search',
+    searchPill: 'Search',
+    searchPillLabel: 'Search: search all services',
+    searchClose: 'Close search',
+    searchShortcut: (keys: string) => `Keyboard shortcut: ${keys}`,
+    searchShortcutMeta: 'Command',
+    searchShortcutCtrl: 'Ctrl',
     all: 'All',
     inMaintenance: 'In maintenance',
     betaServices: 'Beta',
     allServices: 'All services',
     searchResults: 'Search results',
+    searchGroup: (label: string, n: number) => `${label} · ${n}`,
     categoriesCount: (n: number) => `${n} categories`,
     filterCategories: 'Filter by category',
     favEmpty: 'No favorites yet — mark services with the star.',

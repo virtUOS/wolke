@@ -24,6 +24,7 @@ const BRANDING: Branding = {
   logo_light: '',
   logo_dark: '',
   favicon: '',
+  watermark: '',
   default_locale: 'de',
   imprint_url: '',
   privacy_url: '',
@@ -55,6 +56,14 @@ function jsonResponse(body: unknown) {
 
 function setURL(path: string) {
   window.history.replaceState(null, '', path)
+}
+
+/** The current view, as the launcher tab row names it (issue #170): the
+ *  unfiltered Favoriten / Alle Dienste views have no section heading any more —
+ *  it would only repeat the active tab's own label. */
+function activeTab() {
+  const nav = screen.getByRole('navigation', { name: /Hauptnavigation|Main navigation/i })
+  return within(nav).getByRole('button', { current: 'page' })
 }
 
 function renderDashboard(me: Me = ME) {
@@ -137,12 +146,12 @@ describe('Dashboard tab navigation resets the filter (issue #31)', () => {
     expect(screen.queryByRole('link', { name: /Stud\.IP/ })).not.toBeInTheDocument()
 
     const nav = within(screen.getByRole('navigation', { name: /Hauptnavigation|Main navigation/i }))
-    await user.click(nav.getByRole('button', { name: 'Favoriten' }))
-    await user.click(nav.getByRole('button', { name: 'Dienste' }))
+    await user.click(nav.getByRole('button', { name: /^Favoriten/ }))
+    await user.click(nav.getByRole('button', { name: /^Alle Dienste/ }))
 
     expect(window.location.search).toBe('?tab=dienste')
     await waitFor(() => expect(screen.getByRole('link', { name: /Stud\.IP/ })).toBeVisible())
-    expect(screen.getByRole('heading', { level: 2, name: 'Alle Dienste' })).toBeVisible()
+    expect(activeTab()).toHaveTextContent(/^Alle Dienste/)
   })
 
   it('re-clicking the already-active Dienste tab clears an active category filter', async () => {
@@ -153,11 +162,11 @@ describe('Dashboard tab navigation resets the filter (issue #31)', () => {
     await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
 
     const nav = within(screen.getByRole('navigation', { name: /Hauptnavigation|Main navigation/i }))
-    await user.click(nav.getByRole('button', { name: 'Dienste' }))
+    await user.click(nav.getByRole('button', { name: /^Alle Dienste/ }))
 
     expect(window.location.search).toBe('?tab=dienste')
     await waitFor(() => expect(screen.getByRole('link', { name: /Stud\.IP/ })).toBeVisible())
-    expect(screen.getByRole('heading', { level: 2, name: 'Alle Dienste' })).toBeVisible()
+    expect(activeTab()).toHaveTextContent(/^Alle Dienste/)
   })
 })
 
@@ -320,16 +329,17 @@ describe('the Beta filter (issues #34, review findings 2 and 3)', () => {
     // no longer claims a filter that cannot apply.
     await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
     expect(screen.queryByRole('button', { name: 'Beta' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'Alle Dienste' })).toBeVisible()
+    expect(activeTab()).toHaveTextContent(/^Alle Dienste/)
     expect(window.location.search).toBe('?tab=dienste')
   })
 })
 
 
 // The holder's side of the marker: their restricted category is marked as one,
-// on the filter pill and on the section heading, so "can I send this link to a
-// colleague?" is answerable without opening the admin screens. Non-holders
-// never receive the category at all, which the server tests pin.
+// on the filter pill — since issue #182 the only place a facet view is named —
+// so "can I send this link to a colleague?" is answerable without opening the
+// admin screens. Non-holders never receive the category at all, which the
+// server tests pin.
 describe('the restricted marker on the dashboard (issue #121)', () => {
   const held: Me = {
     ...ME,
@@ -371,7 +381,7 @@ describe('the restricted marker on the dashboard (issue #121)', () => {
     )
   })
 
-  it('marks the restricted pill and its section, and says what the lock means', async () => {
+  it('marks the restricted pill, and says what the lock means', async () => {
     setURL('/?tab=dienste')
     const user = userEvent.setup()
     renderDashboard(held)
@@ -393,23 +403,26 @@ describe('the restricted marker on the dashboard (issue #121)', () => {
     // The public category's pill is untouched.
     expect(screen.getByRole('button', { name: 'Netz & Daten' })).toBeInTheDocument()
 
-    // Selecting it marks the section heading the same way.
+    // Selecting it highlights that same pill — there is no section heading to
+    // carry the marker a second time (issue #182), and none is needed: the
+    // marker stays on screen, on the pill that names the view.
     await user.click(pill)
-    const heading = screen.getByRole('heading', { level: 2 })
-    expect(heading.textContent).toContain('Infrastruktur')
-    expect(within(heading).getByText('Nur für IT-Infrastruktur sichtbar')).toBeInTheDocument()
+    expect(pill).toHaveAttribute('aria-pressed', 'true')
+    expect(within(pill).getByText('Nur für IT-Infrastruktur sichtbar')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument()
   })
 
-  it('leaves a public section unmarked', async () => {
+  it('leaves a public category unmarked', async () => {
     setURL('/?cat=data')
     renderDashboard(held)
 
     await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
     // The pill strip still marks the restricted category — this is about the
-    // section the user is actually in.
-    const heading = screen.getByRole('heading', { level: 2 })
-    expect(heading.textContent).toContain('Netz & Daten')
-    expect(within(heading).queryByText(/Nur für/)).not.toBeInTheDocument()
+    // one the user is actually in, which is the highlighted pill.
+    const active = screen.getByRole('button', { name: 'Netz & Daten' })
+    expect(active).toHaveAttribute('aria-pressed', 'true')
+    expect(within(active).queryByText(/Nur für/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument()
   })
 })
 
@@ -494,10 +507,12 @@ describe('empty facets are not offered (issue #139)', () => {
     renderDashboard()
 
     // Corrected during render, exactly like the stale Beta facet: no pill, no
-    // "In Wartung" heading over an empty page, and the URL drops the filter.
+    // unlabelled empty page, and the URL drops the filter. (Since issue #182
+    // no facet has a heading, so the pill is all that would name this view —
+    // which is exactly why the reset has to happen.)
     await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
     expect(screen.queryByRole('button', { name: /In Wartung/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'Alle Dienste' })).toBeVisible()
+    expect(activeTab()).toHaveTextContent(/^Alle Dienste/)
     expect(window.location.search).toBe('?tab=dienste')
   })
 
@@ -519,7 +534,7 @@ describe('empty facets are not offered (issue #139)', () => {
 
     await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
     expect(screen.queryByRole('button', { name: 'Beta' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'Alle Dienste' })).toBeVisible()
+    expect(activeTab()).toHaveTextContent(/^Alle Dienste/)
     expect(window.location.search).toBe('?tab=dienste')
   })
 
@@ -560,5 +575,89 @@ describe('empty facets are not offered (issue #139)', () => {
     release?.()
     await waitFor(() => expect(screen.getByRole('link', { name: /Webmail/ })).toBeVisible())
     expect(window.location.search).toBe('?filter=wartung')
+  })
+})
+
+// Issue #182: selecting a category used to render an <h2> above the pills that
+// the unfiltered view didn't have, so the pills and every card jumped down by
+// its height and back again on "Alle". The heading was also redundant — the
+// highlighted pill directly beneath it named the same thing. It is gone for
+// every facet view; only a search keeps its heading, because nothing else on
+// the page names a search (there is no pill for one).
+describe('no section heading on facet views (issue #182)', () => {
+  function stubCatalog() {
+    stubMatchMedia()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.startsWith('/api/catalog')) {
+          return jsonResponse({
+            services: [
+              {
+                id: 's1', name: 'VPN', description: { de: 'Zugang', en: 'Access' },
+                service_url: 'https://vpn.example.edu', icon: 'shield',
+                categories: ['data'], doc_only: false,
+              },
+              {
+                id: 's2', name: 'Webmail', description: { de: 'E-Mail', en: 'Email' },
+                service_url: 'https://mail.example.edu', icon: 'mail',
+                categories: ['data'], doc_only: false, tag: 'wartung',
+              },
+              {
+                id: 's3', name: 'Zettelkasten Labor', description: { de: 'Notizen', en: 'Notes' },
+                service_url: 'https://zk.example.edu', icon: 'flask-conical',
+                categories: ['data'], doc_only: false, tag: 'beta',
+              },
+            ],
+            categories: [{ slug: 'data', label: { de: 'Netz & Daten', en: 'Network & Data' }, sort: 10 }],
+          })
+        }
+        if (url.startsWith('/api/search')) {
+          return jsonResponse({ services: [] })
+        }
+        if (url.startsWith('/api/favorites')) return jsonResponse({ services: [] })
+        if (url.startsWith('/api/announcements')) return jsonResponse({ announcements: [] })
+        if (url.startsWith('/api/usage/frequent')) return jsonResponse({ services: [] })
+        return jsonResponse({})
+      }),
+    )
+  }
+
+  const noHeading = () => expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument()
+
+  it.each([
+    ['a category', '/?cat=data', 'Netz & Daten'],
+    ['the maintenance facet', '/?filter=wartung', 'In Wartung'],
+    ['the beta facet', '/?filter=beta', 'Beta'],
+  ])('renders no heading for %s — the highlighted pill names the view', async (_what, url, pill) => {
+    stubCatalog()
+    setURL(url)
+    renderDashboard({ ...ME, show_beta: true })
+    await waitFor(() => expect(screen.getByRole('button', { name: new RegExp(`^${pill}`) })).toHaveAttribute('aria-pressed', 'true'))
+    noHeading()
+  })
+
+  it('renders no heading on "Alle" either, so switching to a facet and back moves nothing', async () => {
+    stubCatalog()
+    setURL('/?tab=dienste')
+    const user = userEvent.setup()
+    renderDashboard()
+    await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
+    noHeading()
+    await user.click(screen.getByRole('button', { name: 'Netz & Daten' }))
+    noHeading()
+    await user.click(screen.getByRole('button', { name: 'Alle' }))
+    noHeading()
+  })
+
+  it('keeps the "Suchergebnisse" heading — a search has no pill to name it', async () => {
+    stubCatalog()
+    setURL('/?tab=dienste')
+    const user = userEvent.setup()
+    renderDashboard()
+    await waitFor(() => expect(screen.getByRole('link', { name: /VPN/ })).toBeVisible())
+    await user.type(screen.getByRole('searchbox'), 'vpn')
+    await waitFor(() => expect(screen.getByRole('heading', { level: 2, name: 'Suchergebnisse' })).toBeVisible())
   })
 })
