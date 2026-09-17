@@ -579,6 +579,8 @@ branding:
                    # the opaque desktop tiles, anchored to the content column and the greeting and
                    # dissolving into the right gutter (issue #195; docs/specs/watermark-column-fade.md).
                    # Light uses 0.15, dark 0.07 — see that spec for why the two differ.
+                   # Validated at startup as a SAME-ORIGIN PATH: img-src is 'self', so an absolute
+                   # URL would be blocked by the browser and the mark would silently never render.
   imprint_url: "https://www.uni-osnabrueck.de/impressum/"   # legal footer links
   privacy_url: "https://www.uni-osnabrueck.de/datenschutz/" # (empty hides the link)
   feedback_url: ""  # right-aligned footer feedback link (env FEEDBACK_URL): URL or email/mailto:

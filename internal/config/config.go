@@ -314,22 +314,64 @@ func (c *Config) validate() error {
 	if c.AnnouncementRetentionDays < 0 {
 		return fmt.Errorf("config: announcement_retention_days must be >= 0 (0 disables purging)")
 	}
-	// A news site is a website, not a mail or phone target: a value that isn't
-	// an absolute http(s) URL would render as a dead link in the notification
-	// panel, so refuse it at startup.
-	if v := c.Branding.NewsURL; v != "" {
-		u, err := url.Parse(v)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return fmt.Errorf("config: news_url %q must be an absolute http(s) URL", v)
-		}
+	// The externally-supplied URLs, each against the rule its consumer needs.
+	// A news site is a website, not a mail or phone target: a value that isn't an
+	// absolute http(s) URL would render as a dead link in the notification panel.
+	if err := checkURLSetting("news_url", c.Branding.NewsURL, absoluteHTTPURL); err != nil {
+		return err
 	}
 	// A set widget URL must yield an origin: it feeds the CSP allowlist and the
 	// widget's gateway base URL, so a malformed value must fail at startup, not
 	// silently produce a broken policy.
-	if v := c.Branding.AssistantWidgetURL; v != "" {
-		u, err := url.Parse(v)
+	if err := checkURLSetting("assistant_widget_url", c.Branding.AssistantWidgetURL, absoluteHTTPURL); err != nil {
+		return err
+	}
+	// The watermark is an asset we serve ourselves, interpolated into a CSS mask
+	// URL by the SPA. Our own CSP allows img-src 'self', so an absolute URL is
+	// blocked by the browser: without this check it would pass startup, log
+	// nothing, and leave the operator looking at a launcher with no mark.
+	if err := checkURLSetting("watermark", c.Branding.Watermark, sameOriginPath); err != nil {
+		return err
+	}
+	return nil
+}
+
+// urlRule is what an externally-supplied URL setting is allowed to be. The two
+// rules differ in who dereferences the value: the browser navigating away from
+// us (or the CSP naming a third-party origin) needs a whole URL; an asset we
+// serve ourselves needs a path on our own origin.
+type urlRule int
+
+const (
+	// absoluteHTTPURL: a target outside this app — it must carry its own
+	// scheme and host.
+	absoluteHTTPURL urlRule = iota
+	// sameOriginPath: something this server serves, fetched under our CSP.
+	sameOriginPath
+)
+
+// checkURLSetting validates one externally-supplied URL setting. Empty always
+// means "unset" (the feature is simply off), which is why every caller can hand
+// the raw value over without pre-checking it.
+//
+// It exists so that the next such setting is one line rather than a fourth copy
+// of the same five: news_url and assistant_widget_url were verbatim duplicates
+// of each other before watermark joined them.
+func checkURLSetting(name, value string, rule urlRule) error {
+	if value == "" {
+		return nil
+	}
+	u, err := url.Parse(value)
+	switch rule {
+	case absoluteHTTPURL:
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return fmt.Errorf("config: assistant_widget_url %q must be an absolute http(s) URL", v)
+			return fmt.Errorf("config: %s %q must be an absolute http(s) URL", name, value)
+		}
+	case sameOriginPath:
+		if err != nil || u.Scheme != "" || u.Host != "" || !strings.HasPrefix(u.Path, "/") {
+			return fmt.Errorf("config: %s %q must be a same-origin path beginning with %q (for example %q): "+
+				"this app's content security policy allows img-src 'self' only, so a browser refuses to load an "+
+				"absolute URL and the asset silently never appears", name, value, "/", "/branding/watermark.svg")
 		}
 	}
 	return nil

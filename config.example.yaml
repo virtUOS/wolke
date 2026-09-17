@@ -90,6 +90,10 @@ branding:
   # branding dir and uncomment the line below. Use a single-colour silhouette
   # with a transparent background: the file is used as a CSS mask, so only its
   # alpha matters — the colour always comes from the `accent` theme token.
+  # Must be a same-origin path, not an absolute URL: the content security policy
+  # allows img-src 'self', so a browser would refuse to load a mark hosted
+  # elsewhere. The server rejects an absolute URL at startup rather than let it
+  # fail silently in the page.
   # watermark: /branding/watermark.svg
   default_locale: de
   # Legal footer links (institution-specific). Leave empty to hide a link.
