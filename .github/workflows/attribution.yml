@@ -1,0 +1,56 @@
+name: Attribution
+
+# Its own workflow rather than a job in ci.yml because of `edited`: the PR body
+# is part of what is checked, so the check has to re-run when the description
+# changes. Adding `edited` to ci.yml's trigger would re-run the whole build —
+# Postgres, Playwright and all — every time someone fixes a typo in a comment.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  attribution:
+    name: No AI attribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The default shallow clone does not contain the base branch, so the
+          # commit range would silently collapse to the head commit — a gate
+          # that looks like it is working while checking almost nothing.
+          fetch-depth: 0
+
+      - name: Check every commit message in the PR range
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          status=0
+          for sha in $(git rev-list "$base..$HEAD_SHA"); do
+            subject=$(git log -1 --format='%h ("%s")' "$sha")
+            git log -1 --format=%B "$sha" |
+              scripts/check-attribution.sh \
+                "commit ${subject}" \
+                "rewrite that commit — \`git rebase -i ${base}\` (or \`git commit --amend\` if it is the tip), drop the offending line(s), then \`git push --force-with-lease\`." \
+                - || status=1
+          done
+          exit $status
+
+      - name: Check the pull request title and body
+        # The title and body are attacker-controlled text. They are passed
+        # through `env:` and quoted, never interpolated into the script — a
+        # workflow that runs whatever someone types into a PR description is a
+        # worse bug than the one this gate exists to catch.
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" |
+            scripts/check-attribution.sh \
+              "the pull request title/body" \
+              "edit the pull request description (or title) here on GitHub and drop the offending line(s). No push is needed: this check re-runs when the PR is edited." \
+              -
