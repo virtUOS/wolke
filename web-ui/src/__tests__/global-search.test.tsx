@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { Branding } from '@/lib/branding'
+import { BRANDING } from '@/test/branding'
 import type { Me, Service } from '@/lib/api'
 import { Dashboard } from '@/components/Dashboard'
 
@@ -16,25 +16,6 @@ import { Dashboard } from '@/components/Dashboard'
 //      "Suchergebnisse", with the pending/failed states, the settled-count
 //      announcement, the clear-on-plain-click rule (#26/#27) and search's
 //      absence from the URL all intact. Only the entry point moved.
-
-const BRANDING: Branding = {
-  product_name: 'wolke',
-  org_name: 'Universität Osnabrück',
-  logo_light: '',
-  logo_dark: '',
-  favicon: '',
-  watermark: '',
-  default_locale: 'de',
-  imprint_url: '',
-  privacy_url: '',
-  feedback_url: '',
-  bot_url: '',
-  help_url: '',
-  news_url: '',
-  assistant_widget_url: '',
-  assistant_bot_id: '',
-  theme: { light: {}, dark: {} },
-}
 
 const ME: Me = {
   id: 'u1',

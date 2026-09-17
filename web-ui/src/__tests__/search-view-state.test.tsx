@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { Branding } from '@/lib/branding'
+import { BRANDING } from '@/test/branding'
 import type { Me, Service } from '@/lib/api'
 import { Dashboard } from '@/components/Dashboard'
 
@@ -19,25 +19,6 @@ import { Dashboard } from '@/components/Dashboard'
 //
 // These are Dashboard-level rules — which view wins — so they are asserted
 // through the real Dashboard, not through the two components in isolation.
-
-const BRANDING: Branding = {
-  product_name: 'wolke',
-  org_name: 'Universität Osnabrück',
-  logo_light: '',
-  logo_dark: '',
-  favicon: '',
-  watermark: '',
-  default_locale: 'de',
-  imprint_url: '',
-  privacy_url: '',
-  feedback_url: '',
-  bot_url: '',
-  help_url: '',
-  news_url: '',
-  assistant_widget_url: '',
-  assistant_bot_id: '',
-  theme: { light: {}, dark: {} },
-}
 
 const ME: Me = {
   id: 'u1',

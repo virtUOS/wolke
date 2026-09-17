@@ -10,6 +10,7 @@ import { RoleDefaultsAdmin } from '@/components/admin/RoleDefaultsAdmin'
 import { ServiceForm } from '@/components/admin/ServiceForm'
 import { api, type AdminService, type Category, type Me, type Role, type Service, type VisibilityEntry } from '@/lib/api'
 import type { Branding } from '@/lib/branding'
+import { BRANDING } from '@/test/branding'
 import { expectNoAxeViolations } from '@/test/axe'
 
 // Service visibility v2 (docs/specs/service-visibility.md): the built-in beta
@@ -44,11 +45,10 @@ const adminService = (over: Partial<AdminService>): AdminService => ({
   icon: 'server', is_active: true, categories: ['labs'], keywords: [], ...over,
 })
 
-const branding = {
-  product_name: 'wolke', org_name: 'Uni', logo_light: '/l.svg', logo_dark: '/d.svg', favicon: '/f.svg',
-  default_locale: 'de', imprint_url: '', privacy_url: '', feedback_url: '', bot_url: '', help_url: '',
-  assistant_widget_url: '', assistant_bot_id: '', theme: { light: {}, dark: {} },
-} as Branding
+const branding: Branding = {
+  ...BRANDING,
+  org_name: 'Uni', logo_light: '/l.svg', logo_dark: '/d.svg', favicon: '/f.svg',
+}
 
 const me = (over: Partial<Me> = {}): Me => ({
   id: 'u1', display_name: 'Tim B', primary_role: 'staff', is_admin: true,

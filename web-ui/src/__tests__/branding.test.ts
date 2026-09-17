@@ -1,20 +1,18 @@
 import { applyBrandingTokens, assistantEnabled, contactHref, feedbackHref, type Branding } from '@/lib/branding'
+import { BRANDING } from '@/test/branding'
 
+// The shared fixture (src/test/branding.ts) plus the values this suite asserts
+// on: the title, the token sets applyBrandingTokens turns into CSS variables,
+// and the logo/legal URLs that make the payload look like a real one.
 const branding: Branding = {
+  ...BRANDING,
   product_name: 'IT Service',
   org_name: 'Test Universität',
   logo_light: '/branding/logo-light.svg',
   logo_dark: '/branding/logo-dark.svg',
   favicon: '/branding/favicon.svg',
-  watermark: '',
-  default_locale: 'de',
   imprint_url: 'https://example.edu/impressum',
   privacy_url: 'https://example.edu/datenschutz',
-  feedback_url: '',
-  bot_url: '',
-  help_url: '', news_url: '',
-  assistant_widget_url: '',
-  assistant_bot_id: '',
   theme: {
     light: { primary: '#A6093D', primary_hover: '#8A0732' },
     dark: { primary: '#C2355C' },
