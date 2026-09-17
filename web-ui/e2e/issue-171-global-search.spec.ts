@@ -243,3 +243,100 @@ test('⌘K and "/" reach the field — and defer to whatever is layered above', 
   await page.keyboard.press('Escape')
   await expectViewportHealthy(page, { isMobile, label: 'after the shortcut deferred to the menu' })
 })
+
+// ── Review of feat/launcher-v1.1 ────────────────────────────────────────────
+//
+// Three findings from the whole-branch review, each about the *layer* rather
+// than the search: ⌘K was suppressed inside the field it advertises itself in,
+// closing the phone overlay dropped focus on <body>, and the controls the
+// overlay covers stayed in the tab order underneath it. The last one can only
+// be measured in a real engine — jsdom and user-event do not model `inert` —
+// so it lives here rather than in the unit suite.
+
+const bell = (page: Page) =>
+  page.getByRole('banner').getByRole('button', { name: /Mitteilungen|Announcements/ })
+const avatar = (page: Page) =>
+  page.getByRole('banner').getByRole('button', { name: /Konto-Menü öffnen|Open account menu/ })
+
+test('⌘K works from inside the field, and selects the standing query', async ({ page }, testInfo) => {
+  const isMobile = testInfo.project.use.isMobile === true
+  await gotoApp(page)
+
+  const search = await openSearch(page)
+  await search.fill('Netzspeicher')
+  await expect(search).toBeFocused()
+
+  // The shortcut a reader reaches for to start over, pressed where the field
+  // itself advertises it. It must re-select rather than be swallowed by the
+  // guard that (rightly) keeps "/" out of a text field.
+  await page.keyboard.press('ControlOrMeta+k')
+  await expect(search).toBeFocused()
+  await page.keyboard.type('E-Mail')
+  await expect(search).toHaveValue('E-Mail')
+
+  await expectViewportHealthy(page, { isMobile, label: 'query replaced via the shortcut' })
+})
+
+test('closing the phone overlay hands focus back to the pill', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.use.isMobile !== true, 'the overlay is the phone entry point')
+  await gotoApp(page)
+
+  await openSearch(page)
+  await page.getByRole('button', { name: /Suche schließen|Close search/ }).click()
+  await expect(page.getByRole('searchbox')).toHaveCount(0)
+  await expect(searchPill(page)).toBeFocused()
+
+  // Escape is the other way out, and owes the same.
+  await openSearch(page)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('searchbox')).toHaveCount(0)
+  await expect(searchPill(page)).toBeFocused()
+})
+
+test('the phone overlay takes the controls it covers out of the tab order', async ({ page }, testInfo) => {
+  const isMobile = testInfo.project.use.isMobile === true
+  test.skip(!isMobile, 'the overlay is the phone entry point')
+  await gotoApp(page)
+
+  await expect(bell(page)).toBeVisible()
+  await expect(avatar(page)).toBeVisible()
+
+  const search = await openSearch(page)
+  await expect(search).toBeFocused()
+
+  // The bell and the avatar are behind the overlay, and so is the pill that
+  // opened it. Tabbing out of the field must reach the overlay's own ✕ and
+  // then leave the bar — never a control the reader cannot see.
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.press('Tab')
+    await expect(bell(page), 'the covered bell is unreachable').not.toBeFocused()
+    await expect(avatar(page), 'the covered avatar is unreachable').not.toBeFocused()
+    await expect(searchPill(page), 'the covered pill is unreachable').not.toBeFocused()
+  }
+  await expectViewportHealthy(page, { isMobile, label: 'phone search overlay open' })
+
+  // …and they all come back when it stands down.
+  await closeSearch(page)
+  await avatar(page).focus()
+  await expect(avatar(page)).toBeFocused()
+  await bell(page).focus()
+  await expect(bell(page)).toBeFocused()
+})
+
+test('the shortcut chip names the key in the interface language', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.use.isMobile === true, 'the hint is desktop-only — a phone has no such key')
+  await gotoApp(page)
+
+  await expect(page.getByRole('banner').getByRole('searchbox')).toBeVisible()
+  const chip = page.getByRole('banner').locator('kbd')
+  // The seeded session is German; a Mac runner shows the ⌘ glyph instead,
+  // which is the same word in every language.
+  await expect(chip).toHaveText(/^(Strg K|Ctrl K|⌘K)$/)
+  const shown = (await chip.textContent())!
+  if (shown !== '⌘K') {
+    const title = await page.getByRole('banner').getByRole('searchbox').getAttribute('title')
+    // One name for one key: the chip and the tooltip agree.
+    expect(title).toContain(shown.replace(' K', ''))
+  }
+  await expectViewportHealthy(page, { isMobile: false, label: 'the localized shortcut chip' })
+})

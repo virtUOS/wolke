@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode, type RefObject } from 'react'
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { Search, X } from 'lucide-react'
 import { t, type Lang } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
@@ -121,7 +121,7 @@ function SearchField({
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
       ) : (
-        shortcutHint && <ShortcutHint apple={apple} />
+        shortcutHint && <ShortcutHint locale={locale} apple={apple} />
       )}
     </div>
   )
@@ -136,14 +136,24 @@ function isApplePlatform(): boolean {
 
 /** The kbd chip in the field's trailing slot — decoration only: the spoken
  *  form is the field's own aria-keyshortcuts, because "⌘K" read aloud is not a
- *  shortcut. */
-function ShortcutHint({ apple }: { apple: boolean }): ReactNode {
+ *  shortcut.
+ *
+ *  The key's name is localized (`searchShortcutCtrl`), like the title the field
+ *  carries: "Ctrl" beside a tooltip reading „Tastenkürzel: Strg + K" is two
+ *  names for one key, and „Strg" is what a German keyboard has printed on it.
+ *  ⌘ stays the glyph on Apple platforms — it is a symbol rather than a word,
+ *  printed on a Mac keyboard in every language, and the spelled-out
+ *  `searchShortcutMeta` ("Befehlstaste") is a tooltip word: in the chip it is
+ *  ~90px wide and would run under the field's own text at the 260px the bar
+ *  gives it. */
+function ShortcutHint({ locale, apple }: { locale: Lang; apple: boolean }): ReactNode {
+  const tr = t(locale)
   return (
     <kbd
       aria-hidden="true"
       className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-sm border border-border px-1.5 py-0.5 font-sans text-xs leading-none text-text-muted"
     >
-      {apple ? '⌘K' : 'Ctrl K'}
+      {apple ? '⌘K' : `${tr.dash.searchShortcutCtrl} K`}
     </kbd>
   )
 }
@@ -165,6 +175,25 @@ interface GlobalSearchProps {
 
 export function GlobalSearch({ locale, isMobile, value, onChange, inputRef, open, onOpen, onClose }: GlobalSearchProps) {
   const tr = t(locale)
+  const pillRef = useRef<HTMLButtonElement>(null)
+  const wasOpen = useRef(open)
+
+  // Focus goes back where it came from when the overlay stands down. Without
+  // this it lands on <body>: the field it was in has just been unmounted, so a
+  // keyboard user's next Tab restarts at the top of the document and a screen
+  // reader user is dropped out of the bar entirely. The bell and the account
+  // menu already return focus to their triggers on close; the overlay owes the
+  // same contract even though it is deliberately not a Dialog.
+  //
+  // In an effect rather than in the ✕ handler because *every* way out closes
+  // it — the ✕, Escape, and the plain-click launch that clears the search from
+  // Dashboard (issue #27) — and because the pill is inert while the overlay is
+  // up: it only becomes focusable again in the render this effect follows.
+  useEffect(() => {
+    const closed = wasOpen.current && !open
+    wasOpen.current = open
+    if (closed) pillRef.current?.focus()
+  }, [open])
 
   if (!isMobile) {
     // 260–320px of field, per the design. It shrinks before the wordmark does
@@ -188,10 +217,15 @@ export function GlobalSearch({ locale, isMobile, value, onChange, inputRef, open
           now the only way to reach search on a phone, where there are no
           category chips either (Dashboard's section-head note). */}
       <button
+        ref={pillRef}
         type="button"
         aria-label={tr.dash.searchPillLabel}
         aria-expanded={open}
         onClick={onOpen}
+        // Covered by the overlay, so out of the tab order with it: a control a
+        // reader cannot see is not one they can mean to reach. TopBar does the
+        // same for the bell and the avatar beside it (`searchOpen`).
+        inert={open}
         className="mr-0.5 inline-flex h-11 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full border border-border bg-surface px-3 max-[359px]:w-11 max-[359px]:px-0 text-[13px] text-text transition-colors hover:bg-bg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
       >
         <Search className="h-[18px] w-[18px] shrink-0 text-text-muted" aria-hidden="true" />
@@ -266,7 +300,12 @@ export function useSearchHotkeys(activate: () => void, enabled: boolean): void {
       const meta = (e.metaKey || e.ctrlKey) && !e.altKey && (e.key === 'k' || e.key === 'K')
       const slash = e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey
       if (!meta && !slash) return
-      if (isTypingTarget(document.activeElement)) return
+      // The typing guard is "/"'s alone. A bare slash belongs to whatever is
+      // being typed into; ⌘K is a chord nobody types by accident, and
+      // suppressing it inside a field breaks it in the very place the field
+      // advertises it — the reader who wants to start a fresh query from the
+      // one they are standing in. It re-focuses and selects, so it does.
+      if (slash && isTypingTarget(document.activeElement)) return
       if (overlayOpen()) return
       e.preventDefault()
       activate()

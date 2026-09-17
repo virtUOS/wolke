@@ -663,3 +663,27 @@ test.describe('watermark enabled', () => {
     expect(await documentOverflow(page)).toBeLessThanOrEqual(0)
   })
 })
+
+// A branding payload that predates the watermark field — the shape a client
+// genuinely holds for up to five minutes after a deploy, since /api/branding is
+// public with max-age=300. The launcher has no error boundary above it, so a
+// throw here is a blank page, not a missing decoration.
+test('a branding payload without the watermark field still renders the launcher', async ({ page }, testInfo) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.route('**/api/branding', async (route) => {
+    const res = await route.fetch()
+    const stale = (await res.json()) as Record<string, unknown>
+    delete stale.watermark
+    await route.fulfill({ json: stale })
+  })
+
+  await gotoApp(page)
+  await expect(page.getByRole('main')).toBeVisible()
+  await expect(page.locator('.app-watermark')).toHaveCount(0)
+  expect(errors, 'the stale payload must not throw during render').toEqual([])
+  await expectViewportHealthy(page, {
+    isMobile: testInfo.project.use.isMobile === true,
+    label: 'launcher on a pre-watermark branding payload',
+  })
+})

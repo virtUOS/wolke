@@ -35,6 +35,11 @@ interface TopBarProps {
    *  because the query lives in Dashboard (it is what drives /api/search and
    *  the results view) and the admin surface has no search at all. */
   search?: ReactNode
+  /** Phone only: whether that entry point's overlay is currently laid over
+   *  this row. The overlay covers the actions but does not remove them, so
+   *  without this the bell and the avatar stay in the tab order underneath it
+   *  — reachable, invisible, and announced. See the actions row below. */
+  searchOpen?: boolean
   /** Whether the user asked to see beta services
    *  (docs/specs/service-visibility.md §2.1). */
   showBeta?: boolean
@@ -61,6 +66,7 @@ export function TopBar({
   onLogout,
   isMobile,
   search,
+  searchOpen = false,
   showBeta = false,
   onSetShowBeta = () => {},
 }: TopBarProps) {
@@ -115,7 +121,15 @@ export function TopBar({
             fit 324px. `position: relative` makes this row, not the individual
             trigger, the anchor for the two panels below it: anchored to a
             trigger, a 360px panel hangs off the left edge of a narrow phone. */}
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 2 }}>
+        <div
+          // `inert` while the phone search overlay is up: it covers this row,
+          // and a covered control has to leave the tab order with it. One
+          // attribute on the row rather than one per control — inert is
+          // inherited by the subtree, which is also why it cannot live on the
+          // overlay itself.
+          inert={searchOpen}
+          style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 2 }}
+        >
           {!isMobile && bot && (
             <a
               href={bot}

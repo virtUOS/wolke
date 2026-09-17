@@ -356,6 +356,27 @@ describe('the keyboard shortcuts (issue #171)', () => {
     expect(search).toHaveValue('a/b')
   })
 
+  // The typing guard exists for "/" and for "/" only: a shortcut that steals a
+  // slash out of a text field is worse than no shortcut. ⌘K has no such
+  // problem — it is a chord no one types by accident — and suppressing it
+  // inside a field breaks it in the one place the field itself advertises it,
+  // which is where a keyboard user reaches for it to start over.
+  it('⌘K works from inside the search field it advertises itself in', async () => {
+    stubFetch()
+    const user = userEvent.setup()
+    renderDashboard()
+
+    const search = (await screen.findByRole('searchbox')) as HTMLInputElement
+    await user.type(search, 'git')
+
+    await user.keyboard('{Control>}k{/Control}')
+    expect(search).toHaveFocus()
+    // It reached the field: the shortcut selects the standing query, so the
+    // next keystroke replaces it rather than appending to it.
+    expect(search).toHaveValue('git')
+    expect([search.selectionStart, search.selectionEnd]).toEqual([0, 3])
+  })
+
   it('neither fires while another overlay owns the keyboard', async () => {
     stubFetch()
     const user = userEvent.setup()
@@ -370,6 +391,95 @@ describe('the keyboard shortcuts (issue #171)', () => {
     expect(search).not.toHaveFocus()
     await user.keyboard('/')
     expect(search).not.toHaveFocus()
+  })
+})
+
+// ── The phone overlay is a layer, so it has to behave like one ──────────────
+//
+// The revealed field is laid over the whole app-bar row rather than being
+// squeezed into it, and it is deliberately not a Dialog (no trap, no portal).
+// That buys simplicity, but it does not excuse it from the two things a layer
+// owes a keyboard user: give focus back when it goes away, and don't leave the
+// controls it covers in the tab order underneath it.
+
+describe('the phone search overlay and focus (review of feat/launcher-v1.1)', () => {
+  async function openPhoneSearch() {
+    stubFetch({ mobile: true })
+    const user = userEvent.setup()
+    renderDashboard()
+    const pill = await screen.findByRole('button', { name: /Alle Dienste durchsuchen/ })
+    await user.click(pill)
+    expect(screen.getByRole('searchbox')).toHaveFocus()
+    return { user }
+  }
+
+  const pill = () => screen.getByRole('button', { name: /Alle Dienste durchsuchen/ })
+
+  it('closing with ✕ hands focus back to the pill, not to <body>', async () => {
+    const { user } = await openPhoneSearch()
+    await user.click(screen.getByRole('button', { name: 'Suche schließen' }))
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    expect(pill()).toHaveFocus()
+  })
+
+  it('dismissing with Escape does the same', async () => {
+    const { user } = await openPhoneSearch()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('searchbox')).toBeNull()
+    expect(pill()).toHaveFocus()
+  })
+
+  it('makes the bell, the avatar and the pill it covers inert while it is open', async () => {
+    const { user } = await openPhoneSearch()
+    const bar = within(screen.getByRole('banner'))
+    const bell = bar.getByRole('button', { name: /Mitteilungen/ })
+    const avatar = bar.getByRole('button', { name: /Konto-Menü/ })
+
+    // `inert` is what actually takes them out of the tab order, and it is a
+    // subtree attribute — the row carries it, not each control. jsdom and
+    // user-event do not model inert at all (user-event's tab walks a plain
+    // focusable-selector list), so the real Tab traversal is asserted in
+    // Chromium: e2e/issue-171-global-search.spec.ts.
+    expect(bell.closest('[inert]')).not.toBeNull()
+    expect(avatar.closest('[inert]')).not.toBeNull()
+    expect(pill()).toHaveAttribute('inert')
+
+    await user.click(screen.getByRole('button', { name: 'Suche schließen' }))
+    expect(bell.closest('[inert]')).toBeNull()
+    expect(avatar.closest('[inert]')).toBeNull()
+    expect(pill()).not.toHaveAttribute('inert')
+  })
+})
+
+// ── The shortcut chip is chrome, and chrome is localized ────────────────────
+
+describe('the shortcut hint (review of feat/launcher-v1.1)', () => {
+  const chip = () => document.querySelector('kbd')
+
+  it('names the key in the active language', async () => {
+    stubFetch()
+    renderDashboard()
+    await screen.findByRole('searchbox')
+    // German: „Strg", the same word the field's own title/aria-keyshortcuts
+    // uses. A hard-coded "Ctrl" beside a localized tooltip is two names for
+    // one key.
+    expect(chip()).toHaveTextContent('Strg K')
+  })
+
+  it('and in English', async () => {
+    stubFetch()
+    renderDashboard({ ...ME, locale: 'en' })
+    await screen.findByRole('searchbox')
+    expect(chip()).toHaveTextContent('Ctrl K')
+  })
+
+  it('stays decoration: the spoken form is the field\'s own aria-keyshortcuts', async () => {
+    stubFetch()
+    renderDashboard()
+    const search = await screen.findByRole('searchbox')
+    expect(chip()).toHaveAttribute('aria-hidden', 'true')
+    expect(search).toHaveAttribute('aria-keyshortcuts', 'Control+K')
+    expect(search).toHaveAttribute('title', 'Tastenkürzel: Strg + K')
   })
 })
 
