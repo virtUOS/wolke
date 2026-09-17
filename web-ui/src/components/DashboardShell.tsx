@@ -54,6 +54,9 @@ interface DashboardShellProps {
    *  passes it; the admin surface deliberately doesn't — it has no catalogue
    *  search, and an app-bar field that searches nothing on screen is a lie. */
   search?: ReactNode
+  /** Phone only: whether the search entry point's overlay is laid over the app
+   *  bar, which makes the bar's own actions inert while it is (see TopBar). */
+  searchOpen?: boolean
   /** Whether to paint the decorative institution mark behind the canvas
    *  (issue #174). Like `search`, the admin shell deliberately doesn't ask for
    *  it: it is launcher decoration, not chrome. Even when true it renders
@@ -81,6 +84,7 @@ export function DashboardShell({
   onSetShowBeta,
   focusKey,
   search,
+  searchOpen = false,
   watermark = false,
   children,
 }: DashboardShellProps) {
@@ -148,6 +152,7 @@ export function DashboardShell({
         onLogout={logout}
         isMobile={isMobile}
         search={search}
+        searchOpen={searchOpen}
         showBeta={showBeta}
         onSetShowBeta={onSetShowBeta}
       />

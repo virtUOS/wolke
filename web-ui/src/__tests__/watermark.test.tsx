@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   Watermark,
@@ -62,6 +62,19 @@ describe('Watermark', () => {
 
   it('renders nothing for a whitespace-only value', () => {
     const { container } = render(<Watermark src="   " />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
+  // A *stale* payload is a different shape from an empty value, and it is the
+  // one that hurts. /api/branding is public with max-age=300, so for five
+  // minutes after a deploy a client can hold the pre-deploy JSON — which has no
+  // `watermark` key at all — alongside the new bundle. There is no error
+  // boundary above the shell, so `src.trim()` on an absent field is not a
+  // missing decoration, it is a blank page (the stale-shell incident, #156/
+  // #158). NotificationBell defaults its own branding field for this reason;
+  // this is the same defence.
+  it('renders nothing when the field is absent, not merely empty', () => {
+    const { container } = render(<Watermark />)
     expect(container).toBeEmptyDOMElement()
   })
 
@@ -382,5 +395,15 @@ describe('DashboardShell watermark placement', () => {
   it('renders nothing even on the launcher when branding has no mark', () => {
     const { container } = renderShell({ watermark: true, branding: { ...BRANDING, watermark: '' } })
     expect(mark(container)).toBeNull()
+  })
+
+  it('survives a stale branding payload that predates the watermark field', () => {
+    // The shape a client five minutes either side of a deploy actually holds:
+    // the key is missing, not empty. The shell must render, not throw.
+    const stale: Partial<Branding> = { ...BRANDING }
+    delete stale.watermark
+    const { container } = renderShell({ watermark: true, branding: stale as Branding })
+    expect(mark(container)).toBeNull()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
   })
 })

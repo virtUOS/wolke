@@ -111,8 +111,16 @@ const GUTTER_MASK =
   ` transparent calc(50% + var(${WATERMARK_COLUMN_VAR}) / 2 + ${WATERMARK_GEOMETRY.desktop.gutterFade}px))`
 
 interface WatermarkProps {
-  /** `branding.watermark` — a mounted asset path, or '' to render nothing. */
-  src: string
+  /** `branding.watermark` — a mounted asset path, or '' to render nothing.
+   *
+   *  Optional, and defaulted, because the value crosses a version boundary:
+   *  /api/branding is public with max-age=300, so for five minutes after a
+   *  deploy a client can hold the *pre-deploy* payload — which has no
+   *  `watermark` key — together with the new bundle. Nothing above the shell
+   *  catches a render throw, so an undefined here would be a blank page rather
+   *  than a missing decoration (the stale-shell incident, #156/#158).
+   *  NotificationBell defaults its own branding field for the same reason. */
+  src?: string
   /** The effective dark-mode state, which picks the opacity (see above). */
   isDark?: boolean
   /** The phone layout (the shell's `isMobile`, the same 768px switch that
@@ -123,7 +131,7 @@ interface WatermarkProps {
   columnWidth?: number
 }
 
-export function Watermark({ src, isDark = false, isMobile = false, columnWidth = 1180 }: WatermarkProps) {
+export function Watermark({ src = '', isDark = false, isMobile = false, columnWidth = 1180 }: WatermarkProps) {
   const url = src.trim()
   // The config gate: no configured mark, no element. A deployment that mounts
   // its own branding dir replaces the bundled set wholesale, so a watermark.svg
