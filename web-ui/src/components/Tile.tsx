@@ -139,7 +139,7 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
         rel="noopener noreferrer"
         aria-label={s.tile.guideOpen + s.tile.newTab}
         title={s.tile.guide}
-        className={cn(iconButtonVariants({ variant: 'ghost', size: 'sm' }), 'h-11 w-11 md:h-7 md:w-7')}
+        className={iconButtonVariants({ variant: 'ghost', size: 'sm' })}
         style={{ pointerEvents: 'auto', flexShrink: 0 }}
         onClick={(e) => {
           e.stopPropagation()

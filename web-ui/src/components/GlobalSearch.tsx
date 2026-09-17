@@ -103,6 +103,12 @@ function SearchField({
               ),
             }
           : {})}
+        // Not the Input primitive: that one is the forms' field, sized by
+        // min-h-11 / md:min-h-0 with its own padding, and this bar field is a
+        // fixed h-11 / md:h-9 box with room cut out either side for the
+        // magnifier and the trailing slot. Composing it would mean overriding
+        // every box class it sets, which is not a reuse.
+        //
         // pl-9 clears the magnifier, pr-12 the trailing slot. The 44px height
         // is the phone touch floor; the bar's own density takes over from md:.
         // text-ellipsis, not the browser's hard clip: the bar's field is
@@ -112,14 +118,20 @@ function SearchField({
         className="h-11 w-full text-ellipsis rounded-md border border-border bg-surface pl-9 pr-12 text-sm text-text placeholder:text-text-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:h-9 [&::-webkit-search-cancel-button]:appearance-none"
       />
       {hasQuery ? (
-        <button
-          type="button"
+        // IconButton's `plain` sm box is exactly this control's box (44px, 28px
+        // from md:), so the classes are the primitive's rather than re-typed.
+        // Two overrides keep the rendered result identical inside the field it
+        // sits in: the tighter radius, and no ring offset — an offset ring here
+        // would be drawn over the input's own border two pixels away.
+        <IconButton
+          variant="plain"
+          size="sm"
           aria-label={tr.dash.searchClear}
           onClick={() => onChange('')}
-          className="absolute right-0 top-1/2 grid h-11 w-11 -translate-y-1/2 cursor-pointer place-items-center rounded text-text-muted transition-colors hover:text-text focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:right-1 md:h-7 md:w-7"
+          className="absolute right-0 top-1/2 -translate-y-1/2 rounded focus-visible:ring-offset-0 md:right-1"
         >
           <X className="h-4 w-4" aria-hidden="true" />
-        </button>
+        </IconButton>
       ) : (
         shortcutHint && <ShortcutHint locale={locale} apple={apple} />
       )}
