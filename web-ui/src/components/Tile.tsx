@@ -106,13 +106,13 @@ export function Tile({ service, locale, categories, favorited, onToggleFavorite,
       className="h-11 w-11 md:h-7 md:w-7"
       aria-label={favorited ? s.tile.removeFav(service.name) : s.tile.addFav(service.name)}
       aria-pressed={favorited}
-      style={{ color: favorited ? 'var(--accent)' : 'var(--text-muted)', pointerEvents: 'auto', flexShrink: 0 }}
+      style={{ color: favorited ? 'var(--favorite)' : 'var(--text-muted)', pointerEvents: 'auto', flexShrink: 0 }}
       onClick={(e) => {
         e.stopPropagation()
         onToggleFavorite(service)
       }}
     >
-      <Star className={cn('h-5 w-5', favorited && 'fill-[var(--accent)]')} aria-hidden="true" />
+      <Star className={cn('h-5 w-5', favorited && 'fill-[var(--favorite)]')} aria-hidden="true" />
     </IconButton>
   ) : null
 

@@ -41,7 +41,8 @@ deployer changes in `branding.yaml`. Key names use `_` in the payload (`primary_
 |---|---|---|---|
 | `--primary`        | `#A6093D` | `#C2355C` | brand + primary actions, active tab |
 | `--primary-hover`  | `#8A0732` | `#A6093D` | primary pressed/hover |
-| `--accent`         | `#F2C879` | `#F2C879` | sparing accent (info callout) |
+| `--accent`         | `#F2C879` | `#F2C879` | the warm wash — segmented-control pill, tile hover, light canvas tint |
+| `--favorite`       | `#F2C879` | `#F2C879` | the favourited-service state (the star) |
 | `--surface`        | `#F4F4F5` | `#1E1E21` | page background behind cards |
 | `--surface-2`      | `#ECECEE` | `#27272B` | tile footer / inset zones |
 | `--border`         | `#E2E2E5` | `#34343A` | hairlines, dividers, card edges |
@@ -55,6 +56,15 @@ deployer changes in `branding.yaml`. Key names use `_` in the payload (`primary_
 Announcement severities map onto these: `info`→`--info`, `warning`→`--warning`, `critical`→`--danger`.
 Brand red (`--primary`) is for **brand + interaction only** — never large fills, or it stops meaning
 "actionable"; `--danger` is the distinct true-red for destructive/critical, so the two don't blur.
+
+`--accent` is **the warm wash and nothing else**: the active pill of a segmented control, the tile
+hover border and background tint, and the light-mode canvas tint. It had accumulated unrelated jobs
+— it was also the favourites star and the watermark fill — which meant retinting any one of them
+repainted all five. The star left in issue #211, to `--favorite`; the watermark leaves in #212. Read
+the role column as the whole list of what a token paints, and split rather than extend: a token that
+drifts into meaning "the yellow, mostly" is how that knot formed the first time. `--favorite` is
+named for the semantic state, not the glyph, so it survives the affordance ceasing to be a star.
+Both default to the same value, so the split is a no-op until a deployer sets one.
 
 **Structural tokens** — *not* brand-overridable; defined statically in `index.css` and identical across
 skins (a deployer re-colours, but doesn't restructure). They flip on `.dark` where it matters.

@@ -596,9 +596,9 @@ branding:
   assistant_bot_id: ""      # env ASSISTANT_BOT_ID
   theme:
     light: { primary: "#A6093D", primary_hover: "#8A0732", accent: "#F2C879",
-             surface: "#F4F4F5", text: "#18181B" }
+             favorite: "#F2C879", surface: "#F4F4F5", text: "#18181B" }
     dark:  { primary: "#C2355C", primary_hover: "#A6093D", accent: "#F2C879",
-             surface: "#1E1E21", text: "#F4F4F5" }
+             favorite: "#F2C879", surface: "#1E1E21", text: "#F4F4F5" }
   default_locale: de
 ```
 
