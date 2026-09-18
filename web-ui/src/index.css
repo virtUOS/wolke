@@ -23,6 +23,7 @@
   --color-text: var(--text);
   --color-text-muted: var(--text-muted);
   --color-accent: var(--accent);
+  --color-favorite: var(--favorite);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-info: var(--info);
@@ -50,6 +51,11 @@
   --text: #18181b;
   --text-muted: #6b6b70;
   --accent: #f2c879;
+  /* The favourited-service state (issue #211) — its own token so a skin can
+     retint the star without moving the warm wash (--accent). Defaults to the
+     accent value in both themes; keep the two in step when either changes,
+     or the split stops being a no-op. */
+  --favorite: #f2c879;
   --primary: #a6093d;
   --primary-hover: #8a0732;
   --info: #2563eb;
@@ -82,6 +88,7 @@
   --text: #f4f4f5;
   --text-muted: #9a9aa1;
   --accent: #f2c879;
+  --favorite: #f2c879;
   --primary: #c2355c;
   --primary-hover: #a6093d;
   --info: #60a5fa;

@@ -53,7 +53,7 @@ func TestBrandingDefaultPaletteComplete(t *testing.T) {
 	// The full brand-overridable palette (docs/03 §2) must ship in both maps so a
 	// skin can recolour every semantic role without falling back to a CSS default.
 	want := []string{
-		"primary", "primary_hover", "accent",
+		"primary", "primary_hover", "accent", "favorite",
 		"surface", "surface_2", "border",
 		"text", "text_muted",
 		"info", "warning", "success", "danger",
