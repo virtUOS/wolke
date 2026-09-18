@@ -34,7 +34,7 @@ import { expect, test } from './fixtures'
 
 /** A stand-in mark with the real one's 35:47 aspect ratio — a plain shape, no
  *  institution's anything. Only its alpha matters; the colour comes from the
- *  --accent token via the CSS mask. It is deliberately a *solid* hexagon: a
+ *  --text token via the CSS mask (issue #212). It is deliberately a *solid* hexagon: a
  *  horizontal line through its middle has ink at every x, which is what lets
  *  the gutter-fade test below read the gradient off the rendered pixels. */
 const MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 47">
@@ -117,6 +117,43 @@ const GEOMETRY = {
   aspect: 47 / 35,
   gutterFade: 360,
 } as const
+
+/**
+ * The canvas colour as the browser computes it, rounded to the 8-bit values a
+ * screenshot reports.
+ *
+ * Taken from `.app-canvas` rather than by sampling a pixel "somewhere on bare
+ * canvas". The sampled-pixel version (a point at x=40 on the mark's own line)
+ * was wrong at tablet-768: there the desktop layout is narrow enough that x=40
+ * lands inside a card, so the reference was --surface (244,244,245) and every
+ * ink figure at that width was measured against the wrong ground. It went
+ * unnoticed while the fill was --accent, whose larger channel excursion cleared
+ * the floor anyway; #212's neutral fill at luminance parity does not, which is
+ * how the flaw surfaced. The mark's own pixel is identical either way.
+ */
+async function canvasRGB(page: Page): Promise<number[]> {
+  return page.evaluate(() => {
+    const css = getComputedStyle(document.querySelector('.app-canvas')!).backgroundColor
+    let m = /^rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/.exec(css)
+    if (m) return [1, 2, 3].map((i) => Math.round(Number(m![i])))
+    m = /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(css)
+    if (m) return [1, 2, 3].map((i) => Math.round(Number(m![i]) * 255))
+    throw new Error(`unparsed canvas colour: ${css}`)
+  })
+}
+
+/**
+ * Sanity floor for "there is ink here", as a per-channel delta against the bare
+ * canvas, for the pixel-sampling fade tests below.
+ *
+ * It tracks the fill, and issue #212 moved it: the mark is now --text at
+ * luminance parity with the accent it replaced, which is a much smaller
+ * *channel* excursion for a neutral fill — Δ7.4 in light where the accent at
+ * 0.15 gave Δ19. This is only the check that there is something to read the
+ * gradient off at all; the ordering assertions at each sample point are the
+ * real test, and they are untouched.
+ */
+const INK_FLOOR = 5
 
 /** The phone geometry of issue #181, deliberately untouched by #195. */
 const MOBILE_GEOMETRY = { heightOverVh: 0.86, overBottom: 0.22, overRight: 0.36 } as const
@@ -306,15 +343,16 @@ test.describe('watermark enabled', () => {
     // at every x there, so anything that varies along it is the gradient.
     const y = Math.round(box.y + box.height / 2)
     const xs = [columnRight - 40, columnRight + 20, columnRight + 150, columnRight + 280]
-    // …and one reference point on bare canvas, left of the mark entirely.
-    const reference = { x: 40, y }
-    const samples = await samplePixels(page, [...xs.map((x) => ({ x: Math.round(x), y })), reference])
-    const canvas = samples.pop()!
-    // Blue is the channel the accent moves most against either canvas.
+    const samples = await samplePixels(page, xs.map((x) => ({ x: Math.round(x), y })))
+    const canvas = await canvasRGB(page)
+    // Any channel does since #212: --text is neutral, so it moves all three by
+    // roughly the same amount against either canvas (light: 7.4/7.3/7.1 at the
+    // shipped 0.032). Blue is kept because it was the accent's strongest
+    // channel, so the samples stay comparable with the #195/#199 runs.
     const ink = samples.map((p) => Math.abs(p[2] - canvas[2]))
 
     expect(y, 'the sampled line is on screen').toBeLessThan(1080)
-    expect(ink[0], 'the mark is at full strength over the column').toBeGreaterThan(8)
+    expect(ink[0], 'the mark is at full strength over the column').toBeGreaterThan(INK_FLOOR)
     // Strictly decreasing across the gutter, and gone by its far end.
     expect(ink[1]).toBeLessThan(ink[0] + 1)
     expect(ink[2], 'half way across the gutter it is weaker').toBeLessThan(ink[1])
@@ -348,8 +386,8 @@ test.describe('watermark enabled', () => {
     const y = Math.round(box.y + box.height / 2)
     const vh = await page.evaluate(() => document.documentElement.clientHeight)
     expect(y, 'the sampled line is on screen').toBeLessThan(vh)
-    const samples = await samplePixels(page, [...xs.map((x) => ({ x: Math.round(x), y })), { x: 40, y }])
-    const canvas = samples.pop()!
+    const samples = await samplePixels(page, xs.map((x) => ({ x: Math.round(x), y })))
+    const canvas = await canvasRGB(page)
     return samples.map((p) => Math.abs(p[2] - canvas[2]))
   }
 
@@ -367,7 +405,7 @@ test.describe('watermark enabled', () => {
     // Well inside the column, then across the gutter to the screen's last pixel.
     const ink = await inkAlongTheMark(page, [columnRight - 40, columnRight + gutter / 2, vw - 1])
 
-    expect(ink[0], 'full strength over the column').toBeGreaterThan(8)
+    expect(ink[0], 'full strength over the column').toBeGreaterThan(INK_FLOOR)
     expect(ink[1], 'weaker half way across the gutter').toBeLessThan(ink[0])
     // The point of the whole issue: the mark reaches transparent BEFORE the
     // screen edge cuts it, even though the gutter is 50px rather than 360.
@@ -390,12 +428,12 @@ test.describe('watermark enabled', () => {
     expect(box.x + box.width, 'the mark reaches past the viewport').toBeGreaterThan(vw)
 
     const ink = await inkAlongTheMark(page, [vw / 2, vw - 1])
-    expect(ink[0], 'full strength over the column').toBeGreaterThan(8)
+    expect(ink[0], 'full strength over the column').toBeGreaterThan(INK_FLOOR)
     // Asserted, not tolerated: with no gutter there is nothing to fade over, so
     // the mark meets the edge at full strength and bleeds — the same thing the
     // phone rule does on purpose. If this ever goes to zero, the fade has been
     // keyed to something that eats into the column itself.
-    expect(ink[1], 'still at full strength where the screen ends').toBeGreaterThan(8)
+    expect(ink[1], 'still at full strength where the screen ends').toBeGreaterThan(INK_FLOOR)
     expect(ink[1], 'i.e. it bleeds rather than dissolving').toBeCloseTo(ink[0], -1)
     expect(await documentOverflow(page)).toBeLessThanOrEqual(0)
   })
@@ -415,10 +453,9 @@ test.describe('watermark enabled', () => {
     })
     expect(style.pointerEvents).toBe('none')
     expect(style.opacity).toBeGreaterThan(0)
-    // Light's value is a decided departure from the board's dark-derived 0.08
-    // cap (issue #195, C1); it is still far below anything that could compete
-    // with content.
-    expect(style.opacity).toBeLessThanOrEqual(0.15)
+    // Both themes sit at luminance parity with what #195 shipped (issue #212),
+    // and dark is now the larger of the two — see the per-theme tests below.
+    expect(style.opacity).toBeLessThanOrEqual(0.057)
     // The mask URL is the configured one, never a constant baked into the SPA.
     expect(style.maskImage).toContain(MARK_URL)
 
@@ -484,8 +521,14 @@ test.describe('watermark enabled', () => {
 
   // Issue #187: with the desktop cards opaque, the mark crosses no card text on
   // a desktop — and on a phone, where the list rows stay transparent and the
-  // mark shows through them, the accent over the canvas must leave the row text
+  // mark shows through them, the fill over the canvas must leave the row text
   // at AA.
+  //
+  // This check is what capped light's opacity in #212. With the near-black
+  // --text fill the binding text is the row's muted subtitle, and light at the
+  // per-channel-parity value the issue proposed (0.087) measured 4.3480 here —
+  // below the floor. The shipped 0.032 reads 4.8663, identical to the accent at
+  // its old 0.15, because both are luminance parity. See the spec's §3.
   test.describe('text contrast', () => {
     test('desktop: the fill of a card the mark passes behind is pixel-identical with the mark on and off', async ({
       page,
@@ -629,11 +672,11 @@ test.describe('watermark enabled', () => {
         }
         const canvas = parse(getComputedStyle(document.querySelector('.app-canvas')!).backgroundColor)
         const mark = document.querySelector<HTMLElement>('.app-watermark')!
-        const accent = parse(getComputedStyle(mark).backgroundColor)
+        const fill = parse(getComputedStyle(mark).backgroundColor)
         const o = Number(getComputedStyle(mark).opacity)
         // The worst case behind a row's text: a stroke of the mark, i.e. the
-        // accent at its opacity composited over the canvas.
-        const composited = canvas.map((c, i) => (i === 3 ? 1 : c * (1 - o) + accent[i] * o))
+        // fill at its opacity composited over the canvas.
+        const composited = canvas.map((c, i) => (i === 3 ? 1 : c * (1 - o) + fill[i] * o))
         const row = document.querySelector('.tile-list-item')!
         const rowBg = parse(getComputedStyle(row).backgroundColor)
         const texts = [
@@ -654,16 +697,20 @@ test.describe('watermark enabled', () => {
   })
 
   // The rendered opacity is asserted in a dark browser context, not just the
-  // constant, so a theme wired up wrongly fails. Issue #195 splits the two
-  // themes: dark keeps the board's 0.07 under its 0.08 cap, light is lifted
-  // because the same value measures Δ9 there against dark's Δ15.
+  // constant, so a theme wired up wrongly fails. #195 split the two themes and
+  // #212 re-set both to luminance parity with what #195 shipped, when the fill
+  // moved from --accent to --text. The split inverted doing so: light is now
+  // the *lower* value, because --text is near-black against a near-white
+  // canvas — the largest luminance excursion the palette allows — while dark's
+  // very low canvas luminance compresses what the same opacity buys.
   test.describe('in the dark theme', () => {
     test.use({ colorScheme: 'dark' })
 
-    test('renders at the board\'s 0.07, under the ceiling that value defined', async ({ page }) => {
+    test('renders at 0.057, parity with the accent at the board\'s 0.07', async ({ page }) => {
       await gotoApp(page)
       const dark = await watermark(page).evaluate((n) => Number(getComputedStyle(n).opacity))
-      expect(dark).toBeCloseTo(0.07, 3)
+      expect(dark).toBeCloseTo(0.057, 3)
+      // Still under the board's dark-derived 0.08 cap (issue #187, frame 7e).
       expect(dark).toBeLessThanOrEqual(0.08)
     })
 
@@ -679,9 +726,10 @@ test.describe('watermark enabled', () => {
   }) => {
     await gotoApp(page)
     const light = await watermark(page).evaluate((n) => Number(getComputedStyle(n).opacity))
-    expect(light).toBeCloseTo(0.15, 3)
-    // Deliberately above the board's cap; see docs/specs/watermark-column-fade.md §3.
-    expect(light).toBeGreaterThan(0.07)
+    expect(light).toBeCloseTo(0.032, 3)
+    // Below dark since #212, which is the inversion the fill change caused;
+    // see docs/specs/watermark-column-fade.md §3.
+    expect(light).toBeLessThan(0.057)
   })
 
   test('the full viewport matrix stays healthy on every launcher view', async ({

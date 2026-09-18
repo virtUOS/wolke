@@ -46,7 +46,7 @@ deployer changes in `branding.yaml`. Key names use `_` in the payload (`primary_
 | `--surface`        | `#F4F4F5` | `#1E1E21` | page background behind cards |
 | `--surface-2`      | `#ECECEE` | `#27272B` | tile footer / inset zones |
 | `--border`         | `#E2E2E5` | `#34343A` | hairlines, dividers, card edges |
-| `--text`           | `#18181B` | `#F4F4F5` | body text |
+| `--text`           | `#18181B` | `#F4F4F5` | body text; the launcher watermark fill (#212) |
 | `--text-muted`     | `#6B6B70` | `#9A9AA1` | sub-labels, secondary text |
 | `--info`           | `#2563EB` | `#60A5FA` | informational state / banner |
 | `--warning`        | `#B45309` | `#FBBF24` | warning state / banner |
@@ -60,8 +60,9 @@ Brand red (`--primary`) is for **brand + interaction only** — never large fill
 `--accent` is **the warm wash and nothing else**: the active pill of a segmented control, the tile
 hover border and background tint, and the light-mode canvas tint. It had accumulated unrelated jobs
 — it was also the favourites star and the watermark fill — which meant retinting any one of them
-repainted all five. The star left in issue #211, to `--favorite`; the watermark leaves in #212. Read
-the role column as the whole list of what a token paints, and split rather than extend: a token that
+repainted all five. The star left in issue #211, to `--favorite`; the watermark left in #212, to
+`--text`, so a neutral mark stays neutral when the accent is re-skinned. Read the role column as
+the whole list of what a token paints, and split rather than extend: a token that
 drifts into meaning "the yellow, mostly" is how that knot formed the first time. `--favorite` is
 named for the semantic state, not the glyph, so it survives the affordance ceasing to be a star.
 Both default to the same value, so the split is a no-op until a deployer sets one.
