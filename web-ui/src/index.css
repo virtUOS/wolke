@@ -57,6 +57,16 @@
   --success: #15803d;
   --danger: #b91c1c;
 
+  /* Typography roles. Two names, one stack: issue #213 settled the display
+     role on the *body* family, so the greeting's distinction comes from weight
+     and size alone — which is what makes it survive a deployer swapping either
+     family (the launcher reads as a launcher whatever face it is given).
+     Separate names because the roles are genuinely separate; issue #214 moves
+     the values into the branding payload, and this is the shape it expects.
+     Not per-theme: a skin re-colours across light/dark, it doesn't re-face. */
+  --font-body: 'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif;
+  --font-display: 'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif;
+
   /* Structural tokens (not brand-overridable; identical across skins). --bg is
      deliberately excluded from the branding payload — it's the app canvas. */
   --bg: #ffffff;
@@ -86,10 +96,9 @@ body {
   margin: 0;
   background-color: var(--bg);
   color: var(--text);
-  font-family: 'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-optical-sizing: auto;
 }
 
 /* The app canvas fills the viewport. dvh, not vh: on a mobile browser `100vh` is

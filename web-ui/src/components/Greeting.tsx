@@ -34,10 +34,17 @@ export function Greeting({ firstName, locale, isMobile, maintenanceCount, onShow
       <h1
         style={{
           margin: 0,
-          fontFamily: '"Newsreader Variable", Georgia, serif',
-          fontWeight: 500,
+          // Issue #213: no serif on a web surface (UOS corporate design). The
+          // display role is the body family — the greeting is told apart by
+          // weight and size, not by a second face, so the distinction holds
+          // whatever family a deployer substitutes (issue #214).
+          fontFamily: 'var(--font-display)',
+          // Light, not medium: at 36px the body grotesque carries the line on
+          // size alone, and 300 is a real instance of the variable font
+          // (wght 100–900), never a synthesised one.
+          fontWeight: 300,
           fontSize: isMobile ? 27 : 36,
-          letterSpacing: '-0.015em',
+          letterSpacing: '-0.01em',
           color: 'var(--text)',
           lineHeight: 1.05,
         }}
