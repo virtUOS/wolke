@@ -99,10 +99,15 @@ describe('Watermark', () => {
     expect(el).toBeEmptyDOMElement()
   })
 
-  it('tints with the accent token, never a hex', () => {
+  // Issue #212: the mark is a neutral decoration, not a second place the
+  // highlight colour shows up. Filling it with --text means a deployer who
+  // re-skins the accent does not move the watermark with it.
+  it('tints with the text token, never a hex', () => {
     const { container } = render(<Watermark src={MARK} />)
     const el = mark(container)!
-    expect(el.style.backgroundColor).toBe('var(--accent)')
+    expect(el.style.backgroundColor).toBe('var(--text)')
+    // The whole point of #212: it is no longer downstream of --accent.
+    expect(css(el)).not.toContain('--accent')
     expect(css(el)).not.toMatch(/#[0-9a-f]{3,8}\b/i)
   })
 
@@ -116,33 +121,50 @@ describe('Watermark', () => {
     expect(mark(container)!.style.zIndex).toBe('')
   })
 
-  // --- Opacity --------------------------------------------------------------
+  // --- Opacity ---------------------------------------------------------------
   //
-  // Per theme since #195. The board's 0.08 cap (frame 7e) was derived on the
-  // dark canvas and is kept there; light is a deliberate, decided departure
-  // (issue #195, C1). Measured against the shipped tokens, accent #f2c879 over
-  // the canvas each theme actually draws:
+  // Per theme since #195, and re-set in #212 when the fill moved from --accent
+  // to --text. Both values are LUMINANCE parity with what #195 shipped, so the
+  // swap changed the mark's hue and not its weight — see
+  // docs/specs/watermark-column-fade.md §3. Measured on the canvas each theme
+  // actually paints (light is --bg warmed with 5% accent, not #FFFFFF):
   //
-  //   dark  (22,22,24)     at 0.07 → Δ15/255   (the cap's own reference point)
-  //   light (254,252,248)  at 0.07 → Δ9/255    ("barely visible on most screens")
-  //   light                at 0.15 → Δ19/255   (shipped)
+  //   light  canvas (254.35,252.25,248.30)  accent@0.15 → lum 0.91407
+  //                                         text  @0.032 → lum 0.91407
+  //   dark   canvas (22,22,24)              accent@0.07 → lum 0.01669
+  //                                         text  @0.057 → lum 0.01669
   //
+  // Parity is on luminance rather than on the largest per-channel delta #195
+  // and #187 used: that metric was sound while every candidate fill was the
+  // same pale yellow, and stops being sound once the fill's own luminance
+  // moves. Matching channels instead would have put light at 0.087 — ~2.7x
+  // today's weight, and below AA on the phone (§3, "the accessibility
+  // ceiling").
   describe('opacity', () => {
-    it('keeps dark at the board value, under the ceiling it was derived from', () => {
+    it('sets dark at luminance parity with the accent value #195 shipped', () => {
       const { container } = render(<Watermark src={MARK} isDark />)
       expect(Number(mark(container)!.style.opacity)).toBe(WATERMARK_OPACITY.dark)
-      expect(WATERMARK_OPACITY.dark).toBe(0.07)
+      expect(WATERMARK_OPACITY.dark).toBe(0.057)
       // 0.08 is the board's ceiling (issue #187, frame 7e). It was derived on
-      // the dark canvas and binds there only — light is the decided departure
-      // below, so the number lives here rather than as a shared constant.
+      // the dark canvas and binds there only. It no longer constrains anything
+      // — parity lands well under it — but a value above it would still be a
+      // decision nobody has taken, so the assertion stays.
       expect(WATERMARK_OPACITY.dark).toBeLessThanOrEqual(0.08)
     })
 
-    it('lifts light above the dark-derived cap, because the same value measures half the contrast there', () => {
+    it('sets light lower than dark, which is what keeps the two equally faint', () => {
       const { container } = render(<Watermark src={MARK} isDark={false} />)
       expect(Number(mark(container)!.style.opacity)).toBe(WATERMARK_OPACITY.light)
-      expect(WATERMARK_OPACITY.light).toBe(0.15)
-      expect(WATERMARK_OPACITY.light).toBeGreaterThan(WATERMARK_OPACITY.dark)
+      expect(WATERMARK_OPACITY.light).toBe(0.032)
+      // The relationship INVERTED in #212, and the inversion is the tell that
+      // the fill changed character. With the pale accent, light needed more
+      // opacity than dark (0.15 vs 0.07) because the fill sat close to the
+      // near-white canvas in luminance. --text is near-black there: the
+      // largest luminance excursion the palette allows, so it needs less. In
+      // dark the canvas's own luminance floor compresses what the same opacity
+      // buys, so dark needs more. A future edit that restores light > dark has
+      // almost certainly reverted the fill.
+      expect(WATERMARK_OPACITY.light).toBeLessThan(WATERMARK_OPACITY.dark)
     })
 
     it('stays a texture in both themes: never opaque enough to read as an object', () => {

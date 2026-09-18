@@ -112,21 +112,64 @@ suite depends on.
 
 ## 3. Colour and opacity
 
-Fill is `--accent`, never a hex. Opacity is per theme:
+Fill is `--text`, never a hex — a neutral tint that does not move when the
+accent is re-skinned (issue [#212](https://github.com/virtUOS/wolke/issues/212),
+exploration board option 7a). Because the fill is the text token, the mark is
+dark-on-light in light and light-on-dark under `.dark`; that is intended. It
+was `--accent` from #174 through #195; §6 records what the swap cost.
 
-- **dark 0.07** — the handoff's value, and the board's 0.08 cap (frame 7e)
-  applies: measured Δ15/255 against the dark canvas.
-- **light 0.15** — a deliberate departure from the cap, decided on the issue
-  (C1). The cap is dark-derived; at 0.07 the accent over the light canvas gives
-  only Δ9/255, which is the "barely visible on most screens" that was reported.
-  0.15 measures **Δ19/255**. The issue's starting point was 0.18 (Δ23) with an
-  instruction to re-judge on the new geometry: the gutter fade concentrates the
-  mark over the column rather than letting it bleed across the whole canvas, so
-  it carries at less. Judged on a ladder (0.07 / 0.11 / 0.15 / 0.18) rendered
-  with the real line-art mark at 1920×1080; 0.18 starts to read as an object
-  crossing the card row, 0.11 is still faint, 0.15 is present as a texture.
+Opacity stays **per theme** — a single flat value is the thing #195 proved
+wrong — and both values are set at **luminance parity** with what #195 shipped,
+so the swap changes the mark's hue and nothing about its weight:
 
-`WATERMARK_MAX_OPACITY` stays the dark ceiling and is asserted for dark only.
+| | canvas painted | fill | opacity | composited luminance | Δ largest channel |
+|---|---|---|---|---|---|
+| light | (254.35, 252.25, 248.30) | `--text` | **0.032** | 0.91407 | 7.4/255 |
+| dark  | (22, 22, 24)             | `--text` | **0.057** | 0.01669 | 12.7/255 |
+
+Against #195's shipped accent, which those two reproduce: light `--accent`
+@0.15 → luminance 0.91407, and dark `--accent` @0.07 → luminance 0.01669. The
+phone list-row contrast check (§5) reads back 4.8663 in light and 5.6311 in
+dark either way, which is the same statement measured from the other end.
+
+### Why the numbers fell so far, and why that is not a fade
+
+0.15 → 0.032 looks like a large reduction and is not one. **Parity is on
+luminance, not on largest-per-channel delta**, and the two metrics disagree
+sharply for this swap:
+
+- `--accent` (#F2C879) is a *pale* yellow. Over the near-white light canvas it
+  moves the blue channel a lot (Δ127 at full strength) but barely moves
+  luminance, because its own luminance is close to the canvas's.
+- `--text` (#18181B) is near-black. It moves every channel by ~230 and moves
+  luminance hard.
+
+So matching the channel delta — the metric #187 and #195 used, when both fills
+under discussion were the same pale yellow — would have made the mark far
+*heavier* in light, not equal to it. Matching luminance is what "only the tint
+changes" actually means, and it is what the eye and the contrast gate both read.
+The same effect runs the other way in dark, where `--text` (#F4F4F5) is lighter
+than the accent and so lifts the dark canvas further at equal opacity: parity
+there is 0.057, not the 0.07 the per-channel reading suggests.
+
+### The accessibility ceiling this discovered
+
+Light is additionally *capped* near **0.0705**, independently of parity. On the
+phone the list rows are transparent and the mark shows through them, so the
+mark composites under the row's muted subtitle (`--text-muted`, #6B6B70). At
+0.07 that text measures 4.5044 against the mark; at 0.075 it is 4.4580 and
+below the 4.5 AA floor the suite enforces. Shipping at 0.032 leaves the check
+at 4.8663 — today's value exactly — rather than spending the headroom.
+
+Dark has no such ceiling: `--text` there lightens a very dark canvas, and the
+row text stays above 5.4 across the whole plausible range.
+
+### Ceilings from earlier rounds
+
+The board's 0.08 cap (#187, frame 7e) was derived on the dark canvas and both
+values now sit under it, so it no longer binds anything and is no longer
+asserted as a departure. The #212 handoff's "do not exceed 0.06" ceiling is
+likewise satisfied in both themes — though not for the reason it gave; see §6.
 
 ## 4. Phone (unchanged, #181)
 
@@ -136,7 +179,7 @@ mask. Out of scope for #195.
 ## 5. What the tests pin
 
 Unit (`watermark.test.tsx`): the config gate (no value → no element at all),
-decorativeness, the accent token, `--launcher-max-width` as the single source,
+decorativeness, the `--text` fill token, `--launcher-max-width` as the single source,
 the layer's gradient stops, the mark's ratio-derived width/right, the
 `var(--greeting-top)` anchor, and the per-theme opacities.
 
@@ -154,3 +197,31 @@ scroll-top and follows it when the announcement banner mounts; the layer adds
 no document scroll; the mark is invisible to the pointer and to assistive tech;
 card fill is pixel-identical with the mark on and off; and the shipped default
 (unconfigured) renders no element.
+
+## 6. Corrections this round made (issue #212)
+
+Two figures that were repeated across the component comment, the tests and this
+spec turned out to rest on wrong premises. Both are recorded here so a future
+reader does not re-derive them.
+
+**The light canvas is not `--bg`.** `DashboardShell.tsx` paints it as
+`color-mix(in srgb, var(--accent) 5%, var(--bg))` — measured (254.35, 252.25,
+248.30) — and has since the Editorial design landed (`188756f`, 2026-06-17),
+long before the watermark existed. #187 dropped that tint in dark only. Issue
+#212's footnote claims the app does not paint (254,252,248) and that the light
+canvas is `#FFFFFF`; that is backwards. #195's own measurements were taken
+against the real canvas and were correct — its Δ9 at 0.07 and Δ19 at 0.15 both
+reproduce to the digit. The #212 figures of Δ20.1 and light @0.087 are what you
+get by compositing over pure white instead, and they are not shipped.
+
+**Per-channel parity is not parity.** #212 reasoned from the largest
+per-channel delta and concluded dark was "contrast-neutral" at an unchanged
+0.07 and light needed 0.087. Measured on luminance, 0.087 in light is ~2.7×
+today's weight and fails the phone AA check at 4.3480; and dark at 0.07 is ~14%
+heavier than today. The metric was sound while every candidate fill was the
+same pale yellow, and stops being sound the moment the fill's luminance moves.
+The shipped values (light 0.032, dark 0.057) are luminance parity, per §3.
+
+Consequently the handoff's "do not exceed 0.06" ceiling is met in both themes,
+but it was not a constraint this round had to trade against: parity landed
+under it on its own.
