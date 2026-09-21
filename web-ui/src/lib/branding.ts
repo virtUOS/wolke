@@ -32,6 +32,12 @@ export interface Branding {
     light: ThemeTokens
     dark: ThemeTokens
   }
+  // Typography roles (issue #214), keyed `body` / `display` — each a complete
+  // CSS font stack, applied to :root. Deliberately outside `theme`: a face is
+  // not per-theme. A skin SELECTS one of the bundled faces or a system stack;
+  // it cannot ship a font file, which is the one branding setting that needs a
+  // rebuild (docs/02 §11).
+  fonts: ThemeTokens
 }
 
 export async function fetchBranding(signal?: AbortSignal): Promise<Branding> {
@@ -70,9 +76,11 @@ export function feedbackHref(value: string): { href: string; external: boolean }
 
 // tokensToCSS turns {primary_hover: "#8A0732"} into "--primary-hover: #8A0732;",
 // keeping the underscore→hyphen mapping that Tailwind's var() names expect.
-function tokensToCSS(tokens: ThemeTokens): string {
-  return Object.entries(tokens)
-    .map(([name, value]) => `--${name.replace(/_/g, '-')}: ${value};`)
+// `prefix` names the variable family: the font roles arrive keyed `body` and
+// `display` and become --font-body / --font-display.
+function tokensToCSS(tokens: ThemeTokens | undefined, prefix = ''): string {
+  return Object.entries(tokens ?? {})
+    .map(([name, value]) => `--${prefix}${name.replace(/_/g, '-')}: ${value};`)
     .join(' ')
 }
 
@@ -80,7 +88,10 @@ function tokensToCSS(tokens: ThemeTokens): string {
 // tokens on :root and the dark tokens on .dark, then sets the document title and
 // the PWA theme-color to the active brand primary.
 export function applyBrandingTokens(b: Branding): void {
-  const css = `:root { ${tokensToCSS(b.theme.light)} } .dark { ${tokensToCSS(b.theme.dark)} }`
+  // The font roles join the :root half and have no .dark counterpart: a skin
+  // re-colours across the two themes, it does not re-face (issue #214).
+  const root = `${tokensToCSS(b.theme.light)} ${tokensToCSS(b.fonts, 'font-')}`.trim()
+  const css = `:root { ${root} } .dark { ${tokensToCSS(b.theme.dark)} }`
   let el = document.getElementById('branding-tokens')
   if (!el) {
     el = document.createElement('style')

@@ -67,6 +67,10 @@ drifts into meaning "the yellow, mostly" is how that knot formed the first time.
 named for the semantic state, not the glyph, so it survives the affordance ceasing to be a star.
 Both default to the same value, so the split is a no-op until a deployer sets one.
 
+The **typography tokens** (`--font-body`, `--font-display`) are brand-overridable too, but they are not
+colours and not per-theme, so they sit in their own `branding.fonts` block rather than in these two
+maps — see §3.
+
 **Structural tokens** — *not* brand-overridable; defined statically in `index.css` and identical across
 skins (a deployer re-colours, but doesn't restructure). They flip on `.dark` where it matters.
 
@@ -80,14 +84,37 @@ Spacing and elevation use Tailwind's default scales — no custom tokens (keep i
 
 ## 3. Typography
 
-A university tool should feel institutional but current — confirm whether UOS mandates a corporate
-typeface (many universities license one). If not:
+**What ships.** One face, self-hosted: **Hanken Grotesk Variable**
+(`@fontsource-variable/hanken-grotesk`, wght 100–900), bundled by Vite and imported in `main.tsx`.
+No external font host — the strict CSP holds, nothing leaves the user's browser, and the PWA renders
+offline. The open question this section used to carry ("confirm whether UOS mandates a corporate
+typeface", Inter / Inter Tight / JetBrains Mono) is answered: the **UOS web corporate design permits
+no serif face**, and the launcher uses a single grotesque for everything (issue #213). The serif
+that once set the greeting (Newsreader) is gone, along with the second webfont on first paint.
 
-- **Display / headings:** a confident grotesque — e.g. **Inter Tight** or the UOS corporate face if
-  mandated. Used at the page title scale ("Navigation", "Kachel" style in the PDF — heavy weight,
-  with the small red bar accent to its left).
-- **Body / UI:** **Inter** — neutral, excellent at small sizes, great German diacritics and ß.
-- **Mono (data only):** **JetBrains Mono**, for any IDs/metrics in the admin view.
+**Two roles, two tokens** — brand-overridable like the colours (issue #214):
+
+| token | default | role |
+|---|---|---|
+| `--font-body`    | `'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif` | body and UI — set on `body`, inherited everywhere |
+| `--font-display` | the same stack | the launcher greeting and the admin page title |
+
+Same stack by default, so the split is a visual no-op: the display role is told apart by **weight and
+size**, not by a second face (300 at 36px/27px, tracking −0.01em). That is what makes it survive a
+deployer changing either family — the launcher still reads as a launcher whatever face it is given.
+
+Unlike the colour tokens the font tokens are **not per-theme**: they live in `branding.fonts`, not in
+`theme.light` / `theme.dark`. A skin re-colours across the two themes; it does not re-face. A `--font-mono`
+role is deliberately absent until something actually renders in it (admin IDs/metrics would be the
+case); adding one means adding it to `fontRoles` in `internal/config/config.go`, the `@theme inline`
+bridge and the `:root` fallback — the same three places `--font-display` occupies.
+
+**A deployer selects a family; it cannot supply a font file.** `branding.fonts.body` /
+`.display` may name a bundled face or a system stack, and every stack must end in a generic family
+(`sans-serif`, `system-ui`, …) or startup fails — so a face the client cannot load degrades to a
+system font rather than to the browser default. Shipping a licensed corporate face is a fork +
+rebuild; this is the one branding setting that is not purely runtime, and docs/02 §11 and
+`config.example.yaml` say why.
 
 Type scale (rem): 0.75 / 0.875 / 1 / 1.25 / 1.5 / 2 / 2.5. Service names at 1rem semibold;
 category labels at 0.875rem; the "Datenverwaltung" sub-label at 0.875rem muted; the description

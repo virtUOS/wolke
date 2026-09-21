@@ -68,6 +68,35 @@ func TestBrandingDefaultPaletteComplete(t *testing.T) {
 	}
 }
 
+// Issue #214: typography is branding too. The payload carries the font roles
+// so the SPA can set --font-body / --font-display from config; they sit beside
+// the theme rather than inside it, because a face is not per-theme.
+func TestBrandingShipsFontRoles(t *testing.T) {
+	cfg := config.Defaults()
+	h := newTestRouter(t, &cfg, Deps{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/branding", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	var b config.Branding
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, role := range []string{"body", "display"} {
+		v, ok := b.Fonts[role]
+		if !ok || v == "" {
+			t.Errorf("fonts missing the %q role", role)
+			continue
+		}
+		// Every served stack ends in a generic family, so a client that cannot
+		// load the named face still renders text (issue #214, rule 5).
+		if !strings.Contains(v, "sans-serif") && !strings.Contains(v, "serif") && !strings.Contains(v, "monospace") {
+			t.Errorf("fonts.%s = %q, want a generic family at the end of the stack", role, v)
+		}
+	}
+}
+
 func TestBrandingReflectsOverride(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.Branding.ProductName = "Campus Apps"
