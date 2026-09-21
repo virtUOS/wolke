@@ -31,6 +31,16 @@
   --color-success: var(--success);
   --color-danger: var(--danger);
 
+  /* Typography roles, bridged like the colours so `font-body` / `font-display`
+     work as utilities (issue #214). The names collide with the variables they
+     reference on purpose: Tailwind emits its half inside `@layer theme`, and an
+     unlayered declaration always wins over a layered one, so the :root block
+     below — and the branding payload, which is unlayered too — is what every
+     consumer resolves. The `inline` keyword keeps the utilities pointing at
+     var(--font-…) rather than at a build-time value. */
+  --font-body: var(--font-body);
+  --font-display: var(--font-display);
+
   /* Corner scale tied to tokens (values match Tailwind's md/lg, so existing
      rounded-md/lg usage is unchanged). */
   --radius-sm: var(--radius-sm);
@@ -67,9 +77,12 @@
      role on the *body* family, so the greeting's distinction comes from weight
      and size alone — which is what makes it survive a deployer swapping either
      family (the launcher reads as a launcher whatever face it is given).
-     Separate names because the roles are genuinely separate; issue #214 moves
-     the values into the branding payload, and this is the shape it expects.
-     Not per-theme: a skin re-colours across light/dark, it doesn't re-face. */
+     Separate names because the roles are genuinely separate.
+     These are the first-paint fallbacks only: since issue #214 the values come
+     from branding.fonts via GET /api/branding, and must mirror the Go defaults
+     (internal/config/config.go, `bundledSans`). Not per-theme, so unlike the
+     colours they have no .dark counterpart below: a skin re-colours across
+     light/dark, it doesn't re-face. */
   --font-body: 'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif;
   --font-display: 'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif;
 

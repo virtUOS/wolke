@@ -7,6 +7,14 @@
 # role block, which shows the UOS launch deployment's two-role mapping (the
 # built-in default is a three-role example). A fork re-skins and re-points by
 # editing this one file and restarting — no recompile.
+#
+# ONE EXCEPTION: FONT FILES (issue #214). Colours, logos, the favicon and the
+# watermark are all runtime — config values and mounted assets. Typography is
+# half: `branding.fonts` SELECTS a family at runtime, but the face itself is an
+# npm dependency bundled into the SPA at build time, and there is no mount for
+# a font file. So you can point a role at a bundled face or at a system stack
+# without recompiling; deploying your own licensed corporate face means forking,
+# adding the package, and rebuilding the image. See branding.fonts below.
 
 # OIDC is provider-agnostic: discovery does the rest, so the same code works with
 # Keycloak, Authentik, Zitadel, Auth0, Entra, etc. (docs/02 §6).
@@ -121,6 +129,28 @@ branding:
   # (env: ASSISTANT_WIDGET_URL / ASSISTANT_BOT_ID)
   assistant_widget_url: ""  # e.g. "https://assistant.example.edu/widget.js"
   assistant_bot_id: ""      # e.g. "echo"
+  # Typography (issue #214). Two roles, each a complete CSS font stack; they
+  # become the --font-body / --font-display variables. NOT per-theme: a skin
+  # re-colours across light and dark, it does not re-face, so there is one value
+  # per role rather than a light/dark pair.
+  #
+  # You are SELECTING a family, not supplying one. The stack may name a face the
+  # build bundles (today: Hanken Grotesk Variable) or any face the user's device
+  # has — a system stack like `system-ui, sans-serif` needs nothing shipped and
+  # always resolves. It may NOT name a face this build does not carry and the
+  # device does not have: there is no way to mount a font file, so that stack
+  # would simply fall through to its fallback. Shipping your own corporate face
+  # is a fork + rebuild (see the header).
+  #
+  # Every stack must END IN A GENERIC FAMILY (sans-serif, serif, monospace,
+  # system-ui, …) — startup fails otherwise. That is the rule that keeps a
+  # missing face degrading to a system font instead of to the browser default.
+  fonts:
+    body: "'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif"
+    # The greeting and the admin page title. Same stack by default: the display
+    # role is told apart by weight and size, not by a second face (issue #213 —
+    # the UOS web corporate design permits no serif).
+    display: "'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif"
   # Any token from the docs/03 §2 table may be set in either map — the five
   # shown are just the ones most skins change. The rest (surface_2, border,
   # text_muted, info, warning, success, danger) fall back to the bundled

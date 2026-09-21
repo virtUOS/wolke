@@ -31,4 +31,5 @@ export const BRANDING: Branding = {
   assistant_widget_url: '',
   assistant_bot_id: '',
   theme: { light: {}, dark: {} },
+  fonts: {},
 }

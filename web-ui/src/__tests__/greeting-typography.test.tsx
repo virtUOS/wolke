@@ -71,12 +71,17 @@ describe('the font tokens', () => {
   const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8')
 
   it('define the display role as the body family', () => {
-    const body = css.match(/--font-body:\s*([^;]+);/)
-    const display = css.match(/--font-display:\s*([^;]+);/)
+    // Scoped to the :root block on purpose: since issue #214 both names also
+    // appear in the @theme inline bridge, where their value is var(--font-…)
+    // rather than a stack, and an unscoped match reads that one first.
+    const root = css.match(/^:root \{([\s\S]*?)^\}/m)?.[1] ?? ''
+    const body = root.match(/--font-body:\s*([^;]+);/)
+    const display = root.match(/--font-display:\s*([^;]+);/)
     expect(body?.[1]).toBeDefined()
     expect(display?.[1]).toBeDefined()
     // Option (a): same stack. The token stays a separate name so a deployer can
-    // still override one role without the other (issue #214).
+    // still override one role without the other (issue #214) — these are only
+    // the first-paint fallbacks now; the served defaults are pinned in Go.
     expect(display![1].trim()).toBe(body![1].trim())
   })
 
