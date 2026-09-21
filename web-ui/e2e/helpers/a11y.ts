@@ -66,19 +66,50 @@ export async function announcedText(page: Page): Promise<string[]> {
  * state, a deliberately transparent hit target), not the responsive layout
  * dropping content, so it is exempt from the orphan check rather than a
  * false positive on every such element.
+ *
+ * `visible` records two readings of each element: its own text nodes, and the
+ * *line* they are part of — that text plus the text of its visible inline
+ * children. A reader announces a node's whole line as one string, so an element
+ * that styles one word (or, as in issue #220, one full stop) in a nested
+ * <span> would otherwise have its own name reported as announced-but-invisible:
+ * the corpus would hold "Guten Tag, Test" and "." separately while the tree
+ * announces "Guten Tag, Test.". Only *visible* inline children are folded in,
+ * so text hidden inside a visible parent is still caught — which is the check.
  */
 async function textCorpora(page: Page): Promise<{ visible: string; opacityZero: Set<string> }> {
   const result = await page.evaluate(() => {
     const dom = window.__e2eDomWalk!
     const visible: string[] = []
     const opacityZero: string[] = []
+
+    /** The element's text nodes plus its visible inline children's text: what
+     *  the eye reads as one run. */
+    const inlineRun = (el: Element): string => {
+      let out = ''
+      for (const node of el.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          out += node.nodeValue ?? ''
+          continue
+        }
+        if (!(node instanceof Element) || !dom.isVisible(node)) continue
+        if (node.classList.contains('sr-only')) continue
+        if (!getComputedStyle(node).display.startsWith('inline')) continue
+        out += node.textContent ?? ''
+      }
+      return out.trim()
+    }
+
     for (const el of Array.from(document.querySelectorAll('*'))) {
       if (el.classList.contains('sr-only')) continue
       const direct = dom.directText(el)
       if (!direct) continue
       if (dom.isVisible(el)) {
         const rect = el.getBoundingClientRect()
-        if (rect.width > 0 && rect.height > 0) visible.push(direct)
+        if (rect.width > 0 && rect.height > 0) {
+          visible.push(direct)
+          const run = inlineRun(el)
+          if (run !== direct) visible.push(run)
+        }
         continue
       }
       const laidOut = el.checkVisibility({ contentVisibilityAuto: true, visibilityProperty: true })

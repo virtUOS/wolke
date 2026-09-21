@@ -9,6 +9,10 @@ interface GreetingProps {
   locale: string
   isMobile: boolean
   maintenanceCount: number
+  /** Whether the greeting's trailing full stop is set in the brand primary
+   *  (branding.greeting_accent, issue #220). False keeps the punctuation and
+   *  drops the colour. */
+  accent: boolean
   onShowMaintenance: () => void
 }
 
@@ -18,7 +22,7 @@ interface GreetingProps {
 // The favorites count used to sit here too; the tab row above the list carries
 // it now (issue #170), so repeating it in the meta line was the same number
 // twice, 24px apart.
-export function Greeting({ firstName, locale, isMobile, maintenanceCount, onShowMaintenance }: GreetingProps) {
+export function Greeting({ firstName, locale, isMobile, maintenanceCount, accent, onShowMaintenance }: GreetingProps) {
   const s = t(locale)
   // The launcher watermark's vertical anchor (issue #195): the mark's top
   // aligns with this block's, and follows it when the announcement banner —
@@ -39,17 +43,27 @@ export function Greeting({ firstName, locale, isMobile, maintenanceCount, onShow
           // weight and size, not by a second face, so the distinction holds
           // whatever family a deployer substitutes (issue #214).
           fontFamily: 'var(--font-display)',
-          // Light, not medium: at 36px the body grotesque carries the line on
-          // size alone, and 300 is a real instance of the variable font
-          // (wght 100–900), never a synthesised one.
-          fontWeight: 300,
+          // Medium, not light (issue #220): #213 left the weight open and
+          // device testing on the running app answered it — 300 read flimsy on
+          // a real screen. 500 is a real instance of the variable font
+          // (wght 100–900), never a synthesised one. The tracking below comes
+          // with it: weight and tracking are one treatment (design's board
+          // option 10d), so neither number moves without the other.
+          fontWeight: 500,
           fontSize: isMobile ? 27 : 36,
-          letterSpacing: '-0.01em',
+          letterSpacing: '-0.015em',
           color: 'var(--text)',
           lineHeight: 1.05,
         }}
       >
-        {s.greeting.salutation()}, {firstName}.
+        {/* The accent wraps the punctuation only — never the salutation, never
+            the name. It is the literal stop in this JSX that gets wrapped, not
+            a match against the rendered line: both the salutation (which
+            changes with the hour) and the name are variable, and a locale
+            could legitimately end the greeting differently. Opting out drops
+            the colour and keeps the stop. */}
+        {s.greeting.salutation()}, {firstName}
+        {accent ? <span style={{ color: 'var(--primary)' }}>.</span> : '.'}
       </h1>
       {/* Meta row (date + the maintenance shortcut) is desktop-only; the
           mobile layout is kept minimal — just the salutation. */}

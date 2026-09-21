@@ -403,6 +403,7 @@ export function Dashboard({ branding, me }: { branding: Branding; me: Me }) {
         locale={locale}
         isMobile={isMobile}
         maintenanceCount={maintenanceCount}
+        accent={branding.greeting_accent}
         onShowMaintenance={showMaintenance}
       />
 

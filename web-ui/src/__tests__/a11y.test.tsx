@@ -140,7 +140,7 @@ describe('a11y (axe) — UI primitives', () => {
 describe('a11y (axe) — prop-driven views', () => {
   it('Greeting renders the salutation as the page h1', async () => {
     const { baseElement } = render(
-      <Greeting firstName="Tim" locale="de" isMobile={false} maintenanceCount={2} onShowMaintenance={() => {}} />,
+      <Greeting firstName="Tim" locale="de" isMobile={false} maintenanceCount={2} accent={false} onShowMaintenance={() => {}} />,
     )
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Tim')
     await a11y(baseElement)

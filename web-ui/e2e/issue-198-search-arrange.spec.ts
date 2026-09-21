@@ -26,6 +26,24 @@ import { expect, test } from './fixtures'
 const DESKTOP_STOP = { width: 1280, height: 720 }
 const PHONE_STOP = { width: 390, height: 844 }
 
+/**
+ * Resizes, and waits for the engine to have *laid the page out* at the new
+ * width — not just accepted the new viewport.
+ *
+ * `setViewportSize` resolves on the metrics override; the style recalc that
+ * re-evaluates the `md:` media queries the control sizes hang off happens on
+ * the next layout. Reading `clientWidth` forces that layout and is polled until
+ * it agrees, which is the cheapest honest barrier. Without it the assertions
+ * that follow — and the auto viewport guard, which measures whatever state the
+ * test ends in — can read the *previous* layout: the guard has caught the app
+ * bar still wearing its desktop 26px avatar at 390px and failed it against the
+ * phone's 44px touch floor.
+ */
+async function resizeTo(page: Page, size: { width: number; height: number }): Promise<void> {
+  await page.setViewportSize(size)
+  await page.waitForFunction((w) => document.documentElement.clientWidth === w, size.width)
+}
+
 const tabRow = (page: Page) => page.getByRole('navigation', { name: /Hauptnavigation|Main navigation/i })
 const resultsHeading = (page: Page) =>
   page.getByRole('main').getByRole('heading', { level: 2, name: /Suchergebnisse|Search results/ })
@@ -131,7 +149,7 @@ test('a query survives a crossing of the breakpoint, in a field the destination 
   await search.fill('Netzspeicher')
   await expect(resultsHeading(page)).toBeVisible()
 
-  await page.setViewportSize(other)
+  await resizeTo(page, other)
 
   // The typed text crosses — losing it on a rotate is the worse failure — and
   // it lands somewhere the reader can see it and clear it. On a phone that
@@ -149,7 +167,7 @@ test('a query survives a crossing of the breakpoint, in a field the destination 
   })
 
   // …and back, where it is still the same query in this layout's own field.
-  await page.setViewportSize(start)
+  await resizeTo(page, start)
   await expect(page.getByRole('searchbox')).toHaveValue('Netzspeicher')
   await expect(resultsHeading(page)).toBeVisible()
 })
@@ -164,7 +182,7 @@ test('the phone overlay never arrives from a layout that has no overlay', async 
     // must not find it still standing: nothing about it outlives the crossing.
     await openSearch(page)
     await expect(searchPill(page)).toHaveAttribute('aria-expanded', 'true')
-    await page.setViewportSize(DESKTOP_STOP)
+    await resizeTo(page, DESKTOP_STOP)
     await expect(page.getByRole('banner').getByRole('searchbox')).toBeVisible()
     await expect(page.getByRole('button', { name: /Suche schließen|Close search/ })).toHaveCount(0)
     await expectViewportHealthy(page, { isMobile: false, label: 'desktop bar after the overlay was up' })
@@ -178,11 +196,11 @@ test('the phone overlay never arrives from a layout that has no overlay', async 
 
   // Whichever direction it came from, the phone bar shows its collapsed pill
   // and no field, because no query is standing behind it.
-  await page.setViewportSize(PHONE_STOP)
+  await resizeTo(page, PHONE_STOP)
   await expect(page.getByRole('searchbox')).toHaveCount(0)
   await expect(searchPill(page)).toHaveAttribute('aria-expanded', 'false')
   await expectViewportHealthy(page, { isMobile: true, label: 'collapsed phone pill after a crossing' })
 
-  await page.setViewportSize(start)
+  await resizeTo(page, start)
   await expect(tabRow(page)).toBeVisible()
 })

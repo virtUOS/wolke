@@ -594,6 +594,13 @@ branding:
   # The dashboard's own origin must be in the bot's embedding allowed_origins (CORS).
   assistant_widget_url: ""  # env ASSISTANT_WIDGET_URL; absolute http(s) URL of the bundle
   assistant_bot_id: ""      # env ASSISTANT_BOT_ID
+  greeting_accent: true   # the launcher greeting's trailing full stop, set in `primary` (issue #220).
+                          # The one setting here that is ON by default: the accent is drawn in the
+                          # deployment's OWN primary token, so a fork gets its own brand colour and
+                          # there is nothing to opt into — only out of. false keeps the punctuation
+                          # and drops the colour. Punctuation only, never a word: in dark the pairing
+                          # measures 3.4:1, which clears the 3:1 minimum for text at 27/36px but not
+                          # 4.5:1 (doc 03 §2).
   fonts:            # typography roles -> --font-body / --font-display (doc 03 §3).
     body:    "'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif"
     display: "'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif"

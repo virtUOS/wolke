@@ -56,6 +56,11 @@ deployer changes in `branding.yaml`. Key names use `_` in the payload (`primary_
 Announcement severities map onto these: `info`→`--info`, `warning`→`--warning`, `critical`→`--danger`.
 Brand red (`--primary`) is for **brand + interaction only** — never large fills, or it stops meaning
 "actionable"; `--danger` is the distinct true-red for destructive/critical, so the two don't blur.
+The one non-interactive use is the **accented full stop** closing the launcher greeting (issue #220):
+a single glyph, brand rather than affordance, and switchable off per deployment with
+`branding.greeting_accent: false`. In dark it measures 3.4:1 against the canvas — above the 3:1 WCAG
+minimum for text at this size (27/36px), below 4.5:1 — which is why it stays punctuation and never
+carries a word.
 
 `--accent` is **the warm wash and nothing else**: the active pill of a segmented control, the tile
 hover border and background tint, and the light-mode canvas tint. It had accumulated unrelated jobs
@@ -100,8 +105,13 @@ that once set the greeting (Newsreader) is gone, along with the second webfont o
 | `--font-display` | the same stack | the launcher greeting and the admin page title |
 
 Same stack by default, so the split is a visual no-op: the display role is told apart by **weight and
-size**, not by a second face (300 at 36px/27px, tracking −0.01em). That is what makes it survive a
-deployer changing either family — the launcher still reads as a launcher whatever face it is given.
+size**, not by a second face (**500** at 36px/27px, tracking **−0.015em**; the admin title takes the
+same treatment at 32px). That is what makes it survive a deployer changing either family — the
+launcher still reads as a launcher whatever face it is given. The weight was 300 until device testing
+on the running app found it flimsy at both sizes (issue #220); 500 and the tighter tracking are one
+treatment and move together. Both are real instances of the variable face (wght 100–900), so nothing
+is synthesised. The two sizes are the shell's single 768px switch — 27px is the *phone* size and a
+tablet takes 36px; a third tier would need a breakpoint the launcher does not have.
 
 Unlike the colour tokens the font tokens are **not per-theme**: they live in `branding.fonts`, not in
 `theme.light` / `theme.dark`. A skin re-colours across the two themes; it does not re-face. A `--font-mono`

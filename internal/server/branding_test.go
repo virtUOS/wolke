@@ -400,3 +400,38 @@ func TestBrandingWatermarkAssetServed(t *testing.T) {
 		}
 	}
 }
+
+// greeting_accent (issue #220) reaches the SPA through /api/branding like every
+// other skin setting — and unlike the rest of them it is ON by default, so the
+// payload is where a deployment's opt-out has to be visible.
+func TestBrandingServesGreetingAccent(t *testing.T) {
+	cfg := config.Defaults()
+	h := newTestRouter(t, &cfg, Deps{})
+	req := httptest.NewRequest(http.MethodGet, "/api/branding", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	var b config.Branding
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !b.GreetingAccent {
+		t.Error("greeting_accent = false by default, want true")
+	}
+	// The key itself, not just the decoded field: the SPA reads it by name, and
+	// every key in this payload is snake_case.
+	if !strings.Contains(rec.Body.String(), `"greeting_accent":true`) {
+		t.Errorf("payload = %s, want a snake_case greeting_accent key", rec.Body.String())
+	}
+
+	cfg.Branding.GreetingAccent = false
+	h = newTestRouter(t, &cfg, Deps{})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/branding", nil))
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if b.GreetingAccent {
+		t.Error("greeting_accent = true after the deployment turned it off")
+	}
+}
