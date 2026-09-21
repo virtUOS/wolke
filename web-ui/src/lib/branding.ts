@@ -38,6 +38,11 @@ export interface Branding {
   // it cannot ship a font file, which is the one branding setting that needs a
   // rebuild (docs/02 §11).
   fonts: ThemeTokens
+  // Whether the launcher greeting's trailing full stop is set in `primary`
+  // (issue #220). Unlike the other recent settings this one is ON by default:
+  // the accent uses the deployment's own brand colour, so there is nothing to
+  // opt into — only out of.
+  greeting_accent: boolean
 }
 
 export async function fetchBranding(signal?: AbortSignal): Promise<Branding> {

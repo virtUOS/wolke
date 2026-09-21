@@ -3,7 +3,8 @@ import { resolve } from 'node:path'
 import { render, screen } from '@testing-library/react'
 import { Greeting } from '@/components/Greeting'
 
-// Issue #213: the launcher's display voice drops the serif.
+// Issue #213: the launcher's display voice drops the serif — and issue #220
+// settles the weight device testing left open.
 //
 // The UOS corporate design permits no serif face on the web, and the decision
 // on that issue is option (a): the display role uses the *body* family rather
@@ -24,6 +25,7 @@ function greeting(isMobile = false) {
       locale="de"
       isMobile={isMobile}
       maintenanceCount={0}
+      accent={false}
       onShowMaintenance={() => {}}
     />,
   )
@@ -40,8 +42,12 @@ describe('the greeting is set in the display token, not a serif', () => {
 
   it('carries the decided weight, tracking and leading', () => {
     const { h1 } = greeting()
-    expect(h1.style.fontWeight).toBe('300')
-    expect(h1.style.letterSpacing).toBe('-0.01em')
+    // 500, not the 300 #213 left open: on a real device 300 read flimsy, and
+    // the replacement treatment (issue #220, board option 10d) pairs the
+    // heavier weight with tighter tracking. Both are real instances of the
+    // variable face (wght 100-900) — nothing is synthesised.
+    expect(h1.style.fontWeight).toBe('500')
+    expect(h1.style.letterSpacing).toBe('-0.015em')
     expect(h1.style.lineHeight).toBe('1.05')
     expect(h1.style.color).toBe('var(--text)')
   })
@@ -60,7 +66,10 @@ describe('the greeting is set in the display token, not a serif', () => {
   it('sets the name in the same run as the salutation', () => {
     const { h1 } = greeting()
     // One text run, no nested element re-styling the name: the decision is
-    // explicit that the name carries no separate colour or weight.
+    // explicit that the name carries no separate colour or weight. With the
+    // accent off (this suite's default) that leaves the heading with no child
+    // elements at all — the accented stop is the only one there ever is, and
+    // greeting-accent.test.tsx owns it.
     expect(h1.textContent).toContain('Alex')
     expect(h1.querySelectorAll('*')).toHaveLength(0)
   })

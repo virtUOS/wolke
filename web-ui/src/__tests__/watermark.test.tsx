@@ -316,13 +316,13 @@ describe('Greeting publishes its top as the watermark anchor', () => {
   })
 
   it('sets the anchor custom property on mount', () => {
-    render(<Greeting firstName="Tim" locale="de" isMobile={false} maintenanceCount={0} onShowMaintenance={() => {}} />)
+    render(<Greeting firstName="Tim" locale="de" isMobile={false} maintenanceCount={0} accent={false} onShowMaintenance={() => {}} />)
     expect(document.documentElement.style.getPropertyValue(WATERMARK_ANCHOR_VAR)).toMatch(/^-?\d+px$/)
   })
 
   it('removes it again when the greeting goes away, so no stale anchor survives a view change', () => {
     const { unmount } = render(
-      <Greeting firstName="Tim" locale="de" isMobile={false} maintenanceCount={0} onShowMaintenance={() => {}} />,
+      <Greeting firstName="Tim" locale="de" isMobile={false} maintenanceCount={0} accent={false} onShowMaintenance={() => {}} />,
     )
     unmount()
     expect(document.documentElement.style.getPropertyValue(WATERMARK_ANCHOR_VAR)).toBe('')

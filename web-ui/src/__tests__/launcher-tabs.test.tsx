@@ -328,6 +328,7 @@ describe('Greeting after the tab row took over the favorites count', () => {
         locale="de"
         isMobile={false}
         maintenanceCount={2}
+        accent={false}
         onShowMaintenance={onShowMaintenance}
       />,
     )

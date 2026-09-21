@@ -129,6 +129,17 @@ branding:
   # (env: ASSISTANT_WIDGET_URL / ASSISTANT_BOT_ID)
   assistant_widget_url: ""  # e.g. "https://assistant.example.edu/widget.js"
   assistant_bot_id: ""      # e.g. "echo"
+  # The launcher greeting closes with a full stop set in the `primary` token
+  # (issue #220) — punctuation only, never the salutation or the name. Set this
+  # to false to keep the stop and drop the colour.
+  #
+  # Unlike everything else added around it, this defaults to TRUE: the accent
+  # uses YOUR primary, so a re-skinned deployment gets its own brand colour
+  # rather than ours, and there would be nothing to opt into. Note that in dark
+  # the default pairing (#C2355C on #161618) measures 3.4:1 — enough for text at
+  # the greeting's size (27/36px), not enough for body copy, which is why the
+  # accent is a single glyph.
+  greeting_accent: true
   # Typography (issue #214). Two roles, each a complete CSS font stack; they
   # become the --font-body / --font-display variables. NOT per-theme: a skin
   # re-colours across light and dark, it does not re-face, so there is one value

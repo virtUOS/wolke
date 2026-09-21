@@ -135,6 +135,13 @@ type Branding struct {
 	// do not ship adds the package and rebuilds — the one branding setting that
 	// is not purely runtime (docs/02 §11, config.example.yaml).
 	Fonts map[string]string `yaml:"fonts" json:"fonts"`
+	// GreetingAccent sets the launcher greeting's trailing full stop in the
+	// brand primary (issue #220). Unlike every other setting added recently it
+	// defaults to ON: the accent is drawn in the deployment's own `primary`
+	// token, so a fork gets its own brand colour rather than ours and there is
+	// nothing to opt into. A deployment that wants the greeting in one colour
+	// sets this to false; the punctuation stays either way.
+	GreetingAccent bool `yaml:"greeting_accent" json:"greeting_accent"`
 }
 
 // Theme carries the light/dark token sets. Tokens are a map so the variable
@@ -186,6 +193,10 @@ func Defaults() Config {
 				"body":    bundledSans,
 				"display": bundledSans,
 			},
+			// On by default — see the field comment. A file that never mentions
+			// the key keeps this, because the file is unmarshalled *onto* these
+			// defaults rather than replacing them.
+			GreetingAccent: true,
 			Theme: Theme{
 				// TBD: lock against the UOS Corporate Design manual (concept §8.1).
 				// The full brand-overridable palette (docs/03 §2). Names are
