@@ -71,6 +71,19 @@ describe('overflowKind', () => {
     expect(overflowKind(probe({ scrollWidth: 149, clientWidth: 134 }), 324)).toBe('clipped-content')
   })
 
+  it('ignores an element with no layout box at all', () => {
+    // #209: a probe caught mid-relayout reports clientWidth 0 with a leftover
+    // scrollWidth. An element with no box cannot clip anything, and nothing
+    // useful can be said about its content width.
+    expect(overflowKind(probe({ rect: rect(0, 0, 0), scrollWidth: 13, clientWidth: 0 }), 390)).toBeNull()
+  })
+
+  it('ignores a zero content width even when the rect has been laid out', () => {
+    // The two measurements come from different sources; a stale rect with a
+    // fresh clientWidth of 0 is still not an overflow.
+    expect(overflowKind(probe({ scrollWidth: 13, clientWidth: 0 }), 390)).toBeNull()
+  })
+
   it('exempts a sanctioned scroll container from its own inner overflow', () => {
     expect(overflowKind(probe({ scrollWidth: 900, clientWidth: 324, overflowX: 'auto' }), 324)).toBeNull()
     expect(overflowKind(probe({ scrollWidth: 900, clientWidth: 324, overflowX: 'scroll' }), 324)).toBeNull()
