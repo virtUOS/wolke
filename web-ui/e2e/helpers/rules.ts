@@ -70,11 +70,15 @@ export type OverflowKind =
  * fit the viewport.
  */
 export function overflowKind(p: ElementProbe, viewportWidth: number, tolerance = TOLERANCE): OverflowKind | null {
+  // An element with no layout box — a collapsed wrapper, or any element caught
+  // mid-relayout after a viewport resize — cannot overflow anything, and nothing
+  // useful can be said about its content width either (#209).
   const hasArea = p.rect.width > 0 && p.rect.height > 0
-  if (hasArea && (p.rect.right > viewportWidth + tolerance || p.rect.left < -tolerance)) {
+  if (!hasArea) return null
+  if (p.rect.right > viewportWidth + tolerance || p.rect.left < -tolerance) {
     return 'outside-viewport'
   }
-  const contentWider = p.scrollWidth > p.clientWidth + tolerance
+  const contentWider = p.clientWidth > 0 && p.scrollWidth > p.clientWidth + tolerance
   if (contentWider && !isScrollContainer(p.overflowX) && p.textOverflow !== 'ellipsis') {
     return 'clipped-content'
   }
