@@ -14,6 +14,27 @@
         "query": "prometheus",
         "current": {},
         "hide": 0
+      },
+      {
+        "name": "instance",
+        "label": "Instance",
+        "description": "Scrape targets to include. Counters sum across the selection; the shared-state gauges (read from the one Postgres, so every instance reports the same value) take the max instead.",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(wolke_active_sessions, instance)",
+        "query": {
+          "qryType": 1,
+          "query": "label_values(wolke_active_sessions, instance)",
+          "refId": "instance"
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "refresh": 1,
+        "sort": 1,
+        "current": {},
+        "options": [],
+        "hide": 0
       }
     ]
   },
@@ -23,6 +44,7 @@
     {
       "id": 1,
       "title": "Clicks per service (rate)",
+      "description": "Per-instance counter: each instance counts only the clicks it served, so summing across the selected instances is the fleet total.",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
@@ -31,7 +53,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (service) (rate(wolke_service_clicks_total[5m]))",
+          "expr": "sum by (service) (rate(wolke_service_clicks_total{instance=~\"$instance\"}[5m]))",
           "legendFormat": "{{service}}"
         }
       ]
@@ -39,6 +61,7 @@
     {
       "id": 2,
       "title": "Clicks per service and role (total)",
+      "description": "Per-instance counter: each instance counts only the clicks it served, so summing across the selected instances is the fleet total.",
       "type": "table",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
@@ -46,7 +69,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (service, role) (wolke_service_clicks_total)",
+          "expr": "sum by (service, role) (wolke_service_clicks_total{instance=~\"$instance\"})",
           "format": "table",
           "instant": true
         }
@@ -55,6 +78,7 @@
     {
       "id": 3,
       "title": "HTTP request latency p95 (by route)",
+      "description": "Per-instance histogram: each instance observes only its own requests, so the buckets sum across the selected instances before the quantile is taken.",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
@@ -63,7 +87,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(wolke_http_request_duration_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(wolke_http_request_duration_seconds_bucket{instance=~\"$instance\"}[5m])))",
           "legendFormat": "{{route}}"
         }
       ]
@@ -71,6 +95,7 @@
     {
       "id": 4,
       "title": "Active sessions",
+      "description": "Shared-state gauge: read from the one Postgres on every instance's refresh, so every instance reports the same value. Aggregated with max, not sum — summing would multiply the real number by the instance count.",
       "type": "stat",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 },
@@ -78,13 +103,14 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "wolke_active_sessions"
+          "expr": "max(wolke_active_sessions{instance=~\"$instance\"})"
         }
       ]
     },
     {
       "id": 5,
       "title": "Catalog services",
+      "description": "Shared-state gauge: read from the one Postgres on every instance's refresh, so every instance reports the same value. Aggregated with max, not sum — summing would multiply the real number by the instance count.",
       "type": "stat",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 },
@@ -92,7 +118,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "wolke_catalog_services",
+          "expr": "max by (state) (wolke_catalog_services{instance=~\"$instance\"})",
           "legendFormat": "{{state}}"
         }
       ]
@@ -100,6 +126,7 @@
     {
       "id": 6,
       "title": "Active announcements by severity",
+      "description": "Shared-state gauge: read from the one Postgres on every instance's refresh, so every instance reports the same value. Aggregated with max, not sum — summing would multiply the real number by the instance count.",
       "type": "stat",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 4, "w": 12, "x": 12, "y": 12 },
@@ -107,7 +134,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "wolke_announcements_active",
+          "expr": "max by (severity) (wolke_announcements_active{instance=~\"$instance\"})",
           "legendFormat": "{{severity}}"
         }
       ]
@@ -115,6 +142,7 @@
     {
       "id": 7,
       "title": "Favorites per service (top 10)",
+      "description": "Shared-state gauge: read from the one Postgres on every instance's refresh, so every instance reports the same value. Aggregated with max, not sum — summing would multiply the real number by the instance count. (The adjacent click panels do sum; they are per-instance counters.)",
       "type": "bargauge",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
@@ -124,7 +152,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "topk(10, sum by (service) (wolke_service_favorites))",
+          "expr": "topk(10, max by (service) (wolke_service_favorites{instance=~\"$instance\"}))",
           "legendFormat": "{{service}}",
           "instant": true
         }
@@ -133,6 +161,7 @@
     {
       "id": 8,
       "title": "Clicks per service and target (total)",
+      "description": "Per-instance counter: each instance counts only the clicks it served, so summing across the selected instances is the fleet total.",
       "type": "table",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
@@ -140,7 +169,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (service, target) (wolke_service_clicks_total)",
+          "expr": "sum by (service, target) (wolke_service_clicks_total{instance=~\"$instance\"})",
           "format": "table",
           "instant": true
         }
@@ -149,6 +178,7 @@
     {
       "id": 9,
       "title": "Favorites per service and role (current)",
+      "description": "Shared-state gauge: read from the one Postgres on every instance's refresh, so every instance reports the same value. Aggregated with max, not sum — summing would multiply the real number by the instance count. (The adjacent click panels do sum; they are per-instance counters.)",
       "type": "table",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
@@ -156,7 +186,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (service, role) (wolke_service_favorites)",
+          "expr": "max by (service, role) (wolke_service_favorites{instance=~\"$instance\"})",
           "format": "table",
           "instant": true
         }
@@ -165,6 +195,7 @@
     {
       "id": 10,
       "title": "Clicks per service, role and target (total)",
+      "description": "Per-instance counter: each instance counts only the clicks it served, so summing across the selected instances is the fleet total.",
       "type": "table",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
@@ -172,7 +203,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (service, role, target) (wolke_service_clicks_total)",
+          "expr": "sum by (service, role, target) (wolke_service_clicks_total{instance=~\"$instance\"})",
           "format": "table",
           "instant": true
         }
