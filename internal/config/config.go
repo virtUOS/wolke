@@ -106,6 +106,21 @@ type Branding struct {
 	// Right-aligned feedback link in the footer. An http(s) URL or an email /
 	// mailto: address. Empty hides it.
 	FeedbackURL string `yaml:"feedback_url" json:"feedback_url"`
+	// FeedbackLabel renames that link (issue #222) — for a deployment pointing
+	// it at a ticket system, a help desk or a contact form rather than at
+	// feedback. Localized, `{de: …, en: …}`, because it is a UI label and not a
+	// proper noun: the first localized field in *this* block, but the same shape
+	// the role labels and the visibility entries already use.
+	//
+	// Empty or absent is the default and a no-op: the SPA then renders its
+	// built-in localized label, exactly as it does today. A blank translation is
+	// dropped at load, so `en: ""` reads as "not translated" and the SPA's
+	// localized() serves the language that *is* filled — falling back between
+	// languages, which is not the same as falling back to the built-in label.
+	//
+	// Setting this without a feedback_url shows nothing: the URL is what gates
+	// the link, so a label alone has nothing to name.
+	FeedbackLabel map[string]string `yaml:"feedback_label" json:"feedback_label"`
 	// Top-bar quick actions, each shown only when set. BotURL opens a chatbot in
 	// a new tab. HelpURL opens a help/contact target: an http(s) URL (new tab) or
 	// a phone number / tel: link (the dialer on a smartphone).
@@ -124,6 +139,24 @@ type Branding struct {
 	AssistantWidgetURL string `yaml:"assistant_widget_url" json:"assistant_widget_url"`
 	AssistantBotID     string `yaml:"assistant_bot_id" json:"assistant_bot_id"`
 	Theme              Theme  `yaml:"theme" json:"theme"`
+	// Fonts carries the typography roles (issue #214) — `body` and `display`,
+	// each a complete CSS font stack. They sit beside Theme rather than inside
+	// it because a face is not per-theme: a skin re-colours across light and
+	// dark, it does not re-face, and two copies of one family could drift apart
+	// with neither name saying which wins.
+	//
+	// A deployment SELECTS a family here; it cannot supply a font FILE. The
+	// faces are npm dependencies bundled at build time, so a fork wanting one we
+	// do not ship adds the package and rebuilds — the one branding setting that
+	// is not purely runtime (docs/02 §11, config.example.yaml).
+	Fonts map[string]string `yaml:"fonts" json:"fonts"`
+	// GreetingAccent sets the launcher greeting's trailing full stop in the
+	// brand primary (issue #220). Unlike every other setting added recently it
+	// defaults to ON: the accent is drawn in the deployment's own `primary`
+	// token, so a fork gets its own brand colour rather than ours and there is
+	// nothing to opt into. A deployment that wants the greeting in one colour
+	// sets this to false; the punctuation stays either way.
+	GreetingAccent bool `yaml:"greeting_accent" json:"greeting_accent"`
 }
 
 // Theme carries the light/dark token sets. Tokens are a map so the variable
@@ -166,19 +199,42 @@ func Defaults() Config {
 			DefaultLocale: "de",
 			ImprintURL:    "https://www.uni-osnabrueck.de/impressum/",
 			PrivacyURL:    "https://www.uni-osnabrueck.de/datenschutz/",
+			// Empty, but a map rather than nil, so /api/branding serves `{}` and
+			// the SPA reads an object without a null check — the same reason
+			// Fonts and the theme maps are non-nil here. Empty means "use the
+			// built-in label" (issue #222).
+			FeedbackLabel: map[string]string{},
+			// One stack for both roles: issue #213 put the display role on the
+			// body family, so the greeting is told apart by weight and size.
+			// Keep these in step with the first-paint fallbacks in
+			// web-ui/src/index.css, which the SPA uses until /api/branding
+			// resolves.
+			Fonts: map[string]string{
+				"body":    bundledSans,
+				"display": bundledSans,
+			},
+			// On by default — see the field comment. A file that never mentions
+			// the key keeps this, because the file is unmarshalled *onto* these
+			// defaults rather than replacing them.
+			GreetingAccent: true,
 			Theme: Theme{
 				// TBD: lock against the UOS Corporate Design manual (concept §8.1).
 				// The full brand-overridable palette (docs/03 §2). Names are
 				// stable; a skin overrides values via branding.yaml.
 				Light: map[string]string{
 					"primary": "#A6093D", "primary_hover": "#8A0732", "accent": "#F2C879",
-					"surface": "#F4F4F5", "surface_2": "#ECECEE", "border": "#E2E2E5",
+					// The favourited-service state (issue #211). Its own name so a
+					// skin can retint the star alone; the default is the accent
+					// value, so the split is invisible until someone sets it.
+					"favorite": "#F2C879",
+					"surface":  "#F4F4F5", "surface_2": "#ECECEE", "border": "#E2E2E5",
 					"text": "#18181B", "text_muted": "#6B6B70",
 					"info": "#2563EB", "warning": "#B45309", "success": "#15803D", "danger": "#B91C1C",
 				},
 				Dark: map[string]string{
 					"primary": "#C2355C", "primary_hover": "#A6093D", "accent": "#F2C879",
-					"surface": "#1E1E21", "surface_2": "#27272B", "border": "#34343A",
+					"favorite": "#F2C879", // see Light
+					"surface":  "#1E1E21", "surface_2": "#27272B", "border": "#34343A",
 					"text": "#F4F4F5", "text_muted": "#9A9AA1",
 					"info": "#60A5FA", "warning": "#FBBF24", "success": "#4ADE80", "danger": "#F87171",
 				},
@@ -219,6 +275,7 @@ func load(path string, lookupEnv func(string) (string, bool)) (*Config, error) {
 	}
 
 	applyEnv(&cfg, lookupEnv)
+	cfg.Branding.normalize()
 
 	if err := cfg.validate(); err != nil {
 		return nil, err
@@ -293,6 +350,25 @@ func applyEnv(cfg *Config, lookupEnv func(string) (string, bool)) {
 // validate enforces invariants that must hold in every environment. Auth and DB
 // settings may be empty in Phase 0 local dev (no real login/DB wired yet), so
 // they are not required here; later phases tighten this.
+// normalize tidies the localized branding values a file can supply: it trims
+// every translation and drops the ones that are left blank.
+//
+// A label is a display string, so a leading space is a typo rather than intent.
+// Dropping a blank one matters more: `feedback_label: {de: Kontakt, en: ""}`
+// means "I have not translated this", and keeping the empty key would make the
+// SPA render the English reader the built-in "Feedback" while the German one
+// sees "Kontakt" — one link with two unrelated names. Absent instead, and
+// localized() falls back to the language that is filled (issue #222).
+func (b *Branding) normalize() {
+	for lang, v := range b.FeedbackLabel {
+		if trimmed := strings.TrimSpace(v); trimmed == "" {
+			delete(b.FeedbackLabel, lang)
+		} else {
+			b.FeedbackLabel[lang] = trimmed
+		}
+	}
+}
+
 func (c *Config) validate() error {
 	if c.PublicURL == "" {
 		return fmt.Errorf("config: public_url must not be empty")
@@ -332,6 +408,65 @@ func (c *Config) validate() error {
 	// nothing, and leave the operator looking at a launcher with no mark.
 	if err := checkURLSetting("watermark", c.Branding.Watermark, sameOriginPath); err != nil {
 		return err
+	}
+	if err := validateFonts(c.Branding.Fonts); err != nil {
+		return err
+	}
+	return nil
+}
+
+// bundledSans is the one face the build ships (@fontsource-variable/hanken-grotesk,
+// imported in web-ui/src/main.tsx), followed by the system fallbacks that carry
+// the text on a client that cannot load it.
+const bundledSans = "'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif"
+
+// fontRoles is the closed set of typography roles the SPA reads. Closed, so a
+// typo fails at startup: an unrecognised key would define a CSS variable nothing
+// consumes, and the deployer would see the bundled face with no explanation.
+// docs/03 §3 anticipates a `mono` role for admin IDs/metrics — add it here when
+// something actually renders in it, not before.
+var fontRoles = map[string]bool{"body": true, "display": true}
+
+// genericFamilies are the CSS generic font families (plus system-ui and the ui-*
+// set). A stack must end in one of them.
+var genericFamilies = map[string]bool{
+	"serif": true, "sans-serif": true, "monospace": true, "cursive": true,
+	"fantasy": true, "system-ui": true, "ui-serif": true, "ui-sans-serif": true,
+	"ui-monospace": true, "ui-rounded": true, "math": true, "emoji": true,
+	"fangsong": true,
+}
+
+// validateFonts checks the branding.fonts map: known roles, a value that cannot
+// break out of the declaration it is interpolated into, and a generic family at
+// the end of every stack.
+//
+// The last rule is the one worth having. The SPA writes the configured value
+// into `font-family` as-is; a stack naming only a licensed corporate face the
+// client cannot load would fall back to the browser default, which on a German
+// UI is a serif nobody chose. There is no runtime place to append a fallback
+// that would not also silently rewrite what the deployer asked for, so this is
+// a startup error instead.
+func validateFonts(fonts map[string]string) error {
+	for role, stack := range fonts {
+		if !fontRoles[role] {
+			return fmt.Errorf("config: branding.fonts has unknown role %q (known roles: body, display)", role)
+		}
+		if strings.TrimSpace(stack) == "" {
+			return fmt.Errorf("config: branding.fonts.%s must not be empty (omit the key to keep the bundled face)", role)
+		}
+		if strings.ContainsAny(stack, ";{}") {
+			return fmt.Errorf("config: branding.fonts.%s %q must not contain %q, %q or %q: "+
+				"the value is written into a CSS font-family declaration, which those characters would end",
+				role, stack, ";", "{", "}")
+		}
+		families := strings.Split(stack, ",")
+		last := strings.ToLower(strings.Trim(strings.TrimSpace(families[len(families)-1]), `"'`))
+		if !genericFamilies[last] {
+			return fmt.Errorf("config: branding.fonts.%s %q must end in a generic family such as %q "+
+				"(for example %q): a client that cannot load the named face would otherwise fall back to "+
+				"the browser default rather than a system face",
+				role, stack, "sans-serif", "'Corporate Sans', system-ui, sans-serif")
+		}
 	}
 	return nil
 }

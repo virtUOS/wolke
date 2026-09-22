@@ -41,11 +41,14 @@ export function AdminView({ locale, onExit }: { locale: string; onExit: () => vo
           <h1
             style={{
               margin: 0,
-              fontFamily: '"Newsreader Variable", Georgia, serif',
+              // The same display treatment as the launcher greeting (issues
+              // #213, #220); the size stays this view's own 32px. No accented
+              // stop here: this heading is a label, not a sentence.
+              fontFamily: 'var(--font-display)',
               fontWeight: 500,
               fontSize: 32,
               letterSpacing: '-0.015em',
-              lineHeight: 1.1,
+              lineHeight: 1.05,
               color: 'var(--text)',
             }}
           >

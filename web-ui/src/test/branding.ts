@@ -25,10 +25,17 @@ export const BRANDING: Branding = {
   imprint_url: '',
   privacy_url: '',
   feedback_url: '',
+  feedback_label: {},
   bot_url: '',
   help_url: '',
   news_url: '',
   assistant_widget_url: '',
   assistant_bot_id: '',
   theme: { light: {}, dark: {} },
+  fonts: {},
+  // Inert like the rest of this fixture, and deliberately NOT the served
+  // default (true): a test that cares about the accented stop opts in, and
+  // that override reads as the point of the test. The real default is pinned
+  // in Go (internal/config/greeting_accent_test.go) and on the payload.
+  greeting_accent: false,
 }

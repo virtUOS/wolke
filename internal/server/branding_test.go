@@ -53,7 +53,7 @@ func TestBrandingDefaultPaletteComplete(t *testing.T) {
 	// The full brand-overridable palette (docs/03 §2) must ship in both maps so a
 	// skin can recolour every semantic role without falling back to a CSS default.
 	want := []string{
-		"primary", "primary_hover", "accent",
+		"primary", "primary_hover", "accent", "favorite",
 		"surface", "surface_2", "border",
 		"text", "text_muted",
 		"info", "warning", "success", "danger",
@@ -64,6 +64,35 @@ func TestBrandingDefaultPaletteComplete(t *testing.T) {
 		}
 		if v, ok := b.Theme.Dark[key]; !ok || v == "" {
 			t.Errorf("theme.dark missing token %q", key)
+		}
+	}
+}
+
+// Issue #214: typography is branding too. The payload carries the font roles
+// so the SPA can set --font-body / --font-display from config; they sit beside
+// the theme rather than inside it, because a face is not per-theme.
+func TestBrandingShipsFontRoles(t *testing.T) {
+	cfg := config.Defaults()
+	h := newTestRouter(t, &cfg, Deps{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/branding", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	var b config.Branding
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, role := range []string{"body", "display"} {
+		v, ok := b.Fonts[role]
+		if !ok || v == "" {
+			t.Errorf("fonts missing the %q role", role)
+			continue
+		}
+		// Every served stack ends in a generic family, so a client that cannot
+		// load the named face still renders text (issue #214, rule 5).
+		if !strings.Contains(v, "sans-serif") && !strings.Contains(v, "serif") && !strings.Contains(v, "monospace") {
+			t.Errorf("fonts.%s = %q, want a generic family at the end of the stack", role, v)
 		}
 	}
 }
@@ -369,5 +398,71 @@ func TestBrandingWatermarkAssetServed(t *testing.T) {
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("%s: status = %d, want 404 (not allowlisted)", name, rec.Code)
 		}
+	}
+}
+
+// greeting_accent (issue #220) reaches the SPA through /api/branding like every
+// other skin setting — and unlike the rest of them it is ON by default, so the
+// payload is where a deployment's opt-out has to be visible.
+func TestBrandingServesGreetingAccent(t *testing.T) {
+	cfg := config.Defaults()
+	h := newTestRouter(t, &cfg, Deps{})
+	req := httptest.NewRequest(http.MethodGet, "/api/branding", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	var b config.Branding
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !b.GreetingAccent {
+		t.Error("greeting_accent = false by default, want true")
+	}
+	// The key itself, not just the decoded field: the SPA reads it by name, and
+	// every key in this payload is snake_case.
+	if !strings.Contains(rec.Body.String(), `"greeting_accent":true`) {
+		t.Errorf("payload = %s, want a snake_case greeting_accent key", rec.Body.String())
+	}
+
+	cfg.Branding.GreetingAccent = false
+	h = newTestRouter(t, &cfg, Deps{})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/branding", nil))
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if b.GreetingAccent {
+		t.Error("greeting_accent = true after the deployment turned it off")
+	}
+}
+
+// feedback_label (issue #222) rides along with feedback_url: the label of the
+// footer link, localized like every other user-facing string. It is the first
+// localized field in this payload, so assert the *shape* as well as the
+// round-trip — the SPA resolves it with the shared localized() helper, which
+// expects an object keyed by language.
+func TestBrandingServesFeedbackLabel(t *testing.T) {
+	cfg := config.Defaults()
+	h := newTestRouter(t, &cfg, Deps{})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/branding", nil))
+
+	// Present and empty: an unconfigured deployment keeps the built-in label,
+	// and the key is there so the SPA reads an object rather than null.
+	if !strings.Contains(rec.Body.String(), `"feedback_label":{}`) {
+		t.Errorf("payload = %s, want an empty feedback_label object by default", rec.Body.String())
+	}
+
+	cfg.Branding.FeedbackLabel = map[string]string{"de": "Kontakt", "en": "Contact"}
+	h = newTestRouter(t, &cfg, Deps{})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/branding", nil))
+
+	var b config.Branding
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if b.FeedbackLabel["de"] != "Kontakt" || b.FeedbackLabel["en"] != "Contact" {
+		t.Errorf("feedback_label = %v, want the configured pair", b.FeedbackLabel)
 	}
 }

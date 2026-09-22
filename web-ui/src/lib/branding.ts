@@ -2,7 +2,7 @@
 // applies its token sets as CSS variables, so a fork re-skins by editing
 // branding.yaml — no rebuild (docs/02 §11; docs/03 §2).
 
-import { getJSON } from './api'
+import { getJSON, type Localized } from './api'
 
 export type ThemeTokens = Record<string, string>
 
@@ -19,6 +19,15 @@ export interface Branding {
   imprint_url: string
   privacy_url: string
   feedback_url: string
+  // Renames the footer feedback link (issue #222). Localized, because it is a
+  // UI label rather than a proper noun; empty or absent is a no-op, i.e. the
+  // built-in localized string. Resolved with the shared localized() helper,
+  // which falls back between LANGUAGES — a value with only `de` set renders
+  // German to an English reader, which is what a deployment that translated
+  // one language wants, and is not the same as falling back to the built-in
+  // label. The link itself is gated by feedback_url, so a label without one
+  // shows nothing.
+  feedback_label: Localized
   bot_url: string
   help_url: string
   // The institution's news site, linked at the foot of the notification panel.
@@ -32,6 +41,17 @@ export interface Branding {
     light: ThemeTokens
     dark: ThemeTokens
   }
+  // Typography roles (issue #214), keyed `body` / `display` — each a complete
+  // CSS font stack, applied to :root. Deliberately outside `theme`: a face is
+  // not per-theme. A skin SELECTS one of the bundled faces or a system stack;
+  // it cannot ship a font file, which is the one branding setting that needs a
+  // rebuild (docs/02 §11).
+  fonts: ThemeTokens
+  // Whether the launcher greeting's trailing full stop is set in `primary`
+  // (issue #220). Unlike the other recent settings this one is ON by default:
+  // the accent uses the deployment's own brand colour, so there is nothing to
+  // opt into — only out of.
+  greeting_accent: boolean
 }
 
 export async function fetchBranding(signal?: AbortSignal): Promise<Branding> {
@@ -70,9 +90,11 @@ export function feedbackHref(value: string): { href: string; external: boolean }
 
 // tokensToCSS turns {primary_hover: "#8A0732"} into "--primary-hover: #8A0732;",
 // keeping the underscore→hyphen mapping that Tailwind's var() names expect.
-function tokensToCSS(tokens: ThemeTokens): string {
-  return Object.entries(tokens)
-    .map(([name, value]) => `--${name.replace(/_/g, '-')}: ${value};`)
+// `prefix` names the variable family: the font roles arrive keyed `body` and
+// `display` and become --font-body / --font-display.
+function tokensToCSS(tokens: ThemeTokens | undefined, prefix = ''): string {
+  return Object.entries(tokens ?? {})
+    .map(([name, value]) => `--${prefix}${name.replace(/_/g, '-')}: ${value};`)
     .join(' ')
 }
 
@@ -80,7 +102,10 @@ function tokensToCSS(tokens: ThemeTokens): string {
 // tokens on :root and the dark tokens on .dark, then sets the document title and
 // the PWA theme-color to the active brand primary.
 export function applyBrandingTokens(b: Branding): void {
-  const css = `:root { ${tokensToCSS(b.theme.light)} } .dark { ${tokensToCSS(b.theme.dark)} }`
+  // The font roles join the :root half and have no .dark counterpart: a skin
+  // re-colours across the two themes, it does not re-face (issue #214).
+  const root = `${tokensToCSS(b.theme.light)} ${tokensToCSS(b.fonts, 'font-')}`.trim()
+  const css = `:root { ${root} } .dark { ${tokensToCSS(b.theme.dark)} }`
   let el = document.getElementById('branding-tokens')
   if (!el) {
     el = document.createElement('style')

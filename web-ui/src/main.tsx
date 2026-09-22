@@ -3,11 +3,12 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { ApiError } from './lib/api'
-// Self-hosted fonts (bundled by Vite) — no external requests to Google, so the
-// strict CSP holds and there's no GDPR/privacy concern. Variable-weight files;
-// Newsreader's optical-size axis backs `font-optical-sizing: auto`.
+// Self-hosted font (bundled by Vite) — no external requests to Google, so the
+// strict CSP holds and there's no GDPR/privacy concern. One variable-weight
+// file covering wght 100–900, which is the whole type system since issue #213
+// put the display role on the body family: the serif that used to set the
+// greeting is gone, and with it the second webfont on first paint.
 import '@fontsource-variable/hanken-grotesk/wght.css'
-import '@fontsource-variable/newsreader/opsz.css'
 import './index.css'
 import { initInstallCapture } from './lib/pwa-install'
 import { startStaleShellRecovery } from './lib/pwa-update'

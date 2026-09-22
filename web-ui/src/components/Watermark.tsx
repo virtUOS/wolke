@@ -20,34 +20,50 @@ import type { CSSProperties } from 'react'
 //
 // Rendered as a CSS-masked, token-filled box rather than an <img>: an external
 // SVG in an <img> cannot take the CSS color, so the tint would not re-skin with
-// the theme. The mask URL is *configuration* (branding.watermark) — no
-// institution mark is shipped in this repo (CLAUDE.md golden rule 8), and no
+// the theme — which matters more since #212, where the fill became --text and
+// therefore flips between the themes rather than being one colour in both.
+//
+// The mask URL is *configuration* (branding.watermark) — no institution
+// mark is shipped in this repo (CLAUDE.md golden rule 8), and no
 // value means no element at all, which is also what keeps a failed mask from
 // ever painting an unmasked rectangle (see the offline note below).
 
 /**
  * What we ship, per theme.
  *
- * The board specifies 0.07 flat, under a 0.08 ceiling (issue #187, frame 7e).
- * That value was judged on dark renders, and it does not transfer: the accent
- * (#f2c879) sits far from the dark canvas and close to the light one, so the
- * *same* opacity draws half the contrast in light. Measured against the shipped tokens, as the largest per-channel delta
- * of the accent composited over the canvas each theme actually paints:
+ * Both values are **luminance parity** with what #195 shipped: issue #212 moved
+ * the fill from --accent to --text (a neutral mark that does not follow the
+ * highlight colour when a deployer re-skins it), and the opacities were re-set
+ * so that the swap changed the mark's hue and nothing about its weight.
  *
- *   dark  (22,22,24)    at 0.07 → Δ15/255   — the ceiling's own reference point
- *   light (254,252,248) at 0.07 → Δ9/255    — "barely visible on most screens"
- *   light               at 0.15 → Δ19/255   — shipped (issue #195, C1)
+ * Measured on the canvas each theme actually paints — light is --bg warmed with
+ * 5% of the accent (DashboardShell), not #FFFFFF:
  *
- * Light lands at 0.15 rather than the 0.18 the issue started from: #195's
- * gutter fade concentrates the mark over the content column instead of letting
- * it bleed across the whole canvas, so it carries at a lower value — judged on
- * the new geometry at 1280/1920/2560, which is what the issue asked for.
+ *   light  canvas (254.35,252.25,248.30)  accent @0.15 → lum 0.91407  (#195)
+ *                                         text   @0.032 → lum 0.91407  (shipped)
+ *   dark   canvas (22,22,24)              accent @0.07 → lum 0.01669  (#195)
+ *                                         text   @0.057 → lum 0.01669  (shipped)
  *
- * This is a deliberate departure from the handoff, not a drift; the per-theme
- * split is a different thing from the *width*-based opacity fade the board
- * rejected.
+ * Parity is on **luminance**, not on the largest per-channel delta that #187
+ * and #195 reasoned with. That metric was sound while every candidate fill was
+ * the same pale yellow, and stops being sound the moment the fill's own
+ * luminance moves: --accent (#f2c879) is pale and sits close to the light
+ * canvas in luminance while moving the blue channel a lot, whereas --text is
+ * near-black there and moves luminance hard. Matching channels instead would
+ * have put light at 0.087 — about 2.7x today's weight, and below AA where the
+ * phone's transparent list rows let the mark show under their muted subtitle.
+ *
+ * Note the split **inverted** in #212: light is now the lower value. With the
+ * pale accent, light needed more than dark (0.15 vs 0.07) because the fill sat
+ * close to the near-white canvas; --text is the largest luminance excursion the
+ * palette allows there, so it needs less, while dark's very low canvas
+ * luminance compresses what the same opacity buys. Light is separately capped
+ * near 0.0705 by that AA check.
+ *
+ * Keeping the split is the point — a single flat value is what #195 disproved.
+ * See docs/specs/watermark-column-fade.md §3 and §6.
  */
-export const WATERMARK_OPACITY = { light: 0.15, dark: 0.07 } as const
+export const WATERMARK_OPACITY = { light: 0.032, dark: 0.057 } as const
 
 /**
  * The column width, published once by this component and read by everything
@@ -228,7 +244,7 @@ export function Watermark({ src = '', isDark = false, isMobile = false, columnWi
     aspectRatio: '35 / 47',
     pointerEvents: 'none',
     opacity: isDark ? WATERMARK_OPACITY.dark : WATERMARK_OPACITY.light,
-    backgroundColor: 'var(--accent)',
+    backgroundColor: 'var(--text)',
     WebkitMaskImage: mask,
     maskImage: mask,
     WebkitMaskRepeat: 'no-repeat',

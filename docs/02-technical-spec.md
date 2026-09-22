@@ -584,6 +584,11 @@ branding:
   imprint_url: "https://www.uni-osnabrueck.de/impressum/"   # legal footer links
   privacy_url: "https://www.uni-osnabrueck.de/datenschutz/" # (empty hides the link)
   feedback_url: ""  # right-aligned footer feedback link (env FEEDBACK_URL): URL or email/mailto:
+  feedback_label: {}   # renames that link (issue #222) — localized {de, en}, file-only (it is a
+                       # map, so no env override). Empty keeps the built-in "Feedback". One
+                       # language filled is served to readers of the other: localized() falls back
+                       # between languages, which is not the built-in label. A label without a
+                       # feedback_url shows nothing — the URL is what gates the link.
   bot_url:  ""   # top-bar chatbot button (env BOT_URL); empty hides it
   help_url: ""   # top-bar help button (env HELP_URL): an http(s) URL or a phone/tel: number
   news_url: ""   # "Alle Neuigkeiten" link at the foot of the notification panel (env NEWS_URL):
@@ -594,17 +599,45 @@ branding:
   # The dashboard's own origin must be in the bot's embedding allowed_origins (CORS).
   assistant_widget_url: ""  # env ASSISTANT_WIDGET_URL; absolute http(s) URL of the bundle
   assistant_bot_id: ""      # env ASSISTANT_BOT_ID
+  greeting_accent: true   # the launcher greeting's trailing full stop, set in `primary` (issue #220).
+                          # The one setting here that is ON by default: the accent is drawn in the
+                          # deployment's OWN primary token, so a fork gets its own brand colour and
+                          # there is nothing to opt into — only out of. false keeps the punctuation
+                          # and drops the colour. Punctuation only, never a word: in dark the pairing
+                          # measures 3.4:1, which clears the 3:1 minimum for text at 27/36px but not
+                          # 4.5:1 (doc 03 §2).
+  fonts:            # typography roles -> --font-body / --font-display (doc 03 §3).
+    body:    "'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif"
+    display: "'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif"
+                    # NOT per-theme (a skin re-colours, it doesn't re-face), and every stack
+                    # must end in a generic family or startup fails — that is what makes a
+                    # face the client can't load degrade to a system font. See the note below
+                    # on what this can and cannot do.
   theme:
     light: { primary: "#A6093D", primary_hover: "#8A0732", accent: "#F2C879",
-             surface: "#F4F4F5", text: "#18181B" }
+             favorite: "#F2C879", surface: "#F4F4F5", text: "#18181B" }
     dark:  { primary: "#C2355C", primary_hover: "#A6093D", accent: "#F2C879",
-             surface: "#1E1E21", text: "#F4F4F5" }
+             favorite: "#F2C879", surface: "#1E1E21", text: "#F4F4F5" }
   default_locale: de
 ```
 
 Because the SPA reads tokens from `/api/branding` at runtime (rather than hardcoding them at build
 time), a fork re-skins by editing one file and swapping logo assets — no recompile. The doc 03
 palette ships as the bundled default. Keep the variable **names** stable; only values change.
+
+**The one exception: font files (issue #214).** Everything else a skin needs is either a config
+value or a mounted asset, so "no recompile" holds. Typography is only half runtime: `branding.fonts`
+**selects** the family for each role at runtime, but the faces themselves are npm dependencies
+(`@fontsource-variable/*`) bundled into the SPA at build time, and — unlike the logo, favicon and
+watermark — there is **no mount for a font file**. A deployment can therefore point a role at a
+bundled face or at a system stack (`system-ui, sans-serif`, which needs nothing shipped) without
+rebuilding; a deployment that must use its own licensed corporate face forks, adds the package,
+and rebuilds the image.
+
+That was a decision, not an oversight: mounting font files would mean a `@font-face` emission path,
+a filename allowlist, a caching story and a CSP review, all to serve a case a fork handles in one
+`npm install`. Naming a stylesheet URL instead was rejected outright — an external font host on a
+university tool is a data-protection conversation, and the app is a PWA that must render offline.
 
 **Service visibility (`visibility:`).** A list of visibility groups a **category** may be
 restricted to, validated at startup like the role mapping: slug `[a-z0-9-]{1,32}`, unique, not

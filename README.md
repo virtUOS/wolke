@@ -184,6 +184,26 @@ bell. Each has an env override (`FEEDBACK_URL`, `BOT_URL`, `HELP_URL`, `NEWS_URL
 also takes an email/`mailto:` and `help_url` a phone number/`tel:`; `news_url` is http(s) only — a
 news site is a website, so anything else fails at startup rather than rendering a dead link.
 
+The feedback link can also be **renamed**: `branding.feedback_label` is a localized `{de, en}` map
+(file-only — a map has no env override) that replaces the built-in "Feedback" for a deployment
+pointing the link at a ticket system or a help desk. Empty is the default and keeps today's label.
+Filling one language only is legitimate: a reader of the other gets the language that is filled,
+not the built-in label. The label does not enable the link — with `feedback_url` empty nothing
+renders. The top bar's `bot_url` / `help_url` keep their built-in labels for now; nobody has asked
+for those to be renameable, and `feedback_label` is the precedent to follow when someone does.
+
+**Typography is configurable, fonts are not mountable.** `branding.fonts.body` and
+`branding.fonts.display` select the family for each role at runtime (they become the
+`--font-body` / `--font-display` CSS variables), so a deployment can switch to a system stack
+like `system-ui, sans-serif`, or re-face headings alone, by editing `config.yaml` and
+restarting. What you **cannot** do is supply a font file: the faces are npm dependencies bundled
+into the SPA at build time, and unlike the logo, favicon and watermark there is no mount for
+one. Deploying your own licensed corporate face therefore means forking, adding the package and
+rebuilding the image — the single place where "re-skin by editing one file" does not hold. Every
+stack must end in a generic family (`sans-serif`, `system-ui`, …) or the server refuses to start,
+which is what keeps a face the browser cannot load degrading to a system font rather than to the
+browser default. The bundled face is Hanken Grotesk Variable; see [docs/03 §3](docs/03-design-system.md).
+
 **Branding assets** are plain files: mount a directory over the bundled `branding/`
 (compose: `- ./branding:/branding:ro,z`). The mount **replaces the bundled set
 wholesale — provide all seven files**: `logo-light.svg`, `logo-dark.svg`,

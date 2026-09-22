@@ -23,12 +23,23 @@
   --color-text: var(--text);
   --color-text-muted: var(--text-muted);
   --color-accent: var(--accent);
+  --color-favorite: var(--favorite);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-info: var(--info);
   --color-warning: var(--warning);
   --color-success: var(--success);
   --color-danger: var(--danger);
+
+  /* Typography roles, bridged like the colours so `font-body` / `font-display`
+     work as utilities (issue #214). The names collide with the variables they
+     reference on purpose: Tailwind emits its half inside `@layer theme`, and an
+     unlayered declaration always wins over a layered one, so the :root block
+     below — and the branding payload, which is unlayered too — is what every
+     consumer resolves. The `inline` keyword keeps the utilities pointing at
+     var(--font-…) rather than at a build-time value. */
+  --font-body: var(--font-body);
+  --font-display: var(--font-display);
 
   /* Corner scale tied to tokens (values match Tailwind's md/lg, so existing
      rounded-md/lg usage is unchanged). */
@@ -50,12 +61,30 @@
   --text: #18181b;
   --text-muted: #6b6b70;
   --accent: #f2c879;
+  /* The favourited-service state (issue #211) — its own token so a skin can
+     retint the star without moving the warm wash (--accent). Defaults to the
+     accent value in both themes; keep the two in step when either changes,
+     or the split stops being a no-op. */
+  --favorite: #f2c879;
   --primary: #a6093d;
   --primary-hover: #8a0732;
   --info: #2563eb;
   --warning: #b45309;
   --success: #15803d;
   --danger: #b91c1c;
+
+  /* Typography roles. Two names, one stack: issue #213 settled the display
+     role on the *body* family, so the greeting's distinction comes from weight
+     and size alone — which is what makes it survive a deployer swapping either
+     family (the launcher reads as a launcher whatever face it is given).
+     Separate names because the roles are genuinely separate.
+     These are the first-paint fallbacks only: since issue #214 the values come
+     from branding.fonts via GET /api/branding, and must mirror the Go defaults
+     (internal/config/config.go, `bundledSans`). Not per-theme, so unlike the
+     colours they have no .dark counterpart below: a skin re-colours across
+     light/dark, it doesn't re-face. */
+  --font-body: 'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif;
+  --font-display: 'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif;
 
   /* Structural tokens (not brand-overridable; identical across skins). --bg is
      deliberately excluded from the branding payload — it's the app canvas. */
@@ -72,6 +101,7 @@
   --text: #f4f4f5;
   --text-muted: #9a9aa1;
   --accent: #f2c879;
+  --favorite: #f2c879;
   --primary: #c2355c;
   --primary-hover: #a6093d;
   --info: #60a5fa;
@@ -86,10 +116,9 @@ body {
   margin: 0;
   background-color: var(--bg);
   color: var(--text);
-  font-family: 'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-optical-sizing: auto;
 }
 
 /* The app canvas fills the viewport. dvh, not vh: on a mobile browser `100vh` is

@@ -41,11 +41,12 @@ deployer changes in `branding.yaml`. Key names use `_` in the payload (`primary_
 |---|---|---|---|
 | `--primary`        | `#A6093D` | `#C2355C` | brand + primary actions, active tab |
 | `--primary-hover`  | `#8A0732` | `#A6093D` | primary pressed/hover |
-| `--accent`         | `#F2C879` | `#F2C879` | sparing accent (info callout) |
+| `--accent`         | `#F2C879` | `#F2C879` | the warm wash — segmented-control pill, tile hover, light canvas tint |
+| `--favorite`       | `#F2C879` | `#F2C879` | the favourited-service state (the star) |
 | `--surface`        | `#F4F4F5` | `#1E1E21` | page background behind cards |
 | `--surface-2`      | `#ECECEE` | `#27272B` | tile footer / inset zones |
 | `--border`         | `#E2E2E5` | `#34343A` | hairlines, dividers, card edges |
-| `--text`           | `#18181B` | `#F4F4F5` | body text |
+| `--text`           | `#18181B` | `#F4F4F5` | body text; the launcher watermark fill (#212) |
 | `--text-muted`     | `#6B6B70` | `#9A9AA1` | sub-labels, secondary text |
 | `--info`           | `#2563EB` | `#60A5FA` | informational state / banner |
 | `--warning`        | `#B45309` | `#FBBF24` | warning state / banner |
@@ -55,6 +56,25 @@ deployer changes in `branding.yaml`. Key names use `_` in the payload (`primary_
 Announcement severities map onto these: `info`→`--info`, `warning`→`--warning`, `critical`→`--danger`.
 Brand red (`--primary`) is for **brand + interaction only** — never large fills, or it stops meaning
 "actionable"; `--danger` is the distinct true-red for destructive/critical, so the two don't blur.
+The one non-interactive use is the **accented full stop** closing the launcher greeting (issue #220):
+a single glyph, brand rather than affordance, and switchable off per deployment with
+`branding.greeting_accent: false`. In dark it measures 3.4:1 against the canvas — above the 3:1 WCAG
+minimum for text at this size (27/36px), below 4.5:1 — which is why it stays punctuation and never
+carries a word.
+
+`--accent` is **the warm wash and nothing else**: the active pill of a segmented control, the tile
+hover border and background tint, and the light-mode canvas tint. It had accumulated unrelated jobs
+— it was also the favourites star and the watermark fill — which meant retinting any one of them
+repainted all five. The star left in issue #211, to `--favorite`; the watermark left in #212, to
+`--text`, so a neutral mark stays neutral when the accent is re-skinned. Read the role column as
+the whole list of what a token paints, and split rather than extend: a token that
+drifts into meaning "the yellow, mostly" is how that knot formed the first time. `--favorite` is
+named for the semantic state, not the glyph, so it survives the affordance ceasing to be a star.
+Both default to the same value, so the split is a no-op until a deployer sets one.
+
+The **typography tokens** (`--font-body`, `--font-display`) are brand-overridable too, but they are not
+colours and not per-theme, so they sit in their own `branding.fonts` block rather than in these two
+maps — see §3.
 
 **Structural tokens** — *not* brand-overridable; defined statically in `index.css` and identical across
 skins (a deployer re-colours, but doesn't restructure). They flip on `.dark` where it matters.
@@ -69,14 +89,42 @@ Spacing and elevation use Tailwind's default scales — no custom tokens (keep i
 
 ## 3. Typography
 
-A university tool should feel institutional but current — confirm whether UOS mandates a corporate
-typeface (many universities license one). If not:
+**What ships.** One face, self-hosted: **Hanken Grotesk Variable**
+(`@fontsource-variable/hanken-grotesk`, wght 100–900), bundled by Vite and imported in `main.tsx`.
+No external font host — the strict CSP holds, nothing leaves the user's browser, and the PWA renders
+offline. The open question this section used to carry ("confirm whether UOS mandates a corporate
+typeface", Inter / Inter Tight / JetBrains Mono) is answered: the **UOS web corporate design permits
+no serif face**, and the launcher uses a single grotesque for everything (issue #213). The serif
+that once set the greeting (Newsreader) is gone, along with the second webfont on first paint.
 
-- **Display / headings:** a confident grotesque — e.g. **Inter Tight** or the UOS corporate face if
-  mandated. Used at the page title scale ("Navigation", "Kachel" style in the PDF — heavy weight,
-  with the small red bar accent to its left).
-- **Body / UI:** **Inter** — neutral, excellent at small sizes, great German diacritics and ß.
-- **Mono (data only):** **JetBrains Mono**, for any IDs/metrics in the admin view.
+**Two roles, two tokens** — brand-overridable like the colours (issue #214):
+
+| token | default | role |
+|---|---|---|
+| `--font-body`    | `'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif` | body and UI — set on `body`, inherited everywhere |
+| `--font-display` | the same stack | the launcher greeting and the admin page title |
+
+Same stack by default, so the split is a visual no-op: the display role is told apart by **weight and
+size**, not by a second face (**500** at 36px/27px, tracking **−0.015em**; the admin title takes the
+same treatment at 32px). That is what makes it survive a deployer changing either family — the
+launcher still reads as a launcher whatever face it is given. The weight was 300 until device testing
+on the running app found it flimsy at both sizes (issue #220); 500 and the tighter tracking are one
+treatment and move together. Both are real instances of the variable face (wght 100–900), so nothing
+is synthesised. The two sizes are the shell's single 768px switch — 27px is the *phone* size and a
+tablet takes 36px; a third tier would need a breakpoint the launcher does not have.
+
+Unlike the colour tokens the font tokens are **not per-theme**: they live in `branding.fonts`, not in
+`theme.light` / `theme.dark`. A skin re-colours across the two themes; it does not re-face. A `--font-mono`
+role is deliberately absent until something actually renders in it (admin IDs/metrics would be the
+case); adding one means adding it to `fontRoles` in `internal/config/config.go`, the `@theme inline`
+bridge and the `:root` fallback — the same three places `--font-display` occupies.
+
+**A deployer selects a family; it cannot supply a font file.** `branding.fonts.body` /
+`.display` may name a bundled face or a system stack, and every stack must end in a generic family
+(`sans-serif`, `system-ui`, …) or startup fails — so a face the client cannot load degrades to a
+system font rather than to the browser default. Shipping a licensed corporate face is a fork +
+rebuild; this is the one branding setting that is not purely runtime, and docs/02 §11 and
+`config.example.yaml` say why.
 
 Type scale (rem): 0.75 / 0.875 / 1 / 1.25 / 1.5 / 2 / 2.5. Service names at 1rem semibold;
 category labels at 0.875rem; the "Datenverwaltung" sub-label at 0.875rem muted; the description

@@ -7,6 +7,14 @@
 # role block, which shows the UOS launch deployment's two-role mapping (the
 # built-in default is a three-role example). A fork re-skins and re-points by
 # editing this one file and restarting — no recompile.
+#
+# ONE EXCEPTION: FONT FILES (issue #214). Colours, logos, the favicon and the
+# watermark are all runtime — config values and mounted assets. Typography is
+# half: `branding.fonts` SELECTS a family at runtime, but the face itself is an
+# npm dependency bundled into the SPA at build time, and there is no mount for
+# a font file. So you can point a role at a bundled face or at a system stack
+# without recompiling; deploying your own licensed corporate face means forking,
+# adding the package, and rebuilding the image. See branding.fonts below.
 
 # OIDC is provider-agnostic: discovery does the rest, so the same code works with
 # Keycloak, Authentik, Zitadel, Auth0, Entra, etc. (docs/02 §6).
@@ -102,6 +110,21 @@ branding:
   # Right-aligned feedback link in the footer (env: FEEDBACK_URL). An http(s) URL
   # or an email / mailto: address. Empty hides it.
   feedback_url: ""
+  # Renames that link, for a deployment pointing it at a ticket system, a help
+  # desk or a contact form rather than at feedback (issue #222). Localized like
+  # every other user-facing string, and file-only: it is a map, so there is no
+  # env override.
+  #
+  # Leave it out (or empty) to keep the built-in "Feedback" — that is the
+  # default and changes nothing. Filling only one language is fine: a reader of
+  # the other gets the language that *is* filled, not the built-in label, which
+  # is what a deployment that renamed the link and translated half of it wants.
+  #
+  # Note that this names the link, it does not enable it: with feedback_url
+  # empty there is no link to name and nothing renders.
+  # feedback_label:
+  #   de: "Störung melden"
+  #   en: "Report a problem"
   # Top-bar quick actions (env: BOT_URL / HELP_URL). Each button is hidden when
   # empty. bot_url opens a chatbot in a new tab; help_url opens an http(s) URL in
   # a new tab, or a phone number / tel: link (opens the dialer on a phone).
@@ -121,6 +144,39 @@ branding:
   # (env: ASSISTANT_WIDGET_URL / ASSISTANT_BOT_ID)
   assistant_widget_url: ""  # e.g. "https://assistant.example.edu/widget.js"
   assistant_bot_id: ""      # e.g. "echo"
+  # The launcher greeting closes with a full stop set in the `primary` token
+  # (issue #220) — punctuation only, never the salutation or the name. Set this
+  # to false to keep the stop and drop the colour.
+  #
+  # Unlike everything else added around it, this defaults to TRUE: the accent
+  # uses YOUR primary, so a re-skinned deployment gets its own brand colour
+  # rather than ours, and there would be nothing to opt into. Note that in dark
+  # the default pairing (#C2355C on #161618) measures 3.4:1 — enough for text at
+  # the greeting's size (27/36px), not enough for body copy, which is why the
+  # accent is a single glyph.
+  greeting_accent: true
+  # Typography (issue #214). Two roles, each a complete CSS font stack; they
+  # become the --font-body / --font-display variables. NOT per-theme: a skin
+  # re-colours across light and dark, it does not re-face, so there is one value
+  # per role rather than a light/dark pair.
+  #
+  # You are SELECTING a family, not supplying one. The stack may name a face the
+  # build bundles (today: Hanken Grotesk Variable) or any face the user's device
+  # has — a system stack like `system-ui, sans-serif` needs nothing shipped and
+  # always resolves. It may NOT name a face this build does not carry and the
+  # device does not have: there is no way to mount a font file, so that stack
+  # would simply fall through to its fallback. Shipping your own corporate face
+  # is a fork + rebuild (see the header).
+  #
+  # Every stack must END IN A GENERIC FAMILY (sans-serif, serif, monospace,
+  # system-ui, …) — startup fails otherwise. That is the rule that keeps a
+  # missing face degrading to a system font instead of to the browser default.
+  fonts:
+    body: "'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif"
+    # The greeting and the admin page title. Same stack by default: the display
+    # role is told apart by weight and size, not by a second face (issue #213 —
+    # the UOS web corporate design permits no serif).
+    display: "'Hanken Grotesk Variable', system-ui, -apple-system, sans-serif"
   # Any token from the docs/03 §2 table may be set in either map — the five
   # shown are just the ones most skins change. The rest (surface_2, border,
   # text_muted, info, warning, success, danger) fall back to the bundled
@@ -130,13 +186,15 @@ branding:
     light:
       primary: "#A6093D"
       primary_hover: "#8A0732"
-      accent: "#F2C879"
+      accent: "#F2C879"    # the warm wash: segmented pill, tile hover, canvas tint
+      favorite: "#F2C879"  # the favourited-service star; defaults to accent
       surface: "#F4F4F5"
       text: "#18181B"
     dark:
       primary: "#C2355C"
       primary_hover: "#A6093D"
       accent: "#F2C879"
+      favorite: "#F2C879"
       surface: "#1E1E21"
       text: "#F4F4F5"
 
