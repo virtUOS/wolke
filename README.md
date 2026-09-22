@@ -184,6 +184,14 @@ bell. Each has an env override (`FEEDBACK_URL`, `BOT_URL`, `HELP_URL`, `NEWS_URL
 also takes an email/`mailto:` and `help_url` a phone number/`tel:`; `news_url` is http(s) only — a
 news site is a website, so anything else fails at startup rather than rendering a dead link.
 
+The feedback link can also be **renamed**: `branding.feedback_label` is a localized `{de, en}` map
+(file-only — a map has no env override) that replaces the built-in "Feedback" for a deployment
+pointing the link at a ticket system or a help desk. Empty is the default and keeps today's label.
+Filling one language only is legitimate: a reader of the other gets the language that is filled,
+not the built-in label. The label does not enable the link — with `feedback_url` empty nothing
+renders. The top bar's `bot_url` / `help_url` keep their built-in labels for now; nobody has asked
+for those to be renameable, and `feedback_label` is the precedent to follow when someone does.
+
 **Typography is configurable, fonts are not mountable.** `branding.fonts.body` and
 `branding.fonts.display` select the family for each role at runtime (they become the
 `--font-body` / `--font-display` CSS variables), so a deployment can switch to a system stack

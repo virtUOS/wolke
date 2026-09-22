@@ -2,7 +2,7 @@
 // applies its token sets as CSS variables, so a fork re-skins by editing
 // branding.yaml — no rebuild (docs/02 §11; docs/03 §2).
 
-import { getJSON } from './api'
+import { getJSON, type Localized } from './api'
 
 export type ThemeTokens = Record<string, string>
 
@@ -19,6 +19,15 @@ export interface Branding {
   imprint_url: string
   privacy_url: string
   feedback_url: string
+  // Renames the footer feedback link (issue #222). Localized, because it is a
+  // UI label rather than a proper noun; empty or absent is a no-op, i.e. the
+  // built-in localized string. Resolved with the shared localized() helper,
+  // which falls back between LANGUAGES — a value with only `de` set renders
+  // German to an English reader, which is what a deployment that translated
+  // one language wants, and is not the same as falling back to the built-in
+  // label. The link itself is gated by feedback_url, so a label without one
+  // shows nothing.
+  feedback_label: Localized
   bot_url: string
   help_url: string
   // The institution's news site, linked at the foot of the notification panel.

@@ -110,6 +110,21 @@ branding:
   # Right-aligned feedback link in the footer (env: FEEDBACK_URL). An http(s) URL
   # or an email / mailto: address. Empty hides it.
   feedback_url: ""
+  # Renames that link, for a deployment pointing it at a ticket system, a help
+  # desk or a contact form rather than at feedback (issue #222). Localized like
+  # every other user-facing string, and file-only: it is a map, so there is no
+  # env override.
+  #
+  # Leave it out (or empty) to keep the built-in "Feedback" — that is the
+  # default and changes nothing. Filling only one language is fine: a reader of
+  # the other gets the language that *is* filled, not the built-in label, which
+  # is what a deployment that renamed the link and translated half of it wants.
+  #
+  # Note that this names the link, it does not enable it: with feedback_url
+  # empty there is no link to name and nothing renders.
+  # feedback_label:
+  #   de: "Störung melden"
+  #   en: "Report a problem"
   # Top-bar quick actions (env: BOT_URL / HELP_URL). Each button is hidden when
   # empty. bot_url opens a chatbot in a new tab; help_url opens an http(s) URL in
   # a new tab, or a phone number / tel: link (opens the dialer on a phone).

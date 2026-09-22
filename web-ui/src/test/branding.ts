@@ -25,6 +25,7 @@ export const BRANDING: Branding = {
   imprint_url: '',
   privacy_url: '',
   feedback_url: '',
+  feedback_label: {},
   bot_url: '',
   help_url: '',
   news_url: '',

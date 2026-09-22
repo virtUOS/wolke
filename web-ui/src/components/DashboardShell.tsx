@@ -1,5 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
-import type { Me } from '@/lib/api'
+import { localized, type Me } from '@/lib/api'
 import { feedbackHref, type Branding } from '@/lib/branding'
 import { t, type Lang } from '@/lib/i18n'
 import { TopBar } from './TopBar'
@@ -90,6 +90,11 @@ export function DashboardShell({
 }: DashboardShellProps) {
   const s = t(locale)
   const feedback = feedbackHref(branding.feedback_url)
+  // Issue #222: a deployment may rename the link. `localized()` resolves the
+  // configured value across languages on its own, so what is left here is the
+  // other layer of the fallback: no configured label at all means the built-in
+  // one, unchanged from before the setting existed.
+  const feedbackLabel = localized(branding.feedback_label, locale) || s.footer.feedback
   const mainRef = useRef<HTMLElement>(null)
   const prevKey = useRef(focusKey)
 
@@ -219,7 +224,7 @@ export function DashboardShell({
                 style={{ marginLeft: 'auto' }}
                 className="inline-flex min-h-11 items-center rounded text-sm text-text-muted no-underline transition-colors hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--primary)] md:min-h-0"
               >
-                {s.footer.feedback}
+                {feedbackLabel}
               </a>
             )}
           </div>

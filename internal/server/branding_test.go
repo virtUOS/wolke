@@ -435,3 +435,34 @@ func TestBrandingServesGreetingAccent(t *testing.T) {
 		t.Error("greeting_accent = true after the deployment turned it off")
 	}
 }
+
+// feedback_label (issue #222) rides along with feedback_url: the label of the
+// footer link, localized like every other user-facing string. It is the first
+// localized field in this payload, so assert the *shape* as well as the
+// round-trip — the SPA resolves it with the shared localized() helper, which
+// expects an object keyed by language.
+func TestBrandingServesFeedbackLabel(t *testing.T) {
+	cfg := config.Defaults()
+	h := newTestRouter(t, &cfg, Deps{})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/branding", nil))
+
+	// Present and empty: an unconfigured deployment keeps the built-in label,
+	// and the key is there so the SPA reads an object rather than null.
+	if !strings.Contains(rec.Body.String(), `"feedback_label":{}`) {
+		t.Errorf("payload = %s, want an empty feedback_label object by default", rec.Body.String())
+	}
+
+	cfg.Branding.FeedbackLabel = map[string]string{"de": "Kontakt", "en": "Contact"}
+	h = newTestRouter(t, &cfg, Deps{})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/branding", nil))
+
+	var b config.Branding
+	if err := json.Unmarshal(rec.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if b.FeedbackLabel["de"] != "Kontakt" || b.FeedbackLabel["en"] != "Contact" {
+		t.Errorf("feedback_label = %v, want the configured pair", b.FeedbackLabel)
+	}
+}
