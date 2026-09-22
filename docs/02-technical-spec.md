@@ -584,6 +584,11 @@ branding:
   imprint_url: "https://www.uni-osnabrueck.de/impressum/"   # legal footer links
   privacy_url: "https://www.uni-osnabrueck.de/datenschutz/" # (empty hides the link)
   feedback_url: ""  # right-aligned footer feedback link (env FEEDBACK_URL): URL or email/mailto:
+  feedback_label: {}   # renames that link (issue #222) — localized {de, en}, file-only (it is a
+                       # map, so no env override). Empty keeps the built-in "Feedback". One
+                       # language filled is served to readers of the other: localized() falls back
+                       # between languages, which is not the built-in label. A label without a
+                       # feedback_url shows nothing — the URL is what gates the link.
   bot_url:  ""   # top-bar chatbot button (env BOT_URL); empty hides it
   help_url: ""   # top-bar help button (env HELP_URL): an http(s) URL or a phone/tel: number
   news_url: ""   # "Alle Neuigkeiten" link at the foot of the notification panel (env NEWS_URL):

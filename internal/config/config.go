@@ -106,6 +106,21 @@ type Branding struct {
 	// Right-aligned feedback link in the footer. An http(s) URL or an email /
 	// mailto: address. Empty hides it.
 	FeedbackURL string `yaml:"feedback_url" json:"feedback_url"`
+	// FeedbackLabel renames that link (issue #222) — for a deployment pointing
+	// it at a ticket system, a help desk or a contact form rather than at
+	// feedback. Localized, `{de: …, en: …}`, because it is a UI label and not a
+	// proper noun: the first localized field in *this* block, but the same shape
+	// the role labels and the visibility entries already use.
+	//
+	// Empty or absent is the default and a no-op: the SPA then renders its
+	// built-in localized label, exactly as it does today. A blank translation is
+	// dropped at load, so `en: ""` reads as "not translated" and the SPA's
+	// localized() serves the language that *is* filled — falling back between
+	// languages, which is not the same as falling back to the built-in label.
+	//
+	// Setting this without a feedback_url shows nothing: the URL is what gates
+	// the link, so a label alone has nothing to name.
+	FeedbackLabel map[string]string `yaml:"feedback_label" json:"feedback_label"`
 	// Top-bar quick actions, each shown only when set. BotURL opens a chatbot in
 	// a new tab. HelpURL opens a help/contact target: an http(s) URL (new tab) or
 	// a phone number / tel: link (the dialer on a smartphone).
@@ -184,6 +199,11 @@ func Defaults() Config {
 			DefaultLocale: "de",
 			ImprintURL:    "https://www.uni-osnabrueck.de/impressum/",
 			PrivacyURL:    "https://www.uni-osnabrueck.de/datenschutz/",
+			// Empty, but a map rather than nil, so /api/branding serves `{}` and
+			// the SPA reads an object without a null check — the same reason
+			// Fonts and the theme maps are non-nil here. Empty means "use the
+			// built-in label" (issue #222).
+			FeedbackLabel: map[string]string{},
 			// One stack for both roles: issue #213 put the display role on the
 			// body family, so the greeting is told apart by weight and size.
 			// Keep these in step with the first-paint fallbacks in
@@ -255,6 +275,7 @@ func load(path string, lookupEnv func(string) (string, bool)) (*Config, error) {
 	}
 
 	applyEnv(&cfg, lookupEnv)
+	cfg.Branding.normalize()
 
 	if err := cfg.validate(); err != nil {
 		return nil, err
@@ -329,6 +350,25 @@ func applyEnv(cfg *Config, lookupEnv func(string) (string, bool)) {
 // validate enforces invariants that must hold in every environment. Auth and DB
 // settings may be empty in Phase 0 local dev (no real login/DB wired yet), so
 // they are not required here; later phases tighten this.
+// normalize tidies the localized branding values a file can supply: it trims
+// every translation and drops the ones that are left blank.
+//
+// A label is a display string, so a leading space is a typo rather than intent.
+// Dropping a blank one matters more: `feedback_label: {de: Kontakt, en: ""}`
+// means "I have not translated this", and keeping the empty key would make the
+// SPA render the English reader the built-in "Feedback" while the German one
+// sees "Kontakt" — one link with two unrelated names. Absent instead, and
+// localized() falls back to the language that is filled (issue #222).
+func (b *Branding) normalize() {
+	for lang, v := range b.FeedbackLabel {
+		if trimmed := strings.TrimSpace(v); trimmed == "" {
+			delete(b.FeedbackLabel, lang)
+		} else {
+			b.FeedbackLabel[lang] = trimmed
+		}
+	}
+}
+
 func (c *Config) validate() error {
 	if c.PublicURL == "" {
 		return fmt.Errorf("config: public_url must not be empty")
