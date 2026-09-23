@@ -77,6 +77,15 @@ npx playwright test e2e/dashboard.spec.ts
 npx playwright show-report
 ```
 
+> **Both suites take the dev database's user-side state.** The e2e run truncates
+> `users` (cascade) and `announcements` first, and `go test ./internal/service/`
+> clears `announcements`. Both are deliberate: the announcements table and the
+> shared test user are whole-table state the tests assert over, so a leftover row
+> silently changes the answer (issue #234). The catalog is never touched. If you
+> are keeping an announcement or a favorite in the dev database by hand, expect
+> to lose it — `make seed` restores the catalog, and the next login re-seeds the
+> role-default favorites.
+
 The specs live in `web-ui/e2e/`; `docs/specs/responsive-viewport-testing.md` is
 the design, including what the shared assertions check and how to add a screen.
 Specs named `issue-<n>-*.spec.ts` reproduce an open layout bug and are annotated
