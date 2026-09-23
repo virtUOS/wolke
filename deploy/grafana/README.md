@@ -43,15 +43,47 @@ would then break for everyone else.
 Import `wolke-dashboard.json` (Dashboards → New → Import) and pick your
 Prometheus data source when prompted.
 
-**Format:** classic dashboard JSON, `schemaVersion` 39 — it imports on any
-Grafana that reads that schema (9.x and up, including current releases).
-Deliberately *not* the `dashboard.grafana.app/v2` resource that Grafana 12/13
-writes when you edit a dashboard in the UI and export it: v2 does not import on
-older Grafana, and a resource export carries the exporting instance's identity
-(namespace, uid, resourceVersion, createdBy). If you edit this dashboard in
-Grafana and want the change upstream, export it as classic JSON — in a recent
-Grafana that is Export → Export as JSON with the *Export for sharing externally*
-/ classic option, not the resource view.
+**Format:** a `dashboard.grafana.app/v2` resource — what Grafana writes when you
+edit a dashboard in the UI. Kept as v2 deliberately: recent Grafana converts a
+classic dashboard to v2 internally anyway, and a hand-edited re-export comes back
+as v2, so committing classic JSON would not survive the round trip.
+
+The trade is a **minimum Grafana version**. Measured against this file by
+importing it:
+
+| Grafana | Result |
+|---------|--------|
+| 13.2.2 | Imports and renders all 14 panels natively. |
+| 12.4.9 | Imports and renders all 14 panels, but banners "The Dynamic Dashboard feature is temporarily disabled" and opens it as a *classic* dashboard — saving from there can drop v2 features. |
+| 12.0.0 | Import "succeeds" and produces an **empty dashboard**: no panels, no error, no warning. |
+
+So: **Grafana 13 or newer**. 12.4.x works if you only read it. Below that the
+failure is silent, which is the part worth knowing — an empty dashboard looks
+like a broken data source, not like a file the server could not read.
+
+### Before committing a re-exported dashboard
+
+A UI export carries the exporting instance's identity in `metadata`. The
+committed file must not: it ships to forks, and none of those values mean
+anything anywhere else. The whole block is stripped down to one key.
+
+Check, in the file you are about to commit:
+
+1. **`metadata` contains exactly one key: `name: wolke`.** No `namespace`, `uid`,
+   `resourceVersion`, `generation`, `creationTimestamp`, `labels` or
+   `annotations` — the last of which holds `grafana.app/createdBy`,
+   `grafana.app/updatedBy` and a `saved-from-ui` build string.
+2. **`metadata` is present at all.** Established by trying it: with the key
+   removed entirely, the import form silently does nothing — it never reaches the
+   options step. `metadata: {}` is accepted, but Grafana then generates a random
+   uid and the dashboard URL changes on every import, so `name: wolke` stays (it
+   is what the classic file's `uid: wolke` used to do, and it is our slug, not
+   the exporting instance's).
+3. **`spec.title` is `wolke`**, not your institution's name (golden rule 8).
+4. No `exported_service` anywhere — see the scrape section above.
+
+There is no tooling for this; it is four `grep`s worth of checking, on a file
+that changes a few times a year.
 
 Three dashboard variables: the data source, **Instance** — the scrape targets to
 include, multi-select with an "All" that matches every instance — and **Role**,
