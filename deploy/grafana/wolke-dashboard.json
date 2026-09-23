@@ -670,7 +670,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, sum by (service) (increase(wolke_service_favorites_added_total{instance=~\"$instance\", role=~\"$role\"}[$__range])))",
+          "expr": "topk(10, round(sum by (service) (increase(wolke_service_favorites_added_total{instance=~\"$instance\", role=~\"$role\"}[$__range]))))",
           "instant": true,
           "legendFormat": "{{service}}",
           "editorMode": "code"
@@ -739,7 +739,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, sum by (service) (increase(wolke_service_favorites_removed_total{instance=~\"$instance\", role=~\"$role\"}[$__range])))",
+          "expr": "topk(10, round(sum by (service) (increase(wolke_service_favorites_removed_total{instance=~\"$instance\", role=~\"$role\"}[$__range]))))",
           "instant": true,
           "legendFormat": "{{service}}",
           "editorMode": "code"
