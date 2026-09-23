@@ -1,5 +1,27 @@
--- name: CountActiveSessions :one
-select count(*) from sessions where expires_at > now();
+-- name: CountActiveSessionsByRole :many
+-- Currently valid sessions per configured role. Same two-branch shape as
+-- CountFavoritesByServiceAndRole below, and for the same two reasons:
+--
+--  1. Unnesting the configured role list emits a zero for every role, so a role
+--     nobody is logged in under reads 0 rather than dropping out of the
+--     dashboard — a gap there is ambiguous between "nobody logged in" and "the
+--     exporter stopped" (#128's property, now on sessions).
+--  2. The real counts are grouped by the role as stored on the user. Roles the
+--     config no longer defines come back verbatim; the caller folds them onto
+--     the configured default (internal/metrics) via config.RoleSet.Effective,
+--     which keeps the "effective role" rule in one place rather than
+--     duplicating it here.
+--
+-- A role therefore appears more than once and the caller sums; the zero rows
+-- are the additive identity that makes that safe.
+select r.role::text as role, 0::bigint as n
+from unnest(@roles::text[]) as r(role)
+union all
+select u.primary_role as role, count(*) as n
+from sessions s
+join users u on u.id = s.user_id
+where s.expires_at > now()
+group by u.primary_role;
 
 -- name: CountServicesByState :many
 select is_active, count(*) as n from services group by is_active;

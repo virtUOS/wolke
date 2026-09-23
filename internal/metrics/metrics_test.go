@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -58,7 +59,6 @@ func TestMetricsExposeSeries(t *testing.T) {
 		`wolke_service_clicks_total{role="student",service="MyShare",target="service"} 1`,
 		`wolke_service_clicks_total{role="student",service="MyShare",target="documentation"} 1`,
 		"wolke_http_request_duration_seconds",
-		"wolke_active_sessions",
 		`wolke_service_favorites_added_total{role="student",service="MyShare"} 1`,
 		`wolke_service_favorites_removed_total{role="staff",service="MyShare"} 1`,
 	} {
@@ -68,15 +68,23 @@ func TestMetricsExposeSeries(t *testing.T) {
 	}
 }
 
-// fakeGauges stands in for *store.DB. favorites is per-test so a refresh can
-// be replayed with a service removed (the Reset case); gotRoles records the
-// role list the refresh handed the query.
+// fakeGauges stands in for *store.DB. sessions and favorites are per-test so a
+// refresh can be replayed with a role or a service removed (the Reset cases);
+// gotRoles and gotSessionRoles record the role list the refresh handed each
+// query.
 type fakeGauges struct {
-	favorites []store.CountFavoritesByServiceAndRoleRow
-	gotRoles  *[]string
+	sessions        []store.CountActiveSessionsByRoleRow
+	favorites       []store.CountFavoritesByServiceAndRoleRow
+	gotRoles        *[]string
+	gotSessionRoles *[]string
 }
 
-func (fakeGauges) CountActiveSessions(context.Context) (int64, error) { return 7, nil }
+func (f fakeGauges) CountActiveSessionsByRole(_ context.Context, roles []string) ([]store.CountActiveSessionsByRoleRow, error) {
+	if f.gotSessionRoles != nil {
+		*f.gotSessionRoles = roles
+	}
+	return f.sessions, nil
+}
 func (fakeGauges) CountServicesByState(context.Context) ([]store.CountServicesByStateRow, error) {
 	return []store.CountServicesByStateRow{{IsActive: true, N: 5}, {IsActive: false, N: 2}}, nil
 }
@@ -101,6 +109,16 @@ func testRoles() config.RoleSet {
 	}.RoleSet()
 }
 
+// sessionZeros is what the session query's first branch emits: a zero for
+// every configured role.
+func sessionZeros(roles []string) []store.CountActiveSessionsByRoleRow {
+	out := make([]store.CountActiveSessionsByRoleRow, 0, len(roles))
+	for _, role := range roles {
+		out = append(out, store.CountActiveSessionsByRoleRow{Role: role, N: 0})
+	}
+	return out
+}
+
 // crossJoinZeros is what the query's first branch emits: a zero for every
 // (active service x configured role) pair.
 func crossJoinZeros(services []string, roles []string) []store.CountFavoritesByServiceAndRoleRow {
@@ -123,16 +141,27 @@ func TestRefreshGauges(t *testing.T) {
 		store.CountFavoritesByServiceAndRoleRow{Name: "Stud.IP", Role: "student", N: 12},
 		store.CountFavoritesByServiceAndRoleRow{Name: "Stud.IP", Role: "staff", N: 4},
 	)
-	src := fakeGauges{favorites: rows, gotRoles: &gotRoles}
+	// Seven sessions, the number the unlabelled gauge used to report for this
+	// fixture, now split 5 student / 2 staff.
+	sessions := append(sessionZeros(roles.Slugs()),
+		store.CountActiveSessionsByRoleRow{Role: "student", N: 5},
+		store.CountActiveSessionsByRoleRow{Role: "staff", N: 2},
+	)
+	var gotSessionRoles []string
+	src := fakeGauges{sessions: sessions, favorites: rows, gotRoles: &gotRoles, gotSessionRoles: &gotSessionRoles}
 	if err := m.RefreshGauges(context.Background(), src, roles); err != nil {
 		t.Fatalf("RefreshGauges: %v", err)
 	}
 	if want := roles.Slugs(); !slices.Equal(gotRoles, want) {
 		t.Errorf("query got roles %v, want the configured set %v", gotRoles, want)
 	}
+	if want := roles.Slugs(); !slices.Equal(gotSessionRoles, want) {
+		t.Errorf("session query got roles %v, want the configured set %v", gotSessionRoles, want)
+	}
 	_, body := scrape(t, m.Handler(""), "")
 	for _, want := range []string{
-		"wolke_active_sessions 7",
+		`wolke_active_sessions{role="student"} 5`,
+		`wolke_active_sessions{role="staff"} 2`,
 		`wolke_catalog_services{state="active"} 5`,
 		`wolke_catalog_services{state="inactive"} 2`,
 		`wolke_announcements_active{severity="warning"} 1`,
@@ -206,4 +235,124 @@ func TestRefreshGaugesDropsVanishedFavoritesSeries(t *testing.T) {
 	if !strings.Contains(body, `wolke_service_favorites{role="student",service="MyShare"} 3`) {
 		t.Errorf("surviving service lost its series:\n%s", body)
 	}
+}
+
+// The per-role split must still add up to what the unlabelled gauge reported
+// for the same fixture: the dashboard's total panel is now
+// sum(max by (role) (...)), and this is the Go-side half of that claim.
+func TestRefreshGaugesSessionsSplitByRoleSumToTheTotal(t *testing.T) {
+	m := New()
+	roles := testRoles()
+	const total = 7
+	sessions := append(sessionZeros(roles.Slugs()),
+		store.CountActiveSessionsByRoleRow{Role: "student", N: 5},
+		store.CountActiveSessionsByRoleRow{Role: "staff", N: 2},
+	)
+	if err := m.RefreshGauges(context.Background(), fakeGauges{sessions: sessions}, roles); err != nil {
+		t.Fatalf("RefreshGauges: %v", err)
+	}
+	if got := sumSessionSeries(t, m); got != total {
+		t.Errorf("per-role session series sum to %v, want the fixture total %d", got, total)
+	}
+}
+
+// A configured role nobody is logged in under reads 0 rather than vanishing: a
+// gap in the graph cannot be told apart from a dead exporter.
+func TestRefreshGaugesEmptyRoleReportsZeroNotAbsent(t *testing.T) {
+	m := New()
+	roles := testRoles()
+	sessions := append(sessionZeros(roles.Slugs()),
+		store.CountActiveSessionsByRoleRow{Role: "student", N: 4},
+	)
+	if err := m.RefreshGauges(context.Background(), fakeGauges{sessions: sessions}, roles); err != nil {
+		t.Fatalf("RefreshGauges: %v", err)
+	}
+	_, body := scrape(t, m.Handler(""), "")
+	if want := `wolke_active_sessions{role="staff"} 0`; !strings.Contains(body, want) {
+		t.Errorf("scrape missing %q — a role with no sessions must read 0, not disappear:\n%s", want, body)
+	}
+}
+
+// A session whose stored primary_role is no longer configured counts under the
+// default, which is the role that user is actually served — the same
+// config.RoleSet.Effective rule the favorites gauge applies. Not its stale
+// slug, and not dropped.
+func TestRefreshGaugesFoldsStaleSessionRolesOntoTheDefault(t *testing.T) {
+	m := New()
+	roles := testRoles()
+	sessions := append(sessionZeros(roles.Slugs()),
+		store.CountActiveSessionsByRoleRow{Role: "student", N: 3},
+		store.CountActiveSessionsByRoleRow{Role: "visiting-scholar", N: 2},
+	)
+	if err := m.RefreshGauges(context.Background(), fakeGauges{sessions: sessions}, roles); err != nil {
+		t.Fatalf("RefreshGauges: %v", err)
+	}
+	_, body := scrape(t, m.Handler(""), "")
+	if want := `wolke_active_sessions{role="student"} 5`; !strings.Contains(body, want) {
+		t.Errorf("scrape missing %q (stale role not folded onto the default):\n%s", want, body)
+	}
+	if strings.Contains(body, `wolke_active_sessions{role="visiting-scholar"}`) {
+		t.Errorf("unconfigured role minted its own session series:\n%s", body)
+	}
+	if got := sumSessionSeries(t, m); got != 5 {
+		t.Errorf("folding lost or duplicated sessions: series sum to %v, want 5", got)
+	}
+}
+
+// A role dropped from the configuration takes its series with it at the next
+// refresh instead of freezing at its last value (the Reset).
+func TestRefreshGaugesDropsSeriesOfRemovedRole(t *testing.T) {
+	m := New()
+	roles := testRoles()
+	before := append(sessionZeros(roles.Slugs()),
+		store.CountActiveSessionsByRoleRow{Role: "student", N: 3},
+		store.CountActiveSessionsByRoleRow{Role: "staff", N: 2},
+	)
+	if err := m.RefreshGauges(context.Background(), fakeGauges{sessions: before}, roles); err != nil {
+		t.Fatalf("first RefreshGauges: %v", err)
+	}
+	if _, body := scrape(t, m.Handler(""), ""); !strings.Contains(body, `wolke_active_sessions{role="staff"} 2`) {
+		t.Fatalf("first scrape missing the series that should later drop:\n%s", body)
+	}
+
+	// staff is gone from the configuration; the sessions that were counted
+	// under it now fold onto the default, as they do for any stored role the
+	// config does not define.
+	shrunk := config.RoleMapping{
+		Values:  map[string]string{"member": "student"},
+		Default: "student",
+	}.RoleSet()
+	after := append(sessionZeros(shrunk.Slugs()),
+		store.CountActiveSessionsByRoleRow{Role: "student", N: 3},
+		store.CountActiveSessionsByRoleRow{Role: "staff", N: 2},
+	)
+	if err := m.RefreshGauges(context.Background(), fakeGauges{sessions: after}, shrunk); err != nil {
+		t.Fatalf("second RefreshGauges: %v", err)
+	}
+	_, body := scrape(t, m.Handler(""), "")
+	if strings.Contains(body, `wolke_active_sessions{role="staff"}`) {
+		t.Errorf("series for the removed role survived the refresh:\n%s", body)
+	}
+	if want := `wolke_active_sessions{role="student"} 5`; !strings.Contains(body, want) {
+		t.Errorf("scrape missing %q — the removed role's sessions fold onto the default:\n%s", want, body)
+	}
+}
+
+// sumSessionSeries adds up every wolke_active_sessions series in the scrape,
+// which is what the dashboard's total panel computes in PromQL.
+func sumSessionSeries(t *testing.T, m *Metrics) float64 {
+	t.Helper()
+	_, body := scrape(t, m.Handler(""), "")
+	var total float64
+	for _, line := range strings.Split(body, "\n") {
+		if !strings.HasPrefix(line, "wolke_active_sessions{") {
+			continue
+		}
+		v, err := strconv.ParseFloat(line[strings.LastIndex(line, " ")+1:], 64)
+		if err != nil {
+			t.Fatalf("parsing %q: %v", line, err)
+		}
+		total += v
+	}
+	return total
 }

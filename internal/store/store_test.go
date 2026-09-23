@@ -66,3 +66,24 @@ func TestCountFavoritesByServiceAndRole(t *testing.T) {
 		}
 	}
 }
+
+func TestCountActiveSessionsByRole(t *testing.T) {
+	db := testDB(t)
+	// Same union-over-unnest shape as the favorites query, so run it for the
+	// same reason: sqlc cannot prove it executes. Every requested role must
+	// come back even with no sessions at all — that zero is what keeps a role
+	// reading 0 instead of vanishing from the dashboard (#232).
+	rows, err := db.CountActiveSessionsByRole(context.Background(), []string{"student", "staff"})
+	if err != nil {
+		t.Fatalf("CountActiveSessionsByRole: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, r := range rows {
+		seen[r.Role] = true
+	}
+	for _, role := range []string{"student", "staff"} {
+		if !seen[role] {
+			t.Errorf("no row for role %q", role)
+		}
+	}
+}

@@ -42,15 +42,55 @@ func (q *Queries) CountActiveAnnouncementsBySeverity(ctx context.Context) ([]Cou
 	return items, nil
 }
 
-const countActiveSessions = `-- name: CountActiveSessions :one
-select count(*) from sessions where expires_at > now()
+const countActiveSessionsByRole = `-- name: CountActiveSessionsByRole :many
+select r.role::text as role, 0::bigint as n
+from unnest($1::text[]) as r(role)
+union all
+select u.primary_role as role, count(*) as n
+from sessions s
+join users u on u.id = s.user_id
+where s.expires_at > now()
+group by u.primary_role
 `
 
-func (q *Queries) CountActiveSessions(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countActiveSessions)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
+type CountActiveSessionsByRoleRow struct {
+	Role string `json:"role"`
+	N    int64  `json:"n"`
+}
+
+// Currently valid sessions per configured role. Same two-branch shape as
+// CountFavoritesByServiceAndRole below, and for the same two reasons:
+//
+//  1. Unnesting the configured role list emits a zero for every role, so a role
+//     nobody is logged in under reads 0 rather than dropping out of the
+//     dashboard — a gap there is ambiguous between "nobody logged in" and "the
+//     exporter stopped" (#128's property, now on sessions).
+//  2. The real counts are grouped by the role as stored on the user. Roles the
+//     config no longer defines come back verbatim; the caller folds them onto
+//     the configured default (internal/metrics) via config.RoleSet.Effective,
+//     which keeps the "effective role" rule in one place rather than
+//     duplicating it here.
+//
+// A role therefore appears more than once and the caller sums; the zero rows
+// are the additive identity that makes that safe.
+func (q *Queries) CountActiveSessionsByRole(ctx context.Context, roles []string) ([]CountActiveSessionsByRoleRow, error) {
+	rows, err := q.db.Query(ctx, countActiveSessionsByRole, roles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountActiveSessionsByRoleRow{}
+	for rows.Next() {
+		var i CountActiveSessionsByRoleRow
+		if err := rows.Scan(&i.Role, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const countFavoritesByServiceAndRole = `-- name: CountFavoritesByServiceAndRole :many
