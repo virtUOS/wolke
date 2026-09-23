@@ -24,6 +24,9 @@ type Metrics struct {
 	ClicksTotal     *prometheus.CounterVec   // service, role, target
 	RequestDuration *prometheus.HistogramVec // route, method, code
 
+	favoritesAdded   *prometheus.CounterVec // service, role
+	favoritesRemoved *prometheus.CounterVec // service, role
+
 	activeSessions      prometheus.Gauge
 	catalogServices     *prometheus.GaugeVec // state=active|inactive
 	announcementsActive *prometheus.GaugeVec // severity
@@ -43,6 +46,17 @@ func New() *Metrics {
 			Help:    "HTTP request duration by route, method, and status code.",
 			Buckets: prometheus.DefBuckets,
 		}, []string{"route", "method", "code"}),
+		// Counted only where the user themselves toggles the star, so the pair
+		// is the delta to the pre-configured favorites rather than "all
+		// favorites" — see the increments in internal/service/favorites.go.
+		favoritesAdded: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "wolke_service_favorites_added_total",
+			Help: "Favorites added by users themselves, per service and role. Never counts the role defaults seeded at first login, so this is the delta to the pre-configured set.",
+		}, []string{"service", "role"}),
+		favoritesRemoved: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "wolke_service_favorites_removed_total",
+			Help: "Favorites removed by users themselves, per service and role. Counts a removed role default too: dropping one is a user choice.",
+		}, []string{"service", "role"}),
 		activeSessions: prometheus.NewGauge(prometheus.GaugeOpts{
 			Name: "wolke_active_sessions",
 			Help: "Currently valid server-side sessions.",
@@ -60,7 +74,7 @@ func New() *Metrics {
 			Help: "Users currently having a service favorited, per active service and role. Current state: a user's favorites move between roles when their role changes.",
 		}, []string{"service", "role"}),
 	}
-	m.reg.MustRegister(m.ClicksTotal, m.RequestDuration, m.activeSessions, m.catalogServices, m.announcementsActive, m.serviceFavorites)
+	m.reg.MustRegister(m.ClicksTotal, m.RequestDuration, m.favoritesAdded, m.favoritesRemoved, m.activeSessions, m.catalogServices, m.announcementsActive, m.serviceFavorites)
 	return m
 }
 
@@ -73,6 +87,23 @@ func (m *Metrics) ObserveRequest(route, method string, code int, seconds float64
 // link followed (usage.TargetService | usage.TargetDocumentation).
 func (m *Metrics) IncClick(service, role, target string) {
 	m.ClicksTotal.WithLabelValues(service, role, target).Inc()
+}
+
+// IncFavoriteAdded increments the per-service/role counter of favorites the
+// user added themselves. It and IncFavoriteRemoved below are counters,
+// per-instance like ClicksTotal,
+// so dashboard queries sum across instances — unlike the wolke_service_favorites
+// gauge, which is shared state read from the database and is maxed (#224).
+//
+// Together they satisfy service.FavoriteMetrics; the rule about which call
+// sites may reach them lives there, with the increments.
+func (m *Metrics) IncFavoriteAdded(service, role string) {
+	m.favoritesAdded.WithLabelValues(service, role).Inc()
+}
+
+// IncFavoriteRemoved is the un-star counterpart of IncFavoriteAdded.
+func (m *Metrics) IncFavoriteRemoved(service, role string) {
+	m.favoritesRemoved.WithLabelValues(service, role).Inc()
 }
 
 // GaugeSource provides the DB counts the periodic refresh reads (satisfied by

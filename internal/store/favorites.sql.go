@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const addFavorite = `-- name: AddFavorite :exec
+const addFavorite = `-- name: AddFavorite :execrows
 insert into favorites (user_id, service_id, sort, manual_sort)
 values (
     $1, $2, $3,
@@ -26,12 +26,18 @@ type AddFavoriteParams struct {
 	Sort      int32       `json:"sort"`
 }
 
+// Rows affected, not :exec, so the caller can tell a real star from a repeat of
+// one: on conflict do nothing makes this idempotent, and the added counter must
+// not count the no-op (issue #228).
 // manual_sort is computed here rather than passed in: a favorite starred while
 // the user is in manual mode has to land at the end of *their* arrangement,
 // which is a different sequence from `sort` (issue #125).
-func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) error {
-	_, err := q.db.Exec(ctx, addFavorite, arg.UserID, arg.ServiceID, arg.Sort)
-	return err
+func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addFavorite, arg.UserID, arg.ServiceID, arg.Sort)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const listActiveFavoriteIDs = `-- name: ListActiveFavoriteIDs :many

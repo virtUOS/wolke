@@ -28,7 +28,7 @@ type FavoritesStore interface {
 	SeedManualFavoritesOrder(ctx context.Context, arg store.SeedManualFavoritesOrderParams) error
 	MarkFavoritesManualSeeded(ctx context.Context, userID pgtype.UUID) error
 	NextFavoriteSort(ctx context.Context, userID pgtype.UUID) (int32, error)
-	AddFavorite(ctx context.Context, arg store.AddFavoriteParams) error
+	AddFavorite(ctx context.Context, arg store.AddFavoriteParams) (int64, error)
 	RemoveFavorite(ctx context.Context, arg store.RemoveFavoriteParams) (int64, error)
 	SeedFavoritesFromRoleDefaults(ctx context.Context, arg store.SeedFavoritesFromRoleDefaultsParams) error
 	MarkFavoritesSeeded(ctx context.Context, userID pgtype.UUID) error
@@ -104,22 +104,66 @@ func ListFavorites(ctx context.Context, db FavoritesStore, u store.User) ([]stri
 	return out, nil
 }
 
+// FavoriteMetrics counts the two favorite toggles. An interface, not
+// *metrics.Metrics, so the use case stays free of the collector registry and a
+// test can assert what was counted; nil is allowed and means "not counted",
+// which is what the tests that are not about metrics pass.
+//
+// THE PLACEMENT IS THE DEFINITION. Only AddFavorite and RemoveFavorite below
+// may call these. SeedFavoritesFromRoleDefaults — the pre-fill in ListFavorites
+// — must not, and there is a test that says so. See the comment at the
+// increments for why (issue #228).
+type FavoriteMetrics interface {
+	IncFavoriteAdded(service, role string)
+	IncFavoriteRemoved(service, role string)
+}
+
 // AddFavorite favorites a service (idempotent), appending it after existing ones.
-func AddFavorite(ctx context.Context, db FavoritesStore, userID, serviceID pgtype.UUID) error {
+//
+// serviceName and role are metric labels only: the caller resolves the name
+// through the reader's narrowed catalog view and passes the user's effective
+// role (config.RoleSet.Effective, applied once in withEffectiveRole), so a
+// stale role never mints a series the gauge does not also have. An empty
+// serviceName means the caller could not name the service, and nothing is
+// counted rather than a series being minted under "".
+func AddFavorite(ctx context.Context, db FavoritesStore, m FavoriteMetrics, userID, serviceID pgtype.UUID, serviceName, role string) error {
 	sort, err := db.NextFavoriteSort(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("next favorite sort: %w", err)
 	}
-	if err := db.AddFavorite(ctx, store.AddFavoriteParams{UserID: userID, ServiceID: serviceID, Sort: sort}); err != nil {
+	rows, err := db.AddFavorite(ctx, store.AddFavoriteParams{UserID: userID, ServiceID: serviceID, Sort: sort})
+	if err != nil {
 		return fmt.Errorf("add favorite: %w", err)
+	}
+	// Counted HERE and not in the role-default seed above, and that placement is
+	// the whole meaning of the metric: a seeded favorite is never counted, so
+	// added_total minus removed_total IS the delta between what users chose for
+	// themselves and what the deployment pre-configured for them. There is
+	// nothing to model and nothing to subtract — which is also why moving this
+	// increment down into the store, or "helpfully" adding one to the seed path,
+	// silently turns the counter into "all favorites" (issue #228).
+	//
+	// rows guards the idempotent re-star: on conflict do nothing wrote nothing,
+	// so nothing changed and nothing is counted.
+	if m != nil && rows > 0 && serviceName != "" {
+		m.IncFavoriteAdded(serviceName, role)
 	}
 	return nil
 }
 
 // RemoveFavorite un-favorites a service (idempotent — a no-op if absent).
-func RemoveFavorite(ctx context.Context, db FavoritesStore, userID, serviceID pgtype.UUID) error {
-	if _, err := db.RemoveFavorite(ctx, store.RemoveFavoriteParams{UserID: userID, ServiceID: serviceID}); err != nil {
+// serviceName and role are metric labels, as on AddFavorite.
+func RemoveFavorite(ctx context.Context, db FavoritesStore, m FavoriteMetrics, userID, serviceID pgtype.UUID, serviceName, role string) error {
+	rows, err := db.RemoveFavorite(ctx, store.RemoveFavoriteParams{UserID: userID, ServiceID: serviceID})
+	if err != nil {
 		return fmt.Errorf("remove favorite: %w", err)
+	}
+	// The counterpart of the increment in AddFavorite, under the same rule: the
+	// user's own toggle, never the seed. A removed role default IS counted —
+	// dropping a pre-configured favorite is exactly the user choice the delta is
+	// about. rows keeps the idempotent no-op out of the count.
+	if m != nil && rows > 0 && serviceName != "" {
+		m.IncFavoriteRemoved(serviceName, role)
 	}
 	return nil
 }

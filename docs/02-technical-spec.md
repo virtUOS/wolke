@@ -419,12 +419,20 @@ wolke_http_request_duration_seconds{route,method,code}          # histogram
 wolke_catalog_services{state="active|inactive"}                 # gauge
 wolke_announcements_active{severity}                            # gauge
 wolke_service_favorites{service="MyShare", role="student"}      # gauge
+wolke_service_favorites_added_total{service="MyShare", role="student"}    # counter
+wolke_service_favorites_removed_total{service="MyShare", role="student"}  # counter
 ```
 `wolke_service_clicks_total` is the usage-by-role requirement. It is fed from the same click
 ingestion that powers "frequently used", incremented in-process and reconciled against
 `usage_daily` so a restart doesn't lose history. `wolke_service_favorites` counts the users
 currently having each **active** service pinned — zeros included, refreshed from the DB by the
 same gauge ticker, and labelled by service name so it joins the click counter, plus the role.
+The two `_total` counters are the *movement* the gauge cannot show: how often a service is
+starred and un-starred. They are incremented only where the user themselves toggles the star
+(`service.AddFavorite` / `service.RemoveFavorite`), never in the one-time role-default pre-fill,
+so the pair is the **delta to the pre-configured favorites** — a seeded favorite is never
+counted and there is nothing to subtract. They are per-instance, like the click counter, so
+dashboard queries `sum` them rather than `max` them.
 The role set is config (§6), not schema: the refresh emits a row per (active service ×
 configured role), so a service nobody pinned and a role that pinned nothing both stay in the
 dashboard as an explicit zero, and a user whose stored role is no longer configured is counted

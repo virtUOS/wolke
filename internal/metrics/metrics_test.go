@@ -50,6 +50,8 @@ func TestMetricsExposeSeries(t *testing.T) {
 	m.IncClick("MyShare", "student", "service")
 	m.IncClick("MyShare", "student", "documentation")
 	m.ObserveRequest("/api/catalog", "GET", 200, 0.01)
+	m.IncFavoriteAdded("MyShare", "student")
+	m.IncFavoriteRemoved("MyShare", "staff")
 
 	_, body := scrape(t, m.Handler(""), "")
 	for _, want := range []string{
@@ -57,6 +59,8 @@ func TestMetricsExposeSeries(t *testing.T) {
 		`wolke_service_clicks_total{role="student",service="MyShare",target="documentation"} 1`,
 		"wolke_http_request_duration_seconds",
 		"wolke_active_sessions",
+		`wolke_service_favorites_added_total{role="student",service="MyShare"} 1`,
+		`wolke_service_favorites_removed_total{role="staff",service="MyShare"} 1`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("scrape missing %q", want)

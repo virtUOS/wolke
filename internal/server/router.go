@@ -161,12 +161,12 @@ func mountAuthenticated(r chi.Router, deps Deps, spaHandler http.Handler) {
 		if deps.Favorites != nil {
 			if deps.Catalog != nil {
 				pr.With(requireUserJSON).Get("/api/favorites", listFavorites(deps.Catalog, deps.Favorites, vis))
-				pr.With(requireUserJSON).Post("/api/favorites/items", addFavorite(deps.Favorites, deps.Catalog, vis))
+				pr.With(requireUserJSON).Post("/api/favorites/items", addFavorite(deps.Favorites, deps.Catalog, vis, deps.Metrics))
 				// The order write validates against the same narrowed view the
 				// list is rendered from, so it needs the catalog too.
 				pr.With(requireUserJSON).Put("/api/favorites/order", setFavoritesOrder(deps.Catalog, deps.Favorites, vis))
 			}
-			pr.With(requireUserJSON).Delete("/api/favorites/items", removeFavorite(deps.Favorites))
+			pr.With(requireUserJSON).Delete("/api/favorites/items", removeFavorite(deps.Favorites, deps.Catalog, vis, deps.Metrics))
 		}
 		if deps.Usage != nil && deps.Catalog != nil {
 			pr.With(requireUserJSON).Post("/api/events/click", recordClick(deps.Usage, deps.Catalog, deps.Metrics, vis))

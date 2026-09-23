@@ -49,7 +49,7 @@ func TestListFavoritesByUsageWindow(t *testing.T) {
 	})
 
 	for i, id := range []pgtype.UUID{old, recent} {
-		if err := db.AddFavorite(ctx, AddFavoriteParams{UserID: u.ID, ServiceID: id, Sort: int32(i)}); err != nil {
+		if _, err := db.AddFavorite(ctx, AddFavoriteParams{UserID: u.ID, ServiceID: id, Sort: int32(i)}); err != nil {
 			t.Fatalf("add favorite: %v", err)
 		}
 	}
