@@ -48,7 +48,7 @@
         "spec": {
           "id": 1,
           "title": "Clicks per service (rate)",
-          "description": "Per-service counter: each instance counts only the clicks it served, so summing across the selected instances is the fleet total.",
+          "description": "Counter (wolke_service_clicks_total) — per-instance: each instance counts only the clicks it served, so the panel sums across the selected instances to get the fleet total. Never max: that would report the busiest instance instead of the total.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -66,7 +66,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (exported_service) (rate(wolke_service_clicks_total{instance=~\"$instance\"}[10m]))",
+                        "expr": "sum by (service) (rate(wolke_service_clicks_total{instance=~\"$instance\"}[10m]))",
                         "legendFormat": "{{service}}",
                         "range": true
                       }
@@ -163,7 +163,7 @@
         "spec": {
           "id": 10,
           "title": "Clicks per service, role and target (total)",
-          "description": "Per-instance counter: each instance counts only the clicks it served, so summing across the selected instances is the fleet total.",
+          "description": "Counter (wolke_service_clicks_total) — per-instance: each instance counts only the clicks it served, so the panel sums across the selected instances to get the fleet total. Never max: that would report the busiest instance instead of the total.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -181,7 +181,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (exported_service, role, target) (wolke_service_clicks_total{instance=~\"$instance\"})",
+                        "expr": "sum by (service, role, target) (wolke_service_clicks_total{instance=~\"$instance\"})",
                         "format": "table",
                         "instant": true
                       }
@@ -247,7 +247,7 @@
         "spec": {
           "id": 11,
           "title": "Total Clicks",
-          "description": "Per-instance counter: each instance counts only the clicks it served, so summing across the selected instances is the fleet total.",
+          "description": "Counter (wolke_service_clicks_total) — per-instance: each instance counts only the clicks it served, so the panel sums across the selected instances to get the fleet total. Never max: that would report the busiest instance instead of the total.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -361,8 +361,8 @@
         "kind": "Panel",
         "spec": {
           "id": 12,
-          "title": "Staff's Favorites per service (top 10)",
-          "description": "Shared-state gauge: read from the one Postgres on every instance's refresh, so every instance reports the same value. Aggregated with max, not sum — summing would multiply the real number by the instance count. (The adjacent click panels do sum; they are per-instance counters.)",
+          "title": "Favorites per service and role (top 10)",
+          "description": "Gauge (wolke_service_favorites) — shared state: every instance reads it from the one Postgres on its refresh, so all of them report the same number. The panel takes the max across the selection, which is that number. Never sum: that would multiply it by the instance count.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -380,9 +380,9 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "topk(10, max by (exported_service) (wolke_service_favorites{instance=~\"$instance\", role=\"staff\"}))",
+                        "expr": "topk(10, max by (service, role) (wolke_service_favorites{instance=~\"$instance\", role=~\"$role\"}))",
                         "instant": true,
-                        "legendFormat": "{{service}}"
+                        "legendFormat": "{{service}} · {{role}}"
                       }
                     },
                     "refId": "A",
@@ -447,109 +447,12 @@
           }
         }
       },
-      "panel-13": {
-        "kind": "Panel",
-        "spec": {
-          "id": 13,
-          "title": "Students' Favorites per service (top 10)",
-          "description": "Shared-state gauge: read from the one Postgres on every instance's refresh, so every instance reports the same value. Aggregated with max, not sum — summing would multiply the real number by the instance count. (The adjacent click panels do sum; they are per-instance counters.)",
-          "links": [],
-          "data": {
-            "kind": "QueryGroup",
-            "spec": {
-              "queries": [
-                {
-                  "kind": "PanelQuery",
-                  "spec": {
-                    "query": {
-                      "kind": "DataQuery",
-                      "group": "prometheus",
-                      "version": "v0",
-                      "datasource": {
-                        "name": "${datasource}"
-                      },
-                      "spec": {
-                        "editorMode": "code",
-                        "expr": "topk(10, max by (exported_service) (wolke_service_favorites{instance=~\"$instance\", role=\"student\"}))",
-                        "instant": true,
-                        "legendFormat": "{{service}}"
-                      }
-                    },
-                    "refId": "A",
-                    "hidden": false
-                  }
-                }
-              ],
-              "transformations": [],
-              "queryOptions": {}
-            }
-          },
-          "vizConfig": {
-            "kind": "VizConfig",
-            "group": "bargauge",
-            "version": "13.2.2",
-            "spec": {
-              "options": {
-                "displayMode": "gradient",
-                "legend": {
-                  "calcs": [],
-                  "displayMode": "list",
-                  "placement": "bottom",
-                  "showLegend": false
-                },
-                "maxVizHeight": 300,
-                "minVizHeight": 16,
-                "minVizWidth": 8,
-                "namePlacement": "auto",
-                "orientation": "horizontal",
-                "reduceOptions": {
-                  "calcs": [
-                    "lastNotNull"
-                  ],
-                  "fields": "",
-                  "values": false
-                },
-                "showUnfilled": true,
-                "sizing": "auto",
-                "valueMode": "text"
-              },
-              "fieldConfig": {
-                "defaults": {
-                  "unit": "short",
-                  "min": 0,
-                  "thresholds": {
-                    "mode": "percentage",
-                    "steps": [
-                      {
-                        "value": 0,
-                        "color": "green"
-                      },
-                      {
-                        "value": 60,
-                        "color": "orange"
-                      },
-                      {
-                        "value": 80,
-                        "color": "red"
-                      }
-                    ]
-                  },
-                  "color": {
-                    "mode": "thresholds"
-                  }
-                },
-                "overrides": []
-              }
-            }
-          }
-        }
-      },
       "panel-2": {
         "kind": "Panel",
         "spec": {
           "id": 2,
           "title": "Clicks per service and role (total)",
-          "description": "Per-instance counter: each instance counts only the clicks it served, so summing across the selected instances is the fleet total.",
+          "description": "Counter (wolke_service_clicks_total) — per-instance: each instance counts only the clicks it served, so the panel sums across the selected instances to get the fleet total. Never max: that would report the busiest instance instead of the total.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -567,7 +470,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (exported_service, role) (wolke_service_clicks_total{instance=~\"$instance\"})",
+                        "expr": "sum by (service, role) (wolke_service_clicks_total{instance=~\"$instance\"})",
                         "format": "table",
                         "instant": true
                       }
@@ -989,7 +892,7 @@
         "spec": {
           "id": 7,
           "title": "Clicks per service in range (top 10)",
-          "description": "Shared-state gauge: read from the one Postgres on every instance's refresh, so every instance reports the same value. Aggregated with max, not sum — summing would multiply the real number by the instance count. (The adjacent click panels do sum; they are per-instance counters.)",
+          "description": "Counter (wolke_service_clicks_total) — per-instance: each instance counts only the clicks it served, so the panel sums across the selected instances to get the fleet total. Never max: that would report the busiest instance instead of the total.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1007,7 +910,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "topk(10, round(max by (exported_service) (increase(wolke_service_clicks_total{instance=~\"$instance\"}[$__range]))))",
+                        "expr": "topk(10, round(sum by (service) (increase(wolke_service_clicks_total{instance=~\"$instance\"}[$__range]))))",
                         "instant": true,
                         "legendFormat": "{{service}}"
                       }
@@ -1079,7 +982,7 @@
         "spec": {
           "id": 8,
           "title": "Clicks per service and target (total)",
-          "description": "Per-instance counter: each instance counts only the clicks it served, so summing across the selected instances is the fleet total.",
+          "description": "Counter (wolke_service_clicks_total) — per-instance: each instance counts only the clicks it served, so the panel sums across the selected instances to get the fleet total. Never max: that would report the busiest instance instead of the total.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1097,7 +1000,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (exported_service, target) (wolke_service_clicks_total{instance=~\"$instance\"})",
+                        "expr": "sum by (service, target) (wolke_service_clicks_total{instance=~\"$instance\"})",
                         "format": "table",
                         "instant": true
                       }
@@ -1163,7 +1066,7 @@
         "spec": {
           "id": 9,
           "title": "Favorites per service and role (current)",
-          "description": "Shared-state gauge: read from the one Postgres on every instance's refresh, so every instance reports the same value. Aggregated with max, not sum — summing would multiply the real number by the instance count. (The adjacent click panels do sum; they are per-instance counters.)",
+          "description": "Gauge (wolke_service_favorites) — shared state: every instance reads it from the one Postgres on its refresh, so all of them report the same number. The panel takes the max across the selection, which is that number. Never sum: that would multiply it by the instance count.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1181,7 +1084,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "max by (exported_service, role) (wolke_service_favorites{instance=~\"$instance\"})",
+                        "expr": "max by (service, role) (wolke_service_favorites{instance=~\"$instance\", role=~\"$role\"})",
                         "format": "table",
                         "instant": true
                       }
@@ -1315,19 +1218,6 @@
           {
             "kind": "GridLayoutItem",
             "spec": {
-              "x": 0,
-              "y": 11,
-              "width": 12,
-              "height": 11,
-              "element": {
-                "kind": "ElementReference",
-                "name": "panel-13"
-              }
-            }
-          },
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
               "x": 12,
               "y": 11,
               "width": 12,
@@ -1342,7 +1232,7 @@
             "kind": "GridLayoutItem",
             "spec": {
               "x": 0,
-              "y": 22,
+              "y": 11,
               "width": 12,
               "height": 11,
               "element": {
@@ -1501,6 +1391,47 @@
           "regexApplyTo": "value",
           "sort": "alphabeticalAsc",
           "definition": "label_values(wolke_active_sessions, instance)",
+          "options": [],
+          "multi": true,
+          "includeAll": true,
+          "allValue": ".*",
+          "allowCustomValue": true
+        }
+      },
+      {
+        "kind": "QueryVariable",
+        "spec": {
+          "name": "role",
+          "current": {
+            "text": [
+              "$__all"
+            ],
+            "value": [
+              "$__all"
+            ]
+          },
+          "label": "Role",
+          "hide": "dontHide",
+          "refresh": "onDashboardLoad",
+          "skipUrlSync": false,
+          "description": "Roles to include. They come from the deployment's OIDC claim mapping, so they are read off the metric rather than hardcoded here.",
+          "query": {
+            "kind": "DataQuery",
+            "group": "prometheus",
+            "version": "v0",
+            "datasource": {
+              "name": "${datasource}"
+            },
+            "spec": {
+              "qryType": 1,
+              "query": "label_values(wolke_service_favorites, role)",
+              "refId": "role"
+            }
+          },
+          "regex": "",
+          "regexApplyTo": "value",
+          "sort": "alphabeticalAsc",
+          "definition": "label_values(wolke_service_favorites, role)",
           "options": [],
           "multi": true,
           "includeAll": true,
