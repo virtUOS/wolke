@@ -635,7 +635,7 @@
         "spec": {
           "id": 4,
           "title": "Active sessions",
-          "description": "Shared-state gauge: read from the one Postgres on every instance's refresh, so every instance reports the same value. Aggregated with max, not sum — summing would multiply the real number by the instance count.",
+          "description": "Gauge (wolke_active_sessions) — shared state: every instance reads it from the one Postgres on its refresh, so all of them report the same number. Since #232 the metric carries a role label, so the total is max BY ROLE across the selection (the shared-state value for each role), summed across roles. A bare max would report the largest single role, not the total; a bare sum would multiply it by the instance count. Not filtered by the Role variable — this is the total.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -653,7 +653,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "max(wolke_active_sessions{instance=~\"$instance\"})",
+                        "expr": "sum(max by (role) (wolke_active_sessions{instance=~\"$instance\"}))",
                         "range": true
                       }
                     },
@@ -1302,6 +1302,87 @@
             }
           }
         }
+      },
+      "panel-16": {
+        "kind": "Panel",
+        "spec": {
+          "id": 16,
+          "title": "Active sessions by role",
+          "description": "Gauge (wolke_active_sessions) — shared state: every instance reads it from the one Postgres on its refresh, so all of them report the same number. The panel takes the max across the selection per role, which is that number. Never sum across instances: that would multiply it by the instance count. A configured role with nobody logged in reads 0 rather than dropping out, so a gap here means the exporter stopped.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "name": "${datasource}"
+                      },
+                      "spec": {
+                        "editorMode": "code",
+                        "expr": "max by (role) (wolke_active_sessions{instance=~\"$instance\", role=~\"$role\"})",
+                        "range": true,
+                        "legendFormat": "{{role}}"
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "13.2.2",
+            "spec": {
+              "options": {
+                "legend": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "auto",
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    }
+                  },
+                  "min": 0,
+                  "color": {
+                    "mode": "palette-classic"
+                  }
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
       }
     },
     "layout": {
@@ -1487,6 +1568,19 @@
               "element": {
                 "kind": "ElementReference",
                 "name": "panel-3"
+              }
+            }
+          },
+          {
+            "kind": "GridLayoutItem",
+            "spec": {
+              "x": 12,
+              "y": 49,
+              "width": 12,
+              "height": 11,
+              "element": {
+                "kind": "ElementReference",
+                "name": "panel-16"
               }
             }
           }

@@ -35,8 +35,8 @@ they collide, which is what this dashboard assumes.
 
 If you cannot set it (the job is shared, or the collision is deliberate), the
 other way out is to rename the *target's* label instead — call it `job_service`
-or similar — rather than editing 14 panels to say `exported_service`, which
-would then break for everyone else.
+or similar — rather than editing every service-labelled panel to say
+`exported_service`, which would then break for everyone else.
 
 ## Grafana dashboard
 
@@ -53,8 +53,8 @@ importing it:
 
 | Grafana | Result |
 |---------|--------|
-| 13.2.2 | Imports and renders all 14 panels natively. |
-| 12.4.9 | Imports and renders all 14 panels, but banners "The Dynamic Dashboard feature is temporarily disabled" and opens it as a *classic* dashboard — saving from there can drop v2 features. |
+| 13.2.2 | Imports and renders all 15 panels natively. |
+| 12.4.9 | Imports and renders all 15 panels, but banners "The Dynamic Dashboard feature is temporarily disabled" and opens it as a *classic* dashboard — saving from there can drop v2 features. |
 | 12.0.0 | Import "succeeds" and produces an **empty dashboard**: no panels, no error, no warning. |
 
 So: **Grafana 13 or newer**. 12.4.x works if you only read it. Below that the
@@ -112,6 +112,25 @@ quietly plausible — that copy is exactly how a `max` once ended up on a counte
 
 Don't "fix" the inconsistency between two adjacent panels — it is the point.
 
+#### The one gauge that also sums: `wolke_active_sessions`
+
+Since #232 the sessions gauge carries a `role` label, so `max` alone is no
+longer a total — it is *the largest single role's* session count, a smaller
+number that looks perfectly plausible and raises no error. The total panel is:
+
+```promql
+sum(max by (role) (wolke_active_sessions{instance=~"$instance"}))
+```
+
+`max by (role)` collapses the instances (shared state, so they agree), and the
+`sum` then adds the roles up. Both aggregations are needed and the order
+matters. The same trap applies to any external alert or recording rule written
+against the unlabelled gauge — see docs/02 §7, which records this as a metric
+contract change.
+
+The total panel is deliberately *not* filtered by the Role variable; the
+adjacent **Active sessions by role** panel is, and is the one to filter.
+
 ### The two favorites families
 
 `wolke_service_favorites` (gauge) is **current state**: how many users have a
@@ -128,7 +147,8 @@ try and keep (high in added only).
 
 ### Panels
 
-Clicks per service in range (top 10), active sessions, catalog services by
+Clicks per service in range (top 10), active sessions (the total — see the
+gauge note above), active sessions by role, catalog services by
 state, active announcements by severity, total clicks, favorites per service and
 role (top 10 — the current-state gauge, filtered by the Role variable), clicks
 per service (rate), favorites added in range (top 10), favorites removed in range

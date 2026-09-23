@@ -27,7 +27,7 @@ type Metrics struct {
 	favoritesAdded   *prometheus.CounterVec // service, role
 	favoritesRemoved *prometheus.CounterVec // service, role
 
-	activeSessions      prometheus.Gauge
+	activeSessions      *prometheus.GaugeVec // role
 	catalogServices     *prometheus.GaugeVec // state=active|inactive
 	announcementsActive *prometheus.GaugeVec // severity
 	serviceFavorites    *prometheus.GaugeVec // service (name, as on ClicksTotal), role
@@ -57,10 +57,10 @@ func New() *Metrics {
 			Name: "wolke_service_favorites_removed_total",
 			Help: "Favorites removed by users themselves, per service and role. Counts a removed role default too: dropping one is a user choice.",
 		}, []string{"service", "role"}),
-		activeSessions: prometheus.NewGauge(prometheus.GaugeOpts{
+		activeSessions: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "wolke_active_sessions",
-			Help: "Currently valid server-side sessions.",
-		}),
+			Help: "Currently valid server-side sessions, per role. The total is the sum across roles — see the dashboard's Active sessions panel (#232).",
+		}, []string{"role"}),
 		catalogServices: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "wolke_catalog_services",
 			Help: "Number of catalog services by state.",
@@ -109,7 +109,7 @@ func (m *Metrics) IncFavoriteRemoved(service, role string) {
 // GaugeSource provides the DB counts the periodic refresh reads (satisfied by
 // *store.DB).
 type GaugeSource interface {
-	CountActiveSessions(ctx context.Context) (int64, error)
+	CountActiveSessionsByRole(ctx context.Context, roles []string) ([]store.CountActiveSessionsByRoleRow, error)
 	CountServicesByState(ctx context.Context) ([]store.CountServicesByStateRow, error)
 	CountActiveAnnouncementsBySeverity(ctx context.Context) ([]store.CountActiveAnnouncementsBySeverityRow, error)
 	CountFavoritesByServiceAndRole(ctx context.Context, roles []string) ([]store.CountFavoritesByServiceAndRoleRow, error)
@@ -117,11 +117,25 @@ type GaugeSource interface {
 
 // RefreshGauges updates the gauges from the database.
 func (m *Metrics) RefreshGauges(ctx context.Context, src GaugeSource, roles config.RoleSet) error {
-	n, err := src.CountActiveSessions(ctx)
+	sessions, err := src.CountActiveSessionsByRole(ctx, roles.Slugs())
 	if err != nil {
 		return err
 	}
-	m.activeSessions.Set(float64(n))
+	// Same three rules as the favorites gauge below, for the same reasons: the
+	// query's zero rows keep a role with no sessions in the scrape as an
+	// explicit 0, a stale role folds onto the configured default here rather
+	// than in SQL (config.RoleSet.Effective is the single place that rule
+	// lives), and a role therefore appears more than once and is summed.
+	sessionsByRole := make(map[string]float64, len(sessions))
+	for _, s := range sessions {
+		sessionsByRole[roles.Effective(s.Role)] += float64(s.N)
+	}
+	// Reset first, so a role dropped from the configuration takes its series
+	// with it instead of freezing at its last value.
+	m.activeSessions.Reset()
+	for role, n := range sessionsByRole {
+		m.activeSessions.WithLabelValues(role).Set(n)
+	}
 
 	rows, err := src.CountServicesByState(ctx)
 	if err != nil {

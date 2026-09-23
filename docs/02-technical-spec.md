@@ -414,7 +414,7 @@ Expose `/metrics` on the app's own listener. **Do not expose it publicly** — p
 Core series (prefix `wolke_`; aggregate labels only):
 ```
 wolke_service_clicks_total{service="MyShare", role="student", target="service|documentation"}  # counter
-wolke_active_sessions                                           # gauge
+wolke_active_sessions{role="student"}                           # gauge
 wolke_http_request_duration_seconds{route,method,code}          # histogram
 wolke_catalog_services{state="active|inactive"}                 # gauge
 wolke_announcements_active{severity}                            # gauge
@@ -422,6 +422,20 @@ wolke_service_favorites{service="MyShare", role="student"}      # gauge
 wolke_service_favorites_added_total{service="MyShare", role="student"}    # counter
 wolke_service_favorites_removed_total{service="MyShare", role="student"}  # counter
 ```
+`wolke_active_sessions` counts currently valid server-side sessions **per role**. It carries a
+`role` label since #232; before that it was a single unlabelled number. **This is a metric
+contract change** — the first time an existing series gained a label rather than a new metric
+being added — so an external alert or recording rule written against the unlabelled gauge now
+sees one series per role and must aggregate: the total is
+`sum(max by (role) (wolke_active_sessions))` — `max` across instances first (it is shared state,
+read from the one Postgres, so every instance reports the same number, #224), then `sum`
+across roles. A bare `max` returns the largest single role's count, which is plausible-looking
+and wrong. It follows the same three rules as `wolke_service_favorites`: a zero for every
+configured role (so a role nobody is logged in under reads `0` rather than leaving an ambiguous
+gap), a stale role folded onto the configured default in Go via `config.RoleSet.Effective`, and
+a `Reset()` before each refresh so a role dropped from the configuration takes its series with
+it.
+
 `wolke_service_clicks_total` is the usage-by-role requirement. It is fed from the same click
 ingestion that powers "frequently used", incremented in-process and reconciled against
 `usage_daily` so a restart doesn't lose history. `wolke_service_favorites` counts the users

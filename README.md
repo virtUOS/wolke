@@ -351,7 +351,7 @@ All series are prefixed `wolke_` (never an institution name), and labels are **a
 |--------|------|--------|---------|
 | `wolke_http_request_duration_seconds` | histogram | `route`, `method`, `code` | Request latency. `route` is the matched chi pattern, not the raw path, so cardinality stays bounded |
 | `wolke_service_clicks_total` | counter | `service`, `role`, `target` (`service` / `documentation`) | Clicks per service and role, split by whether the launch link or the documentation link was followed (the usage-by-role signal) |
-| `wolke_active_sessions` | gauge | — | Currently valid server-side sessions |
+| `wolke_active_sessions` | gauge | `role` | Currently valid server-side sessions, per role. The total is `sum(max by (role) (…))` — see docs/02 §7; a bare `max` gives the largest single role |
 | `wolke_catalog_services` | gauge | `state` (`active` / `inactive`) | Catalog size by state |
 | `wolke_announcements_active` | gauge | `severity` | In-window announcements by severity |
 | `wolke_service_favorites` | gauge | `service` | Users currently having each **active** service favorited (zeros included, so a service nobody pinned still reports `0`) |
