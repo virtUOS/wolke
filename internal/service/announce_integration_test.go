@@ -11,6 +11,7 @@ import (
 
 	"github.com/virtuos/wolke/internal/announce"
 	"github.com/virtuos/wolke/internal/store"
+	"github.com/virtuos/wolke/internal/store/storetest"
 )
 
 // Integration: retire-on-create (one active at a time), role/window scoping,
@@ -25,6 +26,14 @@ func TestAnnouncementsRetireScopingDismissal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
+	// Every assertion below reads the whole announcements table — ListActive and
+	// ListHistory answer for the table, not for a marked row, because that is
+	// the contract (see storetest.ClaimAnnouncements). So take the table, and
+	// register in the order its doc comment requires: pool close first (runs
+	// last), the claim, then the row cleanup (runs first, under the lock).
+	t.Cleanup(db.Close)
+	storetest.ClaimAnnouncements(ctx, t, db.Pool)
+
 	admin, err := db.UpsertUser(ctx, store.UpsertUserParams{OidcSub: "ann-test", DisplayName: "Ann", PrimaryRole: "staff", IsAdmin: true})
 	if err != nil {
 		t.Fatalf("upsert admin: %v", err)
@@ -37,7 +46,6 @@ func TestAnnouncementsRetireScopingDismissal(t *testing.T) {
 		_, _ = db.Pool.Exec(ctx, "delete from announcements where created_by = $1", admin.ID)
 		_, _ = db.Pool.Exec(ctx, "delete from audit_log where actor_id = $1", admin.ID)
 		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub in ('ann-test','ann-reader')")
-		db.Close()
 	})
 	actor := Actor{ID: admin.ID, Kind: ActorForm}
 
@@ -162,6 +170,12 @@ func TestAnnouncementPurge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
+	// Purge's return value is a global delete count, so this test needs the
+	// table to itself just as much as the one above — a single stray expired
+	// notice makes it 2 instead of 1.
+	t.Cleanup(db.Close)
+	storetest.ClaimAnnouncements(ctx, t, db.Pool)
+
 	admin, err := db.UpsertUser(ctx, store.UpsertUserParams{OidcSub: "ann-purge", DisplayName: "Purge", PrimaryRole: "staff", IsAdmin: true})
 	if err != nil {
 		t.Fatalf("upsert admin: %v", err)
@@ -169,7 +183,6 @@ func TestAnnouncementPurge(t *testing.T) {
 	t.Cleanup(func() {
 		_, _ = db.Pool.Exec(ctx, "delete from announcements where created_by = $1", admin.ID)
 		_, _ = db.Pool.Exec(ctx, "delete from users where oidc_sub = 'ann-purge'")
-		db.Close()
 	})
 
 	day := 24 * time.Hour

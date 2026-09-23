@@ -17,6 +17,7 @@ import (
 	"github.com/virtuos/wolke/internal/announce"
 	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/store"
+	"github.com/virtuos/wolke/internal/store/storetest"
 )
 
 // A deployment configured with exactly two roles must work end to end: login
@@ -43,10 +44,17 @@ func TestTwoRoleDeployment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
+	// This test both writes announcements and reads /api/announcements back, so
+	// it shares the announcements table with internal/service's tests — which
+	// `go test ./...` runs in parallel with this package. Claim the table for
+	// the same reason they do, in the order its doc comment requires: pool close
+	// first (runs last), the claim, then the row cleanup (runs first, under the
+	// lock) — see storetest.ClaimAnnouncements.
+	t.Cleanup(db.Close)
+	storetest.ClaimAnnouncements(ctx, t, db.Pool)
 	t.Cleanup(func() {
 		_, _ = db.Pool.Exec(ctx, "delete from announcements where title->>'de' like 'Rollen-Test%'")
 		_, _ = db.Pool.Exec(ctx, "delete from role_defaults where role = 'phd'")
-		db.Close()
 	})
 	// (The mock IdP always logs in as stud-1; that row may already exist from an
 	// earlier run and is referenced by audit rows, so it is never deleted here.)
