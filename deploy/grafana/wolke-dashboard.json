@@ -609,10 +609,10 @@
       ]
     },
     {
-      "id": 3,
-      "title": "HTTP request latency p95 (by route)",
-      "description": "Per-instance histogram: each instance observes only its own requests, so the buckets sum across the selected instances before the quantile is taken.",
-      "type": "timeseries",
+      "id": 14,
+      "title": "Favorites added in range (top 10)",
+      "description": "Counter (wolke_service_favorites_added_total) — per-instance, so the panel sums across the selected instances. It counts only favorites users starred THEMSELVES: the role defaults pre-filled at first login are never counted, which is what makes this 'which services do people choose', not 'which services are favorited'. Read it next to the removed panel: a service that is starred and kept looks different from one that is starred and dropped again.",
+      "type": "bargauge",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -620,74 +620,45 @@
       "gridPos": {
         "h": 11,
         "w": 12,
-        "x": 12,
+        "x": 0,
         "y": 22
       },
       "options": {
+        "displayMode": "gradient",
         "legend": {
           "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "short",
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "value": 0,
+                "value": null,
                 "color": "green"
-              },
-              {
-                "value": 80,
-                "color": "red"
               }
             ]
-          },
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "showValues": false,
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
           }
         },
         "overrides": []
@@ -699,8 +670,79 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(wolke_http_request_duration_seconds_bucket{instance=~\"$instance\"}[5m])))",
-          "legendFormat": "{{route}}"
+          "expr": "topk(10, sum by (service) (increase(wolke_service_favorites_added_total{instance=~\"$instance\", role=~\"$role\"}[$__range])))",
+          "instant": true,
+          "legendFormat": "{{service}}",
+          "editorMode": "code"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "Favorites removed in range (top 10)",
+      "description": "Counter (wolke_service_favorites_removed_total) — per-instance, so the panel sums across the selected instances. The companion to the added panel: a service high in both is one people try and drop again, a service high only in added is one they keep. A dropped role default IS counted here — dropping a pre-configured favorite is a user choice too.",
+      "type": "bargauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "options": {
+        "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "orange"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "topk(10, sum by (service) (increase(wolke_service_favorites_removed_total{instance=~\"$instance\", role=~\"$role\"}[$__range])))",
+          "instant": true,
+          "legendFormat": "{{service}}",
+          "editorMode": "code"
         }
       ]
     },
@@ -969,6 +1011,102 @@
           "instant": true,
           "format": "table",
           "editorMode": "code"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "HTTP request latency p95 (by route)",
+      "description": "Per-instance histogram: each instance observes only its own requests, so the buckets sum across the selected instances before the quantile is taken.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 12,
+        "x": 0,
+        "y": 49
+      },
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": 0,
+                "color": "green"
+              },
+              {
+                "value": 80,
+                "color": "red"
+              }
+            ]
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(wolke_http_request_duration_seconds_bucket{instance=~\"$instance\"}[5m])))",
+          "legendFormat": "{{route}}"
         }
       ]
     }
