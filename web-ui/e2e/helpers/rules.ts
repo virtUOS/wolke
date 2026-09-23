@@ -90,12 +90,27 @@ export function textTooSmall(p: ElementProbe, min = MIN_FONT_SIZE): boolean {
   return p.hasDirectText && p.fontSize < min
 }
 
-/** Text collapsed to no height — present in the tree, invisible on screen. */
+/**
+ * Text collapsed to no height — present in the tree, invisible on screen.
+ *
+ * Unlike overflowKind above, this one takes no no-layout-box guard, and could
+ * not: the state it exists to catch IS "in the tree, zero height", so a guard
+ * would delete the check rather than narrow it. #227 closed that instead by
+ * making sure no probe is taken mid-relayout — see resizeViewport().
+ */
 export function textNotRendered(p: ElementProbe): boolean {
   return p.hasDirectText && p.rect.height <= 0
 }
 
-/** An interactive element whose hit area is under the touch-target floor. */
+/**
+ * An interactive element whose hit area is under the touch-target floor.
+ *
+ * Also deliberately unguarded against a no-box probe (#227). A guard here was
+ * possible, but a control that genuinely renders at 0×0 is a real defect worth
+ * failing on, so suppressing the mid-relayout false positive would have
+ * suppressed the true one with it. Fixing the cause in resizeViewport() is
+ * what makes keeping the teeth safe.
+ */
 export function touchTargetTooSmall(p: ElementProbe, min = MIN_TOUCH_TARGET): boolean {
   if (!p.interactive || p.smallTargetOk) return false
   return p.hitRect.width < min || p.hitRect.height < min

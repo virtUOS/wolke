@@ -55,7 +55,7 @@ matrix duplication buys little.
 web-ui/
   playwright.config.ts     # projects = the matrix; webServer starts the built binary
   e2e/
-    helpers/viewport.ts    # the assertion helpers (§5)
+    helpers/viewport.ts    # the assertion helpers (§5) + resizeViewport (§5.5)
     helpers/session.ts     # login via the mock IdP, reusable storageState
     fixtures.ts            # test fixture that auto-runs overflow checks (§5.4)
     dashboard.spec.ts
@@ -130,7 +130,58 @@ also call the helpers explicitly after opening each intermediate state (menu ope
 open, tile expanded), since only the final state is checked automatically. This keeps "every
 tested state is overflow-checked" the default, not a per-test chore.
 
-### 5.5 Narrowing the auto-check (implementation note)
+### 5.5 `resizeViewport(page, size)` — the barrier every resize goes through
+
+`page.setViewportSize` resolves on the metrics override, before the style recalc that
+re-evaluates the `md:` media queries the control sizes hang off. A probe taken straight
+afterwards can be read mid-relayout and judged against the *destination's* contract — the
+auto-check caught the app bar still wearing its desktop 26px avatar at 390px and failed it
+against the phone's 44px touch floor (#227).
+
+`resizeViewport()` in `e2e/helpers/viewport.ts` is the only sanctioned way to change the
+viewport. It polls `documentElement.clientWidth` (which forces the layout), then waits two
+animation frames as a floor, then keeps waiting until the document's geometry stops changing
+between frames.
+
+All three parts earn their place. A `requestAnimationFrame` callback runs *before* its own
+frame's style and layout, so one frame only reaches the start of the frame the recalc lands
+in. A fixed count is a heuristic — two frames is enough at rest and still missed 1 crossing in
+640 under artificial parallel load. Waiting for stability *alone* misses too, in the opposite
+direction: two identical samples of a layout the recalc has not reached yet look exactly like
+a settled one, which is what the floor is for.
+
+| barrier | early reads per 40 crossings, each way, per phone project | cost |
+|---|---|---|
+| `clientWidth` poll only (before) | 12–22 | 33 ms/crossing |
+| `clientWidth` + 1 frame | 1–8 | 39 ms/crossing |
+| `clientWidth` + 2 frames | 0 at rest, 1 in 640 under load | 56 ms/crossing |
+| **shipped: floor + settled geometry** | **0 in 3360 crossings under that same load** | 76 ms/crossing |
+
+The absolute rates move with how busy the machine is — the same probe measured 3/40 on an idle
+box and 28/40 on a loaded one, which is why the defect came and went. The ordering does not.
+
+Geometry is compared rather than one named element's box (the shape first proposed) because
+the harness cannot know which element a media query resizes, and because a barrier that waits
+on a specific control hangs to a timeout when that control genuinely collapses instead of
+letting the guard report it. It also does not care whether the width changed at all, so a
+height-only resize is a no-op rather than a hang.
+
+**A bare `page.setViewportSize` anywhere in `e2e/**` is a lint error** (`eslint.config.js`).
+#221 fixed this in one spec and it stayed one spec's fix for a harness-wide property, so the
+rule is what closes the class rather than the instance.
+
+The wait is deliberately **not** hoisted into `snapshot()`, and cost is not the reason: a
+one-frame wait hoisted there measured 136.4s against a 131.8–136.9s baseline for the full
+matrix, i.e. inside the run-to-run noise. The reason is that it would retime the ~1300
+assertions taken nowhere near a resize, which is how one flake class gets traded for another.
+The defect is a property of resizing, so it is fixed where resizing happens.
+
+The same decision is why `textNotRendered` and `touchTargetTooSmall` (§5.2, §5.3) keep their
+zero-box teeth: fixing the cause is what makes it safe for a genuinely collapsed control to
+still fail. Only `overflowKind` is guarded (#209), because nothing useful can be said about
+the content width of an element with no box.
+
+### 5.6 Narrowing the auto-check (implementation note)
 
 The fixture takes a `viewportChecks` option
 (`test.use({ viewportChecks: ['overflow'] })`). Its only sanctioned use is a spec
@@ -139,7 +190,7 @@ with its own fix while other, unrelated defects remain at the same width, and th
 whole point of the annotated-and-flipped workflow (§8) would be lost. Normal flow
 specs never narrow it.
 
-### 5.6 `expectNothingInvisibleAnnounced(page)` — the accessibility-tree rule
+### 5.7 `expectNothingInvisibleAnnounced(page)` — the accessibility-tree rule
 
 `e2e/helpers/a11y.ts`. Everything the accessibility tree announces as *content*
 (text, paragraphs, headings) must also be readable on the screen at this

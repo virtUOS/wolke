@@ -34,6 +34,43 @@ const uiVariantExports = [
 export default tseslint.config(
   { ignores: ['dist', 'coverage', 'node_modules', '*.config.js', '*.config.ts'] },
   {
+    // The e2e suite. One rule, and it is the one that keeps the viewport
+    // harness honest (issue #227).
+    //
+    // `page.setViewportSize` resolves before the style recalc that a
+    // breakpoint crossing triggers has reached individual elements, so a probe
+    // taken straight after it can be measured mid-relayout — the guard read
+    // the avatar at its desktop 26px and failed it against the phone's 44px
+    // floor. `resizeViewport()` in e2e/helpers/viewport.ts carries the barrier
+    // that closes that window.
+    //
+    // This is a lint rule and not a docstring on purpose: #221 fixed the same
+    // thing in one spec, and it stayed one spec's fix for a harness-wide
+    // property until it came back. A convention only holds while everyone
+    // remembers it.
+    //
+    // Only the parser is configured, not `tseslint.configs.recommended`: this
+    // block exists for one rule, and switching a previously unlinted directory
+    // onto a whole rule set is a separate change with a separate diff.
+    files: ['e2e/**/*.ts'],
+    languageOptions: { parser: tseslint.parser },
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression > MemberExpression[property.name='setViewportSize']",
+          message:
+            'Use resizeViewport() from e2e/helpers/viewport.ts — a bare setViewportSize returns before the layout it asks for exists (issue #227).',
+        },
+      ],
+    },
+  },
+  {
+    // The helper that owns the barrier is the one place allowed to call it.
+    files: ['e2e/helpers/viewport.ts'],
+    rules: { 'no-restricted-syntax': 'off' },
+  },
+  {
     files: ['src/**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: {

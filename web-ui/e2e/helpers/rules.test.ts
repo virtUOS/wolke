@@ -123,6 +123,9 @@ describe('readability', () => {
     expect(textTooSmall(probe({ fontSize: 8, hasDirectText: false }))).toBe(false)
   })
 
+  // The same #227 call, for the predicate that could not have been guarded
+  // anyway: catching text that is in the tree and invisible on screen IS the
+  // zero-height check, so a guard would delete it rather than narrow it.
   it('rejects text collapsed to no height', () => {
     expect(textNotRendered(probe({ rect: rect(0, 100, 0) }))).toBe(true)
   })
@@ -149,6 +152,17 @@ describe('touchTargetTooSmall', () => {
 
   it('honours the reviewed-exception attribute', () => {
     expect(touchTargetTooSmall(probe({ interactive: true, hitRect: rect(0, 20, 20), smallTargetOk: true }))).toBe(false)
+  })
+
+  // #227 weighed guarding this the way overflowKind was guarded in #209, and
+  // decided against it: a control that genuinely renders at 0×0 is a real
+  // defect, so the guard would suppress the true positive along with the false
+  // one. What made that safe is fixing the cause instead — resizeViewport()
+  // does not return before the recalc lands, so a no-box probe is no longer a
+  // thing a resize produces. Pinned here so the guard is not added back by
+  // someone reading only the predicate.
+  it('still rejects a control with no layout box at all', () => {
+    expect(touchTargetTooSmall(probe({ interactive: true, hitRect: rect(0, 0, 0) }))).toBe(true)
   })
 })
 
