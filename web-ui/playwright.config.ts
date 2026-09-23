@@ -11,6 +11,7 @@
 // reproducible when Playwright's device list changes under us.
 
 import { defineConfig, type PlaywrightTestConfig, type PlaywrightTestOptions } from '@playwright/test'
+import { DATABASE_URL } from './e2e/global-setup'
 import { STORAGE_STATE } from './e2e/helpers/session'
 
 /** Port for the binary under test — deliberately not 8080, so a running `make run` is left alone. */
@@ -41,6 +42,11 @@ export default defineConfig({
   // Only *.spec.ts are e2e tests; helpers/rules.test.ts is a Vitest unit test
   // that happens to live next to the helper it covers.
   testMatch: '**/*.spec.ts',
+  // Resets the shared test user's server-side state before anything runs, so
+  // the suite starts from "nobody has logged in yet" however it is invoked —
+  // see e2e/global-setup.ts for what that fixes and why it is scoped the way
+  // it is (issue #234).
+  globalSetup: './e2e/global-setup.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -105,7 +111,7 @@ export default defineConfig({
       // The structured config the suite needs beyond the defaults: one opt-in
       // visibility group, for the experimental-mode flow (issue #34).
       CONFIG_FILE: 'dev/config.e2e.yaml',
-      DATABASE_URL: process.env.DATABASE_URL ?? 'postgres://wolke:devpass@localhost:5432/wolke?sslmode=disable',
+      DATABASE_URL,
       // 127.0.0.1, not localhost: mock-oauth2-server crashes on IPv6 peers.
       OIDC_ISSUER_URL: process.env.OIDC_TEST_ISSUER ?? 'http://127.0.0.1:8455/default',
       OIDC_CLIENT_ID: 'wolke',

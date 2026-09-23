@@ -75,6 +75,15 @@ web-ui/
   `eduPersonAffiliation: student` + `groups: [dashboard-admins]`. So `page.goto('/')` follows
   the redirect chain and lands authenticated, with admin access — one identity covers user and
   admin screens. Do the login once in a setup project and share `storageState` across tests.
+- **Starting state:** `e2e/global-setup.ts` truncates `users` (cascade) and `announcements`
+  before the run, so the suite always starts from "nobody has logged in yet" — the state it
+  has always assumed and, until issue #234, only ever got by accident from CI's throwaway
+  Postgres container. The catalog is deliberately *not* touched: it is hand-curated in
+  `dev/seed.sql` and the specs assert against it by name. The reset is about the shared test
+  user, whose favorites, prefs columns and dismissals otherwise survive every local run — see
+  the file's comment for the `favorites_seeded` trap in particular. It fixes the *starting*
+  state only; contention *between* the six parallel workers within a run is still the specs'
+  own problem, handled by `helpers/lock.ts` and the `betaOff()`-style repairs.
 - **Fixture data:** the dev seed (`dev/seed.sql`) provides the catalog. For overflow tests we
   need pathological content; **do not edit `dev/seed.sql`** (backend integration tests assert
   against it). Instead, a global-setup step creates via the admin API (`POST
