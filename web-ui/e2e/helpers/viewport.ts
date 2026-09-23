@@ -28,6 +28,84 @@ interface Snapshot {
   probes: ElementProbe[]
 }
 
+/**
+ * Resizes the page and waits until the engine has *laid it out* at the new
+ * width. Every resize in the suite goes through here — a bare
+ * `page.setViewportSize` in `e2e/**` is a lint error (eslint.config.js), because
+ * this being a convention rather than a rule is how #227 happened.
+ *
+ * `setViewportSize` resolves on the metrics override, before the style recalc
+ * that re-evaluates the `md:` media queries the control sizes hang off. Reading
+ * `documentElement.clientWidth` forces that layout, and polling it until it
+ * agrees was the barrier #221 added — but it is not sufficient: clientWidth
+ * reaches the new width before the recalc has reached individual elements. The
+ * auto-guard then measured the app bar still wearing its desktop 26px avatar at
+ * 390px and failed it against the phone's 44px touch floor.
+ *
+ * Frames are what closes it, but a *fixed* number of them is a heuristic, not
+ * a barrier. A rAF callback runs before its own frame's style and layout, so
+ * one frame only reaches the start of the frame the recalc lands in; two is
+ * enough almost always (0 early reads in 240 crossings at rest) and not
+ * always — under artificial parallel load a fixed two still missed 1 crossing
+ * in 640, which is a flake, just a rarer one.
+ *
+ * So: a floor of two frames, and then frames until the document's geometry
+ * stops changing. The floor handles a recalc that has not started yet — two
+ * identical samples of a layout nothing has touched look exactly like a
+ * settled one, which is why polling for stability *alone* also missed. The
+ * stability check handles a recalc that started and is still going, however
+ * many frames it takes. Measured together, 0 early reads in 3360 crossings
+ * under the same load that broke the fixed count.
+ *
+ * Polling one named element's box instead — the shape first proposed — would
+ * work for that element and no other, and would hang to a timeout on a control
+ * that genuinely collapsed rather than letting the guard report it. Geometry
+ * needs no knowledge of which element the media query resizes, so it is right
+ * for every probe the snapshot then takes. It also does not care whether the
+ * width changed at all, so a height-only resize is a no-op here rather than a
+ * hang.
+ *
+ * Deliberately NOT hoisted into snapshot(), and cost is not the reason: a
+ * one-frame wait hoisted there measured 136.4s against a 131.8-136.9s baseline
+ * for the full matrix, inside the run-to-run noise. The reason is that it would
+ * retime the ~1300 assertions taken nowhere near a resize, which is how one
+ * flake class gets traded for another. The defect is a property of resizing,
+ * and it is fixed where resizing happens.
+ */
+export async function resizeViewport(page: Page, size: { width: number; height: number }): Promise<void> {
+  await page.setViewportSize(size)
+  await page.waitForFunction((w) => document.documentElement.clientWidth === w, size.width)
+  await page.evaluate(
+    ({ floor, cap }) =>
+      new Promise<void>((resolve, reject) => {
+        const geometry = () => {
+          let out = ''
+          for (const el of document.querySelectorAll('*')) {
+            const r = el.getBoundingClientRect()
+            out += `${r.left},${r.top},${r.width},${r.height};`
+          }
+          return out
+        }
+        let frames = 0
+        let previous: string | null = null
+        const step = () => {
+          frames += 1
+          if (frames >= floor) {
+            const now = geometry()
+            if (now === previous) return resolve()
+            previous = now
+          }
+          if (frames >= cap) {
+            return reject(new Error(`the page was still relayouting ${cap} frames after the resize`))
+          }
+          requestAnimationFrame(step)
+        }
+        requestAnimationFrame(step)
+      }),
+    { floor: 2, cap: 60 },
+  )
+}
+
 /** Elements treated as click targets when looking for a padded parent. */
 const CLICK_TARGET_SELECTOR = 'a[href], button, [role="button"], label'
 

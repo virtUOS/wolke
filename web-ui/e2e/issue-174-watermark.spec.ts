@@ -26,7 +26,7 @@
 // deployment that mounted its own.
 
 import type { Page } from '@playwright/test'
-import { expectViewportHealthy } from './helpers/viewport'
+import { expectViewportHealthy, resizeViewport } from './helpers/viewport'
 import { expectNothingInvisibleAnnounced } from './helpers/a11y'
 import { openSearch } from './helpers/search'
 import { gotoApp } from './helpers/session'
@@ -313,7 +313,7 @@ test.describe('watermark enabled', () => {
   ]) {
     test(`keeps the same relationship to the column at ${width}×${height}`, async ({ page }, testInfo) => {
       testInfo.skip(testInfo.project.name !== 'desktop-1920', 'one project drives the above-matrix widths')
-      await page.setViewportSize({ width, height })
+      await resizeViewport(page, { width, height })
       await gotoApp(page)
       await expect(watermark(page)).toHaveCount(1)
       const { overlapsColumn } = await expectColumnGeometry(page)
@@ -333,7 +333,7 @@ test.describe('watermark enabled', () => {
   // matrix, where the entire fade fits on screen.
   test('dissolves across the gutter instead of being cut off', async ({ page }, testInfo) => {
     testInfo.skip(testInfo.project.name !== 'desktop-1920', 'the full 360px fade only fits above the matrix')
-    await page.setViewportSize({ width: 2560, height: 1080 })
+    await resizeViewport(page, { width: 2560, height: 1080 })
     await gotoApp(page)
     await expect(watermark(page)).toHaveCount(1)
 
