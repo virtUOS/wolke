@@ -355,8 +355,10 @@ All series are prefixed `wolke_` (never an institution name), and labels are **a
 | `wolke_catalog_services` | gauge | `state` (`active` / `inactive`) | Catalog size by state |
 | `wolke_announcements_active` | gauge | `severity` | In-window announcements by severity |
 | `wolke_service_favorites` | gauge | `service` | Users currently having each **active** service favorited (zeros included, so a service nobody pinned still reports `0`) |
+| `wolke_service_favorites_added_total` | counter | `service`, `role` | Favorites users starred themselves. Never counts the role defaults seeded at first login, so added minus removed is the delta to the pre-configured set |
+| `wolke_service_favorites_removed_total` | counter | `service`, `role` | Favorites users un-starred themselves — including a seeded default they dropped, which is a user choice |
 
-The histogram and click counter update in-process per request; the four gauges are refreshed from the database every 30s by a background worker. Metrics live on a **private registry**, so the endpoint exposes only these series — no default Go/process collectors.
+The histogram and the three counters update in-process per request; the four gauges are refreshed from the database every 30s by a background worker. Metrics live on a **private registry**, so the endpoint exposes only these series — no default Go/process collectors.
 
 ### How it's scraped
 

@@ -31,7 +31,10 @@ order by s.name;
 -- name: NextFavoriteSort :one
 select coalesce(max(sort) + 1, 0)::int from favorites where user_id = @user_id;
 
--- name: AddFavorite :exec
+-- name: AddFavorite :execrows
+-- Rows affected, not :exec, so the caller can tell a real star from a repeat of
+-- one: on conflict do nothing makes this idempotent, and the added counter must
+-- not count the no-op (issue #228).
 -- manual_sort is computed here rather than passed in: a favorite starred while
 -- the user is in manual mode has to land at the end of *their* arrangement,
 -- which is a different sequence from `sort` (issue #125).

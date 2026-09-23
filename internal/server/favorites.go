@@ -9,6 +9,7 @@ import (
 	"github.com/virtuos/wolke/internal/catalog"
 	"github.com/virtuos/wolke/internal/config"
 	"github.com/virtuos/wolke/internal/httpx"
+	"github.com/virtuos/wolke/internal/metrics"
 	"github.com/virtuos/wolke/internal/service"
 )
 
@@ -44,7 +45,7 @@ func listFavorites(c *catalog.Cache, db service.FavoritesStore, vis config.Visib
 // narrowed view first: a restricted service the user does not hold — like a
 // soft-deleted or unknown one — is a 404, not a stored favorite the user could
 // never resolve (and not a 500 that would tell it apart from "unknown").
-func addFavorite(db service.FavoritesStore, c *catalog.Cache, vis config.VisibilitySet) http.HandlerFunc {
+func addFavorite(db service.FavoritesStore, c *catalog.Cache, vis config.VisibilitySet, m *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
 		serviceID, ok := decodeServiceID(w, r)
@@ -56,11 +57,12 @@ func addFavorite(db service.FavoritesStore, c *catalog.Cache, vis config.Visibil
 			serverError(w, r, "catalog_unavailable", "Could not load the catalog.", err)
 			return
 		}
-		if _, ok := snap.ServiceByID(uuidString(serviceID)); !ok {
+		svc, ok := snap.ServiceByID(uuidString(serviceID))
+		if !ok {
 			httpx.WriteProblem(w, http.StatusNotFound, "not_found", "service not found")
 			return
 		}
-		if err := service.AddFavorite(r.Context(), db, user.ID, serviceID); err != nil {
+		if err := service.AddFavorite(r.Context(), db, favoriteMetrics(m), user.ID, serviceID, svc.Name, user.PrimaryRole); err != nil {
 			writeServiceError(w, r, err)
 			return
 		}
@@ -68,19 +70,46 @@ func addFavorite(db service.FavoritesStore, c *catalog.Cache, vis config.Visibil
 	}
 }
 
-func removeFavorite(db service.FavoritesStore) http.HandlerFunc {
+// removeFavorite un-stars, and — unlike addFavorite — does not require the
+// service to resolve: a favorite that became invisible (soft-deleted, beta off,
+// a category whose group the IdP no longer grants) must stay removable. The
+// narrowed view is consulted only to name the service for the metric, and an
+// unresolvable one is removed uncounted rather than counted under a name this
+// reader was never shown — the same rule recordClick applies.
+func removeFavorite(db service.FavoritesStore, c *catalog.Cache, vis config.VisibilitySet, m *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, _ := userFromContext(r.Context())
 		serviceID, ok := decodeServiceID(w, r)
 		if !ok {
 			return
 		}
-		if err := service.RemoveFavorite(r.Context(), db, user.ID, serviceID); err != nil {
+		// c is nil in a deployment wired without a catalog: un-starring still
+		// works there, uncounted.
+		name := ""
+		if c != nil {
+			if snap, err := visibleCatalog(r.Context(), c, vis); err == nil {
+				if svc, ok := snap.ServiceByID(uuidString(serviceID)); ok {
+					name = svc.Name
+				}
+			}
+		}
+		if err := service.RemoveFavorite(r.Context(), db, favoriteMetrics(m), user.ID, serviceID, name, user.PrimaryRole); err != nil {
 			writeServiceError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// favoriteMetrics adapts the optional collector set to the use case's
+// interface. A nil *metrics.Metrics is not a nil service.FavoriteMetrics once
+// it is wrapped in one, so it has to be spelled out here rather than passed
+// through (the metrics-less router in the tests relies on it).
+func favoriteMetrics(m *metrics.Metrics) service.FavoriteMetrics {
+	if m == nil {
+		return nil
+	}
+	return m
 }
 
 // setFavoritesOrder handles PUT /api/favorites/order: the whole ordered list of

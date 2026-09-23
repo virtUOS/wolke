@@ -32,6 +32,33 @@ type fakeFav struct {
 	added           []store.AddFavoriteParams
 	removeRows      int64
 	removed         int
+	// addRows is what AddFavorite reports as written; 0 stands for the
+	// idempotent re-star that `on conflict do nothing` swallowed.
+	addRows int64
+}
+
+// countingMetrics is a service.FavoriteMetrics that records what it was told,
+// keyed by "service/role".
+type countingMetrics struct{ added, removed map[string]int }
+
+func newCountingMetrics() *countingMetrics {
+	return &countingMetrics{added: map[string]int{}, removed: map[string]int{}}
+}
+
+func (c *countingMetrics) IncFavoriteAdded(service, role string) {
+	c.added[service+"/"+role]++
+}
+
+func (c *countingMetrics) IncFavoriteRemoved(service, role string) {
+	c.removed[service+"/"+role]++
+}
+
+func (c *countingMetrics) total(m map[string]int) int {
+	n := 0
+	for _, v := range m {
+		n += v
+	}
+	return n
 }
 
 func (f *fakeFav) ListFavoritesByUsage(_ context.Context, arg store.ListFavoritesByUsageParams) ([]pgtype.UUID, error) {
@@ -69,9 +96,9 @@ func (f *fakeFav) MarkFavoritesManualSeeded(context.Context, pgtype.UUID) error 
 func (f *fakeFav) NextFavoriteSort(context.Context, pgtype.UUID) (int32, error) {
 	return int32(len(f.byUsage)), nil
 }
-func (f *fakeFav) AddFavorite(_ context.Context, arg store.AddFavoriteParams) error {
+func (f *fakeFav) AddFavorite(_ context.Context, arg store.AddFavoriteParams) (int64, error) {
 	f.added = append(f.added, arg)
-	return nil
+	return f.addRows, nil
 }
 func (f *fakeFav) RemoveFavorite(context.Context, store.RemoveFavoriteParams) (int64, error) {
 	f.removed++
@@ -161,8 +188,8 @@ func TestListFavoritesNoReseedAndAlphaOrder(t *testing.T) {
 }
 
 func TestAddFavoriteAppendsAtNextSort(t *testing.T) {
-	f := &fakeFav{byUsage: []pgtype.UUID{uuidVal(), uuidVal(), uuidVal()}} // 3 existing → next sort 3
-	if err := AddFavorite(context.Background(), f, uuidVal(), uuidVal()); err != nil {
+	f := &fakeFav{byUsage: []pgtype.UUID{uuidVal(), uuidVal(), uuidVal()}, addRows: 1} // 3 existing → next sort 3
+	if err := AddFavorite(context.Background(), f, nil, uuidVal(), uuidVal(), "MyShare", "student"); err != nil {
 		t.Fatalf("AddFavorite: %v", err)
 	}
 	if len(f.added) != 1 || f.added[0].Sort != 3 {
@@ -172,11 +199,91 @@ func TestAddFavoriteAppendsAtNextSort(t *testing.T) {
 
 func TestRemoveFavoriteIsIdempotent(t *testing.T) {
 	f := &fakeFav{removeRows: 0} // not present
-	if err := RemoveFavorite(context.Background(), f, uuidVal(), uuidVal()); err != nil {
+	if err := RemoveFavorite(context.Background(), f, nil, uuidVal(), uuidVal(), "MyShare", "student"); err != nil {
 		t.Fatalf("RemoveFavorite (absent) should be a no-op, got %v", err)
 	}
 	if f.removed != 1 {
 		t.Errorf("RemoveFavorite called %d times, want 1", f.removed)
+	}
+}
+
+// --- the toggle counters (issue #228) ----------------------------------------
+
+func TestAddFavoriteCountsOnlyTheAdd(t *testing.T) {
+	f := &fakeFav{addRows: 1}
+	c := newCountingMetrics()
+	if err := AddFavorite(context.Background(), f, c, uuidVal(), uuidVal(), "MyShare", "student"); err != nil {
+		t.Fatalf("AddFavorite: %v", err)
+	}
+	if c.added["MyShare/student"] != 1 {
+		t.Errorf("added = %v, want one MyShare/student", c.added)
+	}
+	if c.total(c.removed) != 0 {
+		t.Errorf("removed = %v, want nothing counted", c.removed)
+	}
+}
+
+func TestRemoveFavoriteCountsOnlyTheRemove(t *testing.T) {
+	f := &fakeFav{removeRows: 1}
+	c := newCountingMetrics()
+	if err := RemoveFavorite(context.Background(), f, c, uuidVal(), uuidVal(), "MyShare", "staff"); err != nil {
+		t.Fatalf("RemoveFavorite: %v", err)
+	}
+	if c.removed["MyShare/staff"] != 1 {
+		t.Errorf("removed = %v, want one MyShare/staff", c.removed)
+	}
+	if c.total(c.added) != 0 {
+		t.Errorf("added = %v, want nothing counted", c.added)
+	}
+}
+
+// TestSeedingFromRoleDefaultsCountsNeither is THE assertion behind the metric.
+// The pre-fill at first login must never touch either counter: that placement,
+// and nothing else, is what makes added_total minus removed_total the delta
+// between what users chose and what the deployment pre-configured. If a future
+// refactor moves the increment into the store or adds one to the seed path,
+// the counter silently becomes "all favorites" — and this test is what catches
+// it (issue #228).
+func TestSeedingFromRoleDefaultsCountsNeither(t *testing.T) {
+	f := &fakeFav{byUsage: []pgtype.UUID{uuidVal(), uuidVal()}}
+	c := newCountingMetrics()
+	user := store.User{ID: uuidVal(), PrimaryRole: "student", FavoritesSeeded: false, FavoritesOrder: "usage"}
+
+	// ListFavorites is the only path that seeds, and it takes no metrics at
+	// all — which is the structural half of the guarantee. The counter below
+	// is the behavioural half: nothing reached it.
+	if _, err := ListFavorites(context.Background(), f, user); err != nil {
+		t.Fatalf("ListFavorites: %v", err)
+	}
+	if f.seedCalls != 1 {
+		t.Fatalf("seedCalls = %d, want the seed to have run", f.seedCalls)
+	}
+	if c.total(c.added) != 0 || c.total(c.removed) != 0 {
+		t.Errorf("seeding counted added=%v removed=%v, want neither", c.added, c.removed)
+	}
+}
+
+func TestRepeatedToggleCountsOnlyTheRealChange(t *testing.T) {
+	c := newCountingMetrics()
+	// on conflict do nothing / delete of an absent row: no state change.
+	if err := AddFavorite(context.Background(), &fakeFav{addRows: 0}, c, uuidVal(), uuidVal(), "MyShare", "student"); err != nil {
+		t.Fatalf("AddFavorite: %v", err)
+	}
+	if err := RemoveFavorite(context.Background(), &fakeFav{removeRows: 0}, c, uuidVal(), uuidVal(), "MyShare", "student"); err != nil {
+		t.Fatalf("RemoveFavorite: %v", err)
+	}
+	if c.total(c.added) != 0 || c.total(c.removed) != 0 {
+		t.Errorf("idempotent repeats counted added=%v removed=%v, want neither", c.added, c.removed)
+	}
+}
+
+func TestToggleWithoutAResolvableNameCountsNothing(t *testing.T) {
+	c := newCountingMetrics()
+	if err := RemoveFavorite(context.Background(), &fakeFav{removeRows: 1}, c, uuidVal(), uuidVal(), "", "student"); err != nil {
+		t.Fatalf("RemoveFavorite: %v", err)
+	}
+	if c.total(c.removed) != 0 {
+		t.Errorf("removed = %v, want no series minted under an empty service name", c.removed)
 	}
 }
 

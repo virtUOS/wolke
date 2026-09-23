@@ -11,10 +11,13 @@ import (
 )
 
 type Querier interface {
+	// Rows affected, not :exec, so the caller can tell a real star from a repeat of
+	// one: on conflict do nothing makes this idempotent, and the added counter must
+	// not count the no-op (issue #228).
 	// manual_sort is computed here rather than passed in: a favorite starred while
 	// the user is in manual mode has to land at the end of *their* arrangement,
 	// which is a different sequence from `sort` (issue #125).
-	AddFavorite(ctx context.Context, arg AddFavoriteParams) error
+	AddFavorite(ctx context.Context, arg AddFavoriteParams) (int64, error)
 	AddRoleDefault(ctx context.Context, arg AddRoleDefaultParams) error
 	AddServiceCategory(ctx context.Context, arg AddServiceCategoryParams) error
 	AdminListAnnouncements(ctx context.Context, lim int32) ([]Announcement, error)

@@ -161,9 +161,9 @@ func (f fakeFavorites) ListFavoritesByUsage(context.Context, store.ListFavorites
 	return f.ids, nil
 }
 func (f fakeFavorites) NextFavoriteSort(context.Context, pgtype.UUID) (int32, error) { return 0, nil }
-func (f fakeFavorites) AddFavorite(context.Context, store.AddFavoriteParams) error {
+func (f fakeFavorites) AddFavorite(context.Context, store.AddFavoriteParams) (int64, error) {
 	*f.added++
-	return nil
+	return 1, nil
 }
 func (f fakeFavorites) ListActiveFavoriteIDs(context.Context, pgtype.UUID) ([]pgtype.UUID, error) {
 	return f.ids, nil
@@ -303,7 +303,7 @@ func TestNonHolderCannotObtainRestrictedService(t *testing.T) {
 
 	t.Run("add favorite", func(t *testing.T) {
 		added := 0
-		h := addFavorite(fakeFavorites{added: &added}, cache, vis)
+		h := addFavorite(fakeFavorites{added: &added}, cache, vis, nil)
 		body := `{"service_id":"` + restrictedID + `"}`
 
 		// Non-holder: not stored, and the same 404 an unknown id gets.
@@ -408,7 +408,7 @@ func TestBetaServiceHiddenUntilTheUserAsksForIt(t *testing.T) {
 
 	t.Run("add favorite", func(t *testing.T) {
 		added := 0
-		h := addFavorite(fakeFavorites{added: &added}, cache, vis)
+		h := addFavorite(fakeFavorites{added: &added}, cache, vis, nil)
 		body := `{"service_id":"` + betaID + `"}`
 
 		rec := httptest.NewRecorder()

@@ -90,7 +90,7 @@ func TestFavoritesFlow(t *testing.T) {
 	// Remove one of the seeded favorites; it must not come back on the next list
 	// (one-time seeding only).
 	removed := seeded[0]
-	if rec := call(removeFavorite(db), http.MethodDelete, `{"service_id":"`+removed+`"}`); rec.Code != http.StatusNoContent {
+	if rec := call(removeFavorite(db, cache, config.VisibilitySet{}, nil), http.MethodDelete, `{"service_id":"`+removed+`"}`); rec.Code != http.StatusNoContent {
 		t.Fatalf("remove = %d, want 204", rec.Code)
 	}
 	after := listIDs()
@@ -104,7 +104,7 @@ func TestFavoritesFlow(t *testing.T) {
 	}
 
 	// Re-add it.
-	if rec := call(addFavorite(db, cache, config.VisibilitySet{}), http.MethodPost, `{"service_id":"`+removed+`"}`); rec.Code != http.StatusNoContent {
+	if rec := call(addFavorite(db, cache, config.VisibilitySet{}, nil), http.MethodPost, `{"service_id":"`+removed+`"}`); rec.Code != http.StatusNoContent {
 		t.Fatalf("add = %d, want 204", rec.Code)
 	}
 	if len(listIDs()) != len(seeded) {
@@ -256,7 +256,7 @@ func TestFavoritesManualOrderFlow(t *testing.T) {
 	if extra == "" {
 		t.Skip("every active service is already a favorite; nothing left to append")
 	}
-	if rec := call(addFavorite(db, cache, config.VisibilitySet{}), http.MethodPost, "/api/favorites/items", `{"service_id":"`+extra+`"}`); rec.Code != http.StatusNoContent {
+	if rec := call(addFavorite(db, cache, config.VisibilitySet{}, nil), http.MethodPost, "/api/favorites/items", `{"service_id":"`+extra+`"}`); rec.Code != http.StatusNoContent {
 		t.Fatalf("add = %d, want 204", rec.Code)
 	}
 	if got := listIDs(); !slices.Equal(got, append(append([]string{}, moved...), extra)) {
