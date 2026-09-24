@@ -1,0 +1,56 @@
+name: Security scan
+
+# Rescans the image we already shipped. The CI gate (ci.yml, image job) only
+# scans at build time; a CVE published next week applies to the image deployed
+# today, and no code change will ever trigger CI to notice. This run does, and
+# records it in the Security tab against main without anyone pushing anything.
+on:
+  schedule:
+    # Mondays 05:17 UTC — off the hour, where scheduled runs queue.
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trivy:
+    name: Rescan ghcr.io/virtuos/wolke:latest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      IMAGE: ghcr.io/virtuos/wolke:latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Scan image
+        id: scan
+        # Pinned to a commit, not a tag, like ci.yml: tags can move.
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          # The published image, straight from the registry — no local pull.
+          TRIVY_IMAGE_SRC: remote
+        with:
+          image-ref: ${{ env.IMAGE }}
+          format: sarif
+          output: trivy.sarif
+          # Same policy as the CI gate; see the comments there.
+          severity: CRITICAL,HIGH
+          limit-severities-for-sarif: true
+          ignore-unfixed: true
+          # A red scheduled run is the notification that a shipped image needs
+          # a rebuild.
+          exit-code: 1
+          cache: true
+      - name: Scan summary
+        if: ${{ !cancelled() && steps.scan.outcome != 'skipped' }}
+        run: scripts/trivy-summary.sh trivy.sarif "$IMAGE"
+      - name: Upload scan to code scanning
+        if: ${{ !cancelled() && hashFiles('trivy.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy.sarif
+          # Shared with ci.yml so this rescan updates the gate's alerts for the
+          # image on main instead of duplicating them.
+          category: trivy-image
