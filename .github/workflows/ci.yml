@@ -256,10 +256,8 @@ jobs:
       - name: Record the scanned image
         id: scanned
         env:
-          # TEETH CHECK (#239) — revert: scan a knowingly vulnerable image.
-          REF: docker.io/library/alpine:3.18.0
+          REF: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
         run: |
-          docker pull "$REF"
           id=$(docker image inspect --format '{{.Id}}' "$REF")
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
           echo "id=$id" >> "$GITHUB_OUTPUT"
