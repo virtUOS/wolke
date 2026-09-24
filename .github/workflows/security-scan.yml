@@ -9,6 +9,9 @@ on:
     # Mondays 05:17 UTC — off the hour, where scheduled runs queue.
     - cron: "17 5 * * 1"
   workflow_dispatch:
+  # TEETH CHECK (#239) — revert: workflow_dispatch needs the file on main.
+  push:
+    branches: [feat/239-trivy-scan]
 
 permissions:
   contents: read
