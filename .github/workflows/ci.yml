@@ -273,8 +273,6 @@ jobs:
           # ref (`latest`) still names the previous release, so a miss would
           # silently scan the old image.
           TRIVY_IMAGE_SRC: docker
-          # TEETH CHECK (#239) — revert: make the vulnerability DB fetch fail.
-          TRIVY_DB_REPOSITORY: ghcr.io/virtuos/does-not-exist
         with:
           image-ref: ${{ steps.scanned.outputs.ref }}
           # Vulnerabilities only. Trivy also runs its secret scanner by default;
@@ -290,8 +288,8 @@ jobs:
           # keep the gate red with nothing to do but learn to ignore it.
           ignore-unfixed: true
           exit-code: 1
-          # TEETH CHECK (#239) — revert: no cached DB to fall back on.
-          cache: false
+          # The vulnerability DB pull is rate-limited and flaky uncached.
+          cache: true
       - name: Scan summary
         # Separates "Trivy found N vulnerabilities" from "Trivy could not run"
         # (both exit non-zero), and fails if Trivy ever exits 0 without a report.
