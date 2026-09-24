@@ -275,6 +275,9 @@ jobs:
           TRIVY_IMAGE_SRC: docker
         with:
           image-ref: ${{ steps.scanned.outputs.ref }}
+          # Vulnerabilities only. Trivy also runs its secret scanner by default;
+          # secret scanning is a separate decision (#239 scopes it out).
+          scanners: vuln
           format: sarif
           output: trivy.sarif
           severity: CRITICAL,HIGH

@@ -33,9 +33,10 @@ jobs:
           TRIVY_IMAGE_SRC: remote
         with:
           image-ref: ${{ env.IMAGE }}
+          # Same policy as the CI gate; see the comments there.
+          scanners: vuln
           format: sarif
           output: trivy.sarif
-          # Same policy as the CI gate; see the comments there.
           severity: CRITICAL,HIGH
           limit-severities-for-sarif: true
           ignore-unfixed: true
