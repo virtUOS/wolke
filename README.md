@@ -140,7 +140,7 @@ so nothing legitimate does.
 
 ## Deployment (Docker Compose)
 
-The `Dockerfile` builds the SPA (Node) and embeds it — along with the SQL migrations — into a static Go binary, producing **one small distroless image** (~20 MB) that runs as a non-root user with a read-only root filesystem. On every push to `main` (and every `v*` tag) CI publishes it to GHCR at `ghcr.io/<owner>/<repo>`.
+The `Dockerfile` builds the SPA (Node) and embeds it — along with the SQL migrations — into a static Go binary, producing **one small distroless image** (~20 MB) that runs as a non-root user with a read-only root filesystem. On every push to `main` (and every `v*` tag) CI publishes it to GHCR at `ghcr.io/<owner>/<repo>`. Before publishing, CI scans the built image with [Trivy](https://trivy.dev) and refuses to push if it finds a CRITICAL or HIGH vulnerability that has a released fix; the image it pushes is the exact image it scanned. A weekly workflow (`security-scan.yml`, also runnable on demand) rescans the published `:latest`, because a CVE disclosed after release never triggers a build. Both report to the repository's Security tab (code scanning).
 
 **The app applies forward-only migrations itself on startup** (advisory-locked via goose, so rolling-deploy replicas don't race; a no-op when the schema is already current). There's no separate migration image or step — set `AUTO_MIGRATE=false` to opt out and run the goose CLI yourself.
 

@@ -156,6 +156,15 @@ Caddy, take `PUBLIC_URL` from config for OIDC redirects and `Secure` cookies.
   (`--profile backup`) dumps with `pg_dump -Fc` and pushes to a restic/S3 repository with a
   `restic forget --prune` retention policy — see README → Backups and the restore runbook.
 - **Dependencies:** Dependabot/Renovate for Go modules and npm; pin and review. Keep Go and Node LTS current.
+- **Image vulnerabilities:** **Shipped (#239):** the CI `image` job builds with `load: true`,
+  scans the loaded image with Trivy, and only then pushes that same image (a verify step checks
+  every pushed tag resolves to the scanned image ID). It blocks on CRITICAL/HIGH **with a released
+  fix** (`ignore-unfixed`); unfixable CVEs are not gated. `security-scan.yml` rescans
+  `ghcr.io/virtuos/wolke:latest` weekly. Both upload SARIF to code scanning under one category
+  (`trivy-image`); PR runs skip the upload (fork tokens are read-only) and report in the job
+  summary. `scripts/trivy-summary.sh` separates a finding from a scanner that could not run (e.g.
+  a failed DB download) — the latter is never shown as clean. Covers OS packages and the Go
+  modules embedded in the binary; npm is not in the image and stays with Dependabot.
 - **Runbooks:** (1) [post an outage announcement](runbooks/outage-announcement.md);
   (2) [add/remove a service via form and via MCP](runbooks/manage-service.md);
   (3) [restore from backup](runbooks/restore-postgres.md); (4) [revoke a compromised admin](runbooks/revoke-admin.md)

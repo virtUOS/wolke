@@ -202,7 +202,7 @@ jobs:
           retention-days: 7
 
   image:
-    name: Build + push to GHCR
+    name: Build, scan + push to GHCR
     runs-on: ubuntu-latest
     # Only publish once every check passes — frontend, backend AND the viewport
     # e2e suite must be green (the Dockerfile rebuilds the SPA + binary itself,
@@ -211,6 +211,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
@@ -235,16 +236,115 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
-      - name: Build and push
+      - name: Build
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
-          # Build on every run, but only publish on non-PR events. PR runs
-          # (including Dependabot and forks) get a read-only GITHUB_TOKEN without
-          # packages:write — and the GHCR login above is skipped — so a push 403s.
-          # PRs therefore validate the build only; main/tags publish.
-          push: ${{ github.event_name != 'pull_request' }}
+          # Build into the runner's Docker daemon and never push from here: the
+          # image is scanned first, and the image that ships must be the image
+          # that was scanned. The Push step below sends this exact loaded image
+          # — nothing is rebuilt between scan and publish, so no cache is
+          # trusted to make two builds identical. `load` is single-platform
+          # only, which is fine: we build amd64 only.
+          load: true
+          push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Record the scanned image
+        id: scanned
+        env:
+          REF: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+        run: |
+          id=$(docker image inspect --format '{{.Id}}' "$REF")
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "Scanning $REF = $id"
+      - name: Scan image
+        id: scan
+        # Pinned to a commit, not a tag: this third-party action runs in a job
+        # holding packages:write and security-events:write, and tags can move.
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          # Scan the image loaded above, never a registry copy. Without this,
+          # Trivy falls back to pulling the ref remotely — and on main that
+          # ref (`latest`) still names the previous release, so a miss would
+          # silently scan the old image.
+          TRIVY_IMAGE_SRC: docker
+        with:
+          image-ref: ${{ steps.scanned.outputs.ref }}
+          # Vulnerabilities only. Trivy also runs its secret scanner by default;
+          # secret scanning is a separate decision (#239 scopes it out).
+          scanners: vuln
+          format: sarif
+          output: trivy.sarif
+          severity: CRITICAL,HIGH
+          # Without this the action drops `severity` for SARIF output, and the
+          # exit code then fires on MEDIUM/LOW too.
+          limit-severities-for-sarif: true
+          # Block only on what we can act on: a CVE with no released fix would
+          # keep the gate red with nothing to do but learn to ignore it.
+          ignore-unfixed: true
+          exit-code: 1
+          # The vulnerability DB pull is rate-limited and flaky uncached.
+          cache: true
+      - name: Scan summary
+        # Separates "Trivy found N vulnerabilities" from "Trivy could not run"
+        # (both exit non-zero), and fails if Trivy ever exits 0 without a report.
+        if: ${{ !cancelled() && steps.scan.outcome != 'skipped' }}
+        env:
+          REF: ${{ steps.scanned.outputs.ref }}
+        run: scripts/trivy-summary.sh trivy.sarif "$REF"
+      - name: Upload scan to code scanning
+        # Skip on pull_request: fork PRs get a read-only GITHUB_TOKEN without
+        # security-events:write, so the upload 403s. PRs see the verdict in the
+        # job summary; main/tags record it in the Security tab. Runs after a
+        # failed scan too — that is exactly when the alerts matter.
+        if: ${{ !cancelled() && github.event_name != 'pull_request' && hashFiles('trivy.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy.sarif
+          # Shared with security-scan.yml: both describe the image on main, so
+          # a weekly rescan updates the same alerts instead of duplicating them.
+          category: trivy-image
+      - name: Push
+        # Build on every run, but only publish on non-PR events. PR runs
+        # (including Dependabot and forks) get a read-only GITHUB_TOKEN without
+        # packages:write — and the GHCR login above is skipped — so a push 403s.
+        # PRs therefore validate the build only; main/tags publish.
+        if: github.event_name != 'pull_request'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          for tag in $TAGS; do
+            docker push "$tag"
+          done
+      - name: Verify the pushed image is the scanned image
+        # The property the scan rests on, checked rather than assumed: every
+        # pushed tag must resolve to the image ID Trivy scanned. The image ID
+        # is the digest of the image config, which pins every layer by content.
+        if: github.event_name != 'pull_request'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          SCANNED: ${{ steps.scanned.outputs.id }}
+        run: |
+          status=0
+          for tag in $TAGS; do
+            manifest=$(docker buildx imagetools inspect "$tag" --format '{{json .Manifest}}' | jq -r .digest)
+            config=$(docker buildx imagetools inspect "$tag" --raw | jq -r .config.digest)
+            echo "$tag -> manifest $manifest, config $config"
+            if [ "$config" != "$SCANNED" ]; then
+              echo "::error::$tag was pushed as config $config, but Trivy scanned $SCANNED"
+              status=1
+            fi
+          done
+          {
+            echo "### Scanned vs pushed"
+            echo
+            echo "Scanned image ID: \`$SCANNED\`"
+            echo
+            echo "Pushed manifest: \`$manifest\` (config \`$config\`)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
