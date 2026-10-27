@@ -8,15 +8,14 @@ import { LazyIconBoundary, ServiceIcon } from '@/lib/icons'
 // Suspense covers only the *pending* state — a failed load throws during render,
 // and without a boundary React unmounts the tree and the dashboard goes blank.
 //
-// The mock makes reading full-icon's default export throw, which is where React's
-// lazyInitializer lands for a rejected import too (it rethrows the rejection at
-// exactly that point). A mock factory that rejects outright can't be used: Vitest
-// reports that as an unhandled error and fails the run on its own.
-vi.mock('@/lib/full-icon', () => ({
-  get default(): never {
-    throw new Error('error loading dynamically imported module: /assets/icon-set-DeL2hHwx.js')
-  },
-}))
+// A throwing factory makes `import('@/lib/full-icon')` itself reject, which is
+// what a missing chunk does. Don't fake it with a module whose `default` getter
+// throws instead: since React 19.3 the dev build reads `.default` of a resolved
+// lazy module for its async debug info, outside any catch, so that shape surfaces
+// as an unhandled rejection rather than a render error the boundary can catch.
+vi.mock('@/lib/full-icon', () => {
+  throw new Error('error loading dynamically imported module: /assets/icon-set-DeL2hHwx.js')
+})
 
 describe('ServiceIcon', () => {
   beforeEach(() => {
