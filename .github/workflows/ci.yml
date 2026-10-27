@@ -75,9 +75,18 @@ jobs:
       OIDC_TEST_ISSUER: http://127.0.0.1:8455/default
     steps:
       - uses: actions/checkout@v7
+      # Test on the toolchain the image ships: the Dockerfile's golang tag is the
+      # single pin (Dependabot's docker ecosystem bumps it). A separate pin here
+      # drifted once — the image moved to 1.27 in #106 while CI stayed on 1.26.
+      - name: Read Go version from Dockerfile
+        id: go
+        run: |
+          v=$(sed -n 's|^FROM docker.io/library/golang:\([0-9.]*\) AS build$|\1|p' Dockerfile)
+          [ -n "$v" ] || { echo "::error::no golang:<version> AS build line in Dockerfile"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.27.3"
+          go-version: ${{ steps.go.outputs.version }}
           cache: true
       - name: Download SPA build
         uses: actions/download-artifact@v8
@@ -151,9 +160,18 @@ jobs:
       OIDC_TEST_ISSUER: http://127.0.0.1:8455/default
     steps:
       - uses: actions/checkout@v7
+      # Test on the toolchain the image ships: the Dockerfile's golang tag is the
+      # single pin (Dependabot's docker ecosystem bumps it). A separate pin here
+      # drifted once — the image moved to 1.27 in #106 while CI stayed on 1.26.
+      - name: Read Go version from Dockerfile
+        id: go
+        run: |
+          v=$(sed -n 's|^FROM docker.io/library/golang:\([0-9.]*\) AS build$|\1|p' Dockerfile)
+          [ -n "$v" ] || { echo "::error::no golang:<version> AS build line in Dockerfile"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.27.3"
+          go-version: ${{ steps.go.outputs.version }}
           cache: true
       - uses: actions/setup-node@v7
         with:
